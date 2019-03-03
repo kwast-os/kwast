@@ -1,0 +1,108 @@
+use core::fmt::{Debug, Error, Formatter};
+use core::ops::Add;
+
+use bit_field::BitField;
+
+use crate::arch::x86_64::paging::PAGE_SIZE;
+
+/// A 64-bit physical address.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct PhysAddr(usize);
+
+/// A canonical form, 64-bit virtual address.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct VirtAddr(usize);
+
+impl PhysAddr {
+    /// Creates a new physical address.
+    pub fn new(addr: usize) -> Self {
+        // Defined limit by the architecture spec.
+        debug_assert_eq!(
+            addr.get_bits(52..64),
+            0,
+            "Physical address cannot be more than 52-bits."
+        );
+        Self(addr)
+    }
+
+    /// Creates a new physical address that points to null.
+    pub const fn null() -> Self {
+        Self(0)
+    }
+
+    /// Converts the physical address to a usize.
+    pub fn as_usize(self) -> usize {
+        self.0
+    }
+
+    /// Aligns a memory address down.
+    pub fn align_down(&self) -> Self {
+        PhysAddr(self.0 & !(PAGE_SIZE - 1))
+    }
+
+    /// Aligns a memory address up.
+    pub fn align_up(&self) -> Self {
+        self.align_down() + PAGE_SIZE
+    }
+}
+
+impl Add<usize> for PhysAddr {
+    type Output = Self;
+
+    fn add(self, rhs: usize) -> Self::Output {
+        PhysAddr::new(self.0 + rhs)
+    }
+}
+
+impl Debug for PhysAddr {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "PhysAddr({:#x})", self.0)
+    }
+}
+
+impl VirtAddr {
+    /// Creates a canonical form, virtual address.
+    pub fn new(addr: usize) -> Self {
+        let x = addr.get_bits(47..64);
+        debug_assert!(x == 0 || x == 0x1ffff, "address is not in canonical form");
+        Self(addr)
+    }
+
+    /// Converts the virtual address to a usize.
+    pub fn as_usize(self) -> usize {
+        self.0
+    }
+
+    /// Gets the level 4 index for paging.
+    pub fn p4_index(&self) -> usize {
+        (self.0 >> 39) & 511
+    }
+
+    /// Gets the level 3 index for paging.
+    pub fn p3_index(&self) -> usize {
+        (self.0 >> 30) & 511
+    }
+
+    /// Gets the level 2 index for paging.
+    pub fn p2_index(&self) -> usize {
+        (self.0 >> 21) & 511
+    }
+
+    /// Gets the level 1 index for paging.
+    pub fn p1_index(&self) -> usize {
+        (self.0 >> 12) & 511
+    }
+
+    /// Offset in page.
+    pub fn page_offset(&self) -> usize {
+        self.0 & 0xfff
+    }
+}
+
+impl Debug for VirtAddr {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "VirtAddr({:#x})", self.0)
+    }
+}

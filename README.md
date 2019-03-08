@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="Kwast" src="https://github.com/nielsdos/tmp/raw/master/docs/small_logo.png">
+<img alt="Kwast" src="https://github.com/nielsdos/kwast/raw/master/docs/small_logo.png">
 </p>
 
 **Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture.
@@ -56,7 +56,7 @@ cargo run
 ```
 
 ### Contributing
-Interested in contributing to the project? Check the issues for TODO items
+Interested in contributing to the project? Check the issues for TODO items.
 
 ## Goals
 

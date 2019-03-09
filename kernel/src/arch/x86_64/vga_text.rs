@@ -4,63 +4,37 @@ use core::ptr::Unique;
 use spin::Mutex;
 use volatile::Volatile;
 
+const VGA_WIDTH: usize = 80;
+const VGA_HEIGHT: usize = 25;
+
 /// Represents the VGA text buffer.
 type Buffer = [[Volatile<ScreenChar>; VGA_WIDTH]; VGA_HEIGHT];
-
-/// Represents the foreground + background color of a cell.
-#[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
-struct ColorCode(u8);
 
 /// Represents a character on the screen.
 #[derive(Clone, Copy)]
 #[repr(C)]
 struct ScreenChar {
     char: u8,
-    color: ColorCode,
+    color: u8,
 }
-
-const VGA_WIDTH: usize = 80;
-const VGA_HEIGHT: usize = 25;
 
 struct Writer {
     x: usize,
-    color: ColorCode,
     buffer: Unique<Buffer>,
-}
-
-/// Standard VGA colors.
-#[allow(dead_code)]
-#[repr(u8)]
-pub enum Color {
-    Black = 0,
-    Blue = 1,
-    Green = 2,
-    Cyan = 3,
-    Red = 4,
-    Magenta = 5,
-    Brown = 6,
-    LightGray = 7,
-    DarkGray = 8,
-    LightBlue = 9,
-    LightGreen = 10,
-    LightCyan = 11,
-    LightRed = 12,
-    Pink = 13,
-    Yellow = 14,
-    White = 15,
 }
 
 static WRITER: Mutex<Writer> = Mutex::new(Writer {
     x: 0,
-    color: ColorCode::new(Color::Green, Color::Black),
     buffer: unsafe { Unique::new_unchecked(0xb8000 as *mut Buffer) },
 });
 
-impl ColorCode {
-    /// Create a new `ColorCode` based on a foreground and a background color.
-    pub const fn new(fg: Color, bg: Color) -> Self {
-        ColorCode((bg as u8) << 4 | (fg as u8))
+impl ScreenChar {
+    /// Creates a new screen character.
+    fn new(char: u8) -> Self {
+        ScreenChar {
+            char,
+            color: 0x07,
+        }
     }
 }
 
@@ -79,9 +53,8 @@ impl Writer {
 
                 let y = VGA_HEIGHT - 1;
                 let x = self.x;
-                let color = self.color;
 
-                self.buffer()[y][x].write(ScreenChar { char, color });
+                self.buffer()[y][x].write(ScreenChar::new(char));
 
                 self.x += 1;
             }
@@ -98,22 +71,13 @@ impl Writer {
         }
 
         // Clear bottom row
-        let blank = ScreenChar {
-            char: b' ',
-            color: self.color,
-        };
-
+        let blank = ScreenChar::new(b' ');
         for x in 0..VGA_WIDTH {
             self.buffer()[VGA_HEIGHT - 1][x].write(blank);
         }
 
         // Reset
         self.x = 0;
-    }
-
-    #[allow(dead_code)]
-    pub fn set_color(&mut self, color: ColorCode) {
-        self.color = color;
     }
 }
 

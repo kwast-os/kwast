@@ -37,6 +37,11 @@ impl PhysAddr {
         self.0
     }
 
+    /// Converts the physical address to a u64.
+    pub fn as_u64(self) -> u64 {
+        self.0 as u64
+    }
+
     /// Aligns a memory address down.
     pub fn align_down(&self) -> Self {
         PhysAddr(self.0 & !(PAGE_SIZE - 1))
@@ -73,6 +78,11 @@ impl VirtAddr {
     /// Converts the virtual address to a usize.
     pub fn as_usize(self) -> usize {
         self.0
+    }
+
+    /// Converts the virtual address to a u64.
+    pub fn as_u64(self) -> u64 {
+        self.0 as u64
     }
 
     /// Gets the level 4 index for paging.

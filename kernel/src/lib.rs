@@ -9,8 +9,9 @@ use core::panic::PanicInfo;
 
 use arch::interrupts;
 
-use crate::arch::x86_64::address::VirtAddr;
+use crate::arch::x86_64::address::{PhysAddr, VirtAddr};
 use crate::arch::x86_64::paging::ActiveMapping;
+use crate::arch::x86_64::paging::EntryFlags;
 
 #[macro_use]
 mod arch;
@@ -46,8 +47,17 @@ pub extern "C" fn entry(mboot_addr: usize) {
     println!("kernel end: {:#x} | mboot end: {:#x}", kernel_end, mboot_end);
     //pmm::init(&mboot_struct, reserved_end);
 
-    let active = ActiveMapping::new();
+    let mut active = ActiveMapping::new();
     println!("{:#?}", active.translate(VirtAddr::new(0xb8000)));
     println!("{:#?}", active.translate(VirtAddr::new(0xffffffff_fffff000)));
     println!("{:#?}", active.translate(VirtAddr::new(0)));
+
+    let res = active.map_single(
+        VirtAddr::new(0),
+        PhysAddr::new(0xb8000),
+        EntryFlags::PRESENT,
+    );
+    println!("----");
+    println!("{:#?}", res);
+    println!("{:04x}", unsafe { *((0xB8000 + 19 * 80 * 2) as *const u16) });
 }

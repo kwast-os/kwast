@@ -4,7 +4,7 @@
 
 **Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture.
 
-Since WebAssembly was designed to be a safe language, we can run it without having to use *hardware usermode* and *multiple address spaces*. This enables higher performance and opens more possibilities to implement a microkernel.
+Since WebAssembly was designed to be a safe language, we can run it **without** having to use *hardware usermode* and *multiple address spaces*. This enables higher performance and opens more possibilities to implement a microkernel.
 You can read more about "[Why a microkernel?](#history-aka-why-a-microkernel)" below.
 Check out the [goals / ideas](#goals) section.
 

@@ -52,6 +52,8 @@ impl FrameAllocator {
             let start = start.as_usize();
             let end = end.as_usize();
 
+            // TODO: use 2MiB pages if possible
+
             println!("{:x} {:x}", start, end);
         }
     }
@@ -61,10 +63,10 @@ impl FrameAllocator {
 static ALLOCATOR: Mutex<FrameAllocator> = Mutex::new(FrameAllocator::empty());
 
 pub fn init(mboot_struct: &BootInformation, reserved_end: usize) {
+    // TODO: deadlocks?
     ALLOCATOR.lock().init(mboot_struct, PhysAddr::new(reserved_end));
 
     println!("{:#?}", ALLOCATOR);
-    loop {}
 
     // TODO: calc overhead between 2 MiB & 4 KiB and dynamically decide?
 }

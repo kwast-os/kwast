@@ -105,9 +105,9 @@ start:
     mov $0x0277, %ecx
     wrmsr
 
-    // Enable PAE
+    // Enable PSE, PAE
     mov %cr4, %eax
-    orl $(1 << 5), %eax
+    orl $(1 << 4 | 1 << 5), %eax
     mov %eax, %cr4
 
     // Enable: long mode and NX bit

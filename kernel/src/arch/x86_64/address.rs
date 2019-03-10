@@ -104,11 +104,6 @@ impl VirtAddr {
     pub fn p1_index(&self) -> usize {
         (self.0 >> 12) & 511
     }
-
-    /// Offset in page.
-    pub fn page_offset(&self) -> usize {
-        self.0 & 0xfff
-    }
 }
 
 impl Debug for VirtAddr {

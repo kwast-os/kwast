@@ -71,31 +71,82 @@ impl ActiveMapping {
 
     /// Translate a virtual address to a physical address (if mapped).
     pub fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
-        debug_assert_eq!(addr.page_offset(), 0);
-        self.p4()
+        let p2 = self.p4()
             .next_table(addr.p4_index())
-            .and_then(|p3| p3.next_table(addr.p3_index()))
-            .and_then(|p2| p2.next_table(addr.p2_index()))
-            .and_then(|p1| p1.entries[addr.p1_index()].phys_addr())
+            .and_then(|p3| p3.next_table(addr.p3_index()));
+
+        if p2.is_none() {
+            return None;
+        }
+
+        let p2 = p2.unwrap();
+        let p2_entry = &p2.entries[addr.p2_index()];
+        if !p2_entry.flags().contains(EntryFlags::PRESENT) {
+            return None;
+        }
+
+        if p2_entry.flags().contains(EntryFlags::HUGE_PAGE) {
+            // We know it is present, so we can just wrap it.
+            Some(p2_entry.phys_addr_unchecked())
+        } else {
+            p2.next_table(addr.p2_index())
+                .and_then(|p1| p1.entries[addr.p1_index()].phys_addr())
+        }
+    }
+
+    /// Maps a 2MiB page with a caching strategy parameter.
+    pub fn map_2m_cache(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+        debug_assert_eq!(vaddr.as_usize() & 0x1fffff, 0);
+        debug_assert_eq!(paddr.as_usize() & 0x1fffff, 0);
+
+        let p4 = self.p4_mut();
+        let p3 = p4.next_table_may_create(vaddr.p4_index())?;
+        let p2 = p3.next_table_may_create(vaddr.p3_index())?;
+
+        // TODO: what to do if there was a 4k page mapped here?
+        let e = &mut p2.entries[vaddr.p2_index()];
+        let was_present = e.flags().contains(EntryFlags::PRESENT);
+        e.reset_to(paddr, flags | EntryFlags::HUGE_PAGE, cache_type);
+
+        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
+        if was_present {
+            ActiveMapping::invalidate(vaddr);
+        }
+
+        Ok(())
     }
 
     /// Maps a single page with a caching strategy parameter.
-    pub fn map_single_cache(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
-        let mut p4 = self.p4_mut();
+    pub fn map_4k_cache(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+        debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
+        debug_assert_eq!(paddr.as_usize() & 0xfff, 0);
+
+        let p4 = self.p4_mut();
         let p3 = p4.next_table_may_create(vaddr.p4_index())?;
         let p2 = p3.next_table_may_create(vaddr.p3_index())?;
         let p1 = p2.next_table_may_create(vaddr.p2_index())?;
 
-        p1.entries[vaddr.p1_index()].reset_to(paddr, flags, cache_type);
+        let e = &mut p1.entries[vaddr.p1_index()];
+        let was_present = e.flags().contains(EntryFlags::PRESENT);
+        e.reset_to(paddr, flags, cache_type);
 
-        ActiveMapping::invalidate(vaddr);
+        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
+        if was_present {
+            ActiveMapping::invalidate(vaddr);
+        }
 
         Ok(())
     }
 
     /// Maps a single page.
     #[inline]
-    pub fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        self.map_single_cache(vaddr, paddr, flags, CacheType::WriteBack)
+    pub fn map_4k(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
+        self.map_4k_cache(vaddr, paddr, flags, CacheType::WriteBack)
+    }
+
+    /// Maps a 2MiB page.
+    #[inline]
+    pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
+        self.map_2m_cache(vaddr, paddr, flags, CacheType::WriteBack)
     }
 }

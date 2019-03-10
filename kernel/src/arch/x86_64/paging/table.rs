@@ -56,9 +56,12 @@ impl<L> Table<L> where L: HierarchicalLevel {
 
     /// Gets the next table address.
     fn next_table_address(&self, index: usize) -> Option<usize> {
-        let entry = self.entries[index].flags();
+        let flags = self.entries[index].flags();
 
-        if entry.contains(EntryFlags::PRESENT) {
+        // Would be invalid if we refer to a huge page
+        debug_assert!(!flags.contains(EntryFlags::HUGE_PAGE));
+
+        if flags.contains(EntryFlags::PRESENT) {
             Some(self.next_table_address_unchecked(index))
         } else {
             None
@@ -79,6 +82,8 @@ impl<L> Table<L> where L: HierarchicalLevel {
             Ok(unsafe { &mut *(addr as *mut _) })
         } else {
             // TODO: allocate phys adress and put in table
+            println!("index: {}", index);
+            unimplemented!();
             Err(MappingError::OOM)
         }
     }

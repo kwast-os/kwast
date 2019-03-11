@@ -52,5 +52,10 @@ pub extern "C" fn entry(mboot_addr: usize) {
         CacheType::WriteBack,
     ).expect("could not map page");
 
+    let ptr = 0x400_000 as *mut i32;
+    unsafe {
+        ptr.write_volatile(222);
+    }
+
     println!("end");
 }

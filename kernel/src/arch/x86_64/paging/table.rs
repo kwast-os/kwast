@@ -94,13 +94,20 @@ impl<L> Table<L> where L: HierarchicalLevel {
 
         // Need to create a table.
         if !flags.contains(EntryFlags::PRESENT) {
-            /*self.entries[index].set(
-                PhysAddr::new(...),
-                EntryFlags::PRESENT | EntryFlags::WRITABLE,
-                CacheType::WriteBack,
-            );*/
+            // We could use 'map_page` from mem, but it would be much slower.
+            // Therefore, we manipulate the head ourselves. (see docs of `mem`)
+            unsafe {
+                mem::consume_and_move_top(|top| {
+                    self.entries[index].set(
+                        top,
+                        EntryFlags::PRESENT | EntryFlags::WRITABLE,
+                        CacheType::WriteBack,
+                    );
 
-            mem::map_page(VirtAddr::new(addr), EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX, CacheType::WriteBack)?;
+                    VirtAddr::new(addr)
+                })?;
+            }
+
             reference.clear();
         }
 

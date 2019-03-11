@@ -2,8 +2,7 @@ use multiboot2::{BootInformation, MemoryMapTag};
 use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::arch::paging::{ActiveMapping, EntryFlags};
-use crate::arch::paging::CacheType;
+use crate::arch::paging::{ActiveMapping, CacheType, EntryFlags};
 
 /// Map result.
 pub type MappingResult = Result<(), MappingError>;
@@ -16,6 +15,17 @@ pub enum MappingError {
 }
 
 /// The default frame allocator.
+///
+/// How does this allocator work?
+/// Instead of having a fixed area in the memory to keep the stack,
+/// we let each free frame contain a pointer to the next free frame on the stack.
+/// This limits the amount of virtual memory we need to reserve.
+///
+/// When we allocate a frame, we map it to the virtual memory and read the pointer.
+/// Then we move the head. There is no unnecessary mapping happening here.
+///
+/// It is likely that, for an allocation, the data will be accessed anyway after the mapping.
+/// For a free, it is likely that the data was already accessed.
 #[derive(Debug)]
 pub struct FrameAllocator {
     reserved_end: PhysAddr,
@@ -51,7 +61,7 @@ impl FrameAllocator {
         // PML1 exists for the corresponding PML2
         let tmp_4k_map_addr = VirtAddr::new(0x1000);
 
-        // Previous stack entry address
+        // Previous entry address
         let mut top: usize = 0;
         let mut prev_entry_addr: *mut usize = &mut top as *mut _;
 
@@ -88,7 +98,7 @@ impl FrameAllocator {
             let mut current = start.as_usize();
             let end = end.as_usize();
 
-            // Sets the first available address ( = top of the stack / linked list).
+            // Sets the first available address ( = top of the stack).
             if unlikely!(top == 0) {
                 top = current;
             }
@@ -134,7 +144,7 @@ impl FrameAllocator {
                         }*/
         }
 
-        // End linked list
+        // End
         unsafe {
             prev_entry_addr.write_volatile(0);
         }
@@ -143,23 +153,37 @@ impl FrameAllocator {
         // TODO: unmap
     }
 
+    /// Moves the top of the stack.
+    fn move_top(&mut self, vaddr: VirtAddr) {
+        // Read and set the next top address.
+        let ptr = vaddr.as_usize() as *mut usize;
+        self.top = PhysAddr::new(unsafe { *ptr });
+    }
+
     /// Gets a page and maps it to a virtual address.
     pub fn map_page(&mut self, vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
-        // TODO: flags & caching type as argument
-
-        if self.top.is_null() {
+        if unlikely!(self.top.is_null()) {
             return Err(MappingError::OOM);
         }
 
-        // Maps the page to the destination virtual address.
+        // Maps the page to the destination virtual address, then moves the top.
         let mut mapping = unsafe { ActiveMapping::new() };
         mapping.map_4k(vaddr, self.top, flags, cache_type)?;
+        self.move_top(vaddr);
 
-        // Read and set the next linked list top address.
-        let ptr = vaddr.as_usize() as *mut usize;
-        self.top = PhysAddr::new(unsafe { *ptr });
-        //println!("next top: {:#?}", self.top);
+        Ok(())
+    }
 
+    /// Consumes the top and moves it. This function is used internally for memory management.
+    /// It allows the paging component to get the top directly and let it move.
+    /// This is faster than going via `map_page`.
+    pub unsafe fn consume_and_move_top<F>(&mut self, f: F) -> MappingResult
+        where F: FnOnce(PhysAddr) -> VirtAddr {
+        if unlikely!(self.top.is_null()) {
+            return Err(MappingError::OOM);
+        }
+
+        self.move_top(f(self.top));
         Ok(())
     }
 }
@@ -175,6 +199,18 @@ pub fn init(mboot_struct: &BootInformation, reserved_end: usize) {
 /// Maps a page.
 pub fn map_page(vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
     let mut mapping = unsafe { ActiveMapping::new() };
+
+    // Pre-allocating the required tables.
+    // This can be done without locking the PMM the whole time, which prevents a deadlock.
     mapping.ensure_4k_tables_exist(vaddr)?;
+
     ALLOCATOR.lock().map_page(vaddr, flags, cache_type)
+}
+
+/// Consumes the top and then lets it move. (internal memory management use only)
+/// See docs at impl.
+#[inline]
+pub unsafe fn consume_and_move_top<F>(f: F) -> MappingResult
+    where F: FnOnce(PhysAddr) -> VirtAddr {
+    ALLOCATOR.lock().consume_and_move_top(f)
 }

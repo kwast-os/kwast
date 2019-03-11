@@ -96,17 +96,15 @@ impl<L> Table<L> where L: HierarchicalLevel {
         if !flags.contains(EntryFlags::PRESENT) {
             // We could use 'map_page` from mem, but it would be much slower.
             // Therefore, we manipulate the head ourselves. (see docs of `mem`)
-            unsafe {
-                mem::consume_and_move_top(|top| {
-                    self.entries[index].set(
-                        top,
-                        EntryFlags::PRESENT | EntryFlags::WRITABLE,
-                        CacheType::WriteBack,
-                    );
+            mem::get_pmm().consume_and_move_top(|top| {
+                self.entries[index].set(
+                    top,
+                    EntryFlags::PRESENT | EntryFlags::WRITABLE,
+                    CacheType::WriteBack,
+                );
 
-                    VirtAddr::new(addr)
-                })?;
-            }
+                VirtAddr::new(addr)
+            })?;
 
             reference.clear();
         }

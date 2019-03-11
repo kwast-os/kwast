@@ -9,15 +9,14 @@ use core::panic::PanicInfo;
 
 use arch::interrupts;
 
-use crate::arch::x86_64::address::{PhysAddr, VirtAddr};
-use crate::arch::x86_64::paging::ActiveMapping;
-use crate::arch::x86_64::paging::EntryFlags;
+use crate::arch::address::VirtAddr;
+use crate::arch::paging::{CacheType, EntryFlags};
 
 #[macro_use]
 mod arch;
 #[macro_use]
 mod macros;
-mod pmm;
+mod mem;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -45,27 +44,13 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let mboot_end = mboot_struct.end_address();
     let reserved_end = max(kernel_end, mboot_end);
     println!("kernel end: {:#x} | mboot end: {:#x}", kernel_end, mboot_end);
-    pmm::init(&mboot_struct, reserved_end);
+    mem::init(&mboot_struct, reserved_end);
 
-    let mut active = ActiveMapping::new();
-    println!("{:#?}", active.translate(VirtAddr::new(0xb8000)));
-    println!("{:#?}", active.translate(VirtAddr::new(0xffffffff_fffff000)));
-    println!("{:#?}", active.translate(VirtAddr::new(0x0)));
-
-    let res = active.map_2m(
-        VirtAddr::new(0x200000),
-        PhysAddr::new(0x000000),
+    mem::map_page(
+        VirtAddr::new(0x400_000),
         EntryFlags::PRESENT | EntryFlags::WRITABLE,
-    );
-    println!("{:?}", res);
-    println!("{:#?}", active.translate(VirtAddr::new(0x200000)));//TODO: test R/W & NX & test hoe 2MiB adres aligned moet zijn
+        CacheType::WriteBack,
+    ).expect("could not map page");
 
-
-    let a = 0x2b8000 as *mut u16;
-    unsafe {
-        println!("{:x}", *a.offset(0));
-        a.offset(0 + 80).write_volatile(0xFFFF);
-        a.offset(0 + 80 + 1).write_volatile(0xFFFF);
-        a.offset(0 + 80 + 2).write_volatile(0xFFFF);
-    }
+    println!("end");
 }

@@ -7,6 +7,8 @@ bitflags! {
         const PRESENT = 1 << 0;
         const WRITABLE = 1 << 1;
         const HUGE_PAGE = 1 << 7;
+        /// No execute.
+        const NX = 1 << 63;
     }
 }
 
@@ -22,7 +24,13 @@ pub enum CacheType {
 
 pub struct Entry(u64);
 
+#[allow(dead_code)]
 impl Entry {
+    /// Clears the entry.
+    pub fn clear(&mut self) {
+        self.0 = 0
+    }
+
     /// Sets the physical address of this entry, keeps flags.
     pub fn set_phys_addr(&mut self, addr: PhysAddr) {
         self.0 = self.flags().bits() | addr.as_u64();
@@ -30,11 +38,11 @@ impl Entry {
 
     /// Sets the flags, keeps the physical address.
     pub fn set_flags(&mut self, flags: EntryFlags, cache_type: CacheType) {
-        self.0 = self.flags().bits() | (cache_type as u64) | self.phys_addr_unchecked().as_u64();
+        self.0 = flags.bits() | (cache_type as u64) | self.phys_addr_unchecked().as_u64();
     }
 
-    /// Resets the entry to the given address and flags.
-    pub fn reset_to(&mut self, addr: PhysAddr, flags: EntryFlags, cache_type: CacheType) {
+    /// Sets the entry to the given address and flags.
+    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags, cache_type: CacheType) {
         self.0 = flags.bits() | (cache_type as u64) | addr.as_u64();
     }
 

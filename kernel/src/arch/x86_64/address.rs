@@ -32,6 +32,11 @@ impl PhysAddr {
         Self(0)
     }
 
+    /// Checks if the address is null.
+    pub fn is_null(self) -> bool {
+        self.0 == 0
+    }
+
     /// Converts the physical address to a usize.
     pub fn as_usize(self) -> usize {
         self.0
@@ -86,22 +91,22 @@ impl VirtAddr {
     }
 
     /// Gets the level 4 index for paging.
-    pub fn p4_index(&self) -> usize {
+    pub fn p4_index(self) -> usize {
         (self.0 >> 39) & 511
     }
 
     /// Gets the level 3 index for paging.
-    pub fn p3_index(&self) -> usize {
+    pub fn p3_index(self) -> usize {
         (self.0 >> 30) & 511
     }
 
     /// Gets the level 2 index for paging.
-    pub fn p2_index(&self) -> usize {
+    pub fn p2_index(self) -> usize {
         (self.0 >> 21) & 511
     }
 
     /// Gets the level 1 index for paging.
-    pub fn p1_index(&self) -> usize {
+    pub fn p1_index(self) -> usize {
         (self.0 >> 12) & 511
     }
 }

@@ -1,27 +1,16 @@
-use core::ptr::Unique;
-
 use bitflags::bitflags;
 
 use crate::arch::x86_64::address::{PhysAddr, VirtAddr};
+use crate::mem::{MappingError, MappingResult};
 
 pub use self::entry::{CacheType, EntryFlags};
-use self::table::{Level4, Table};
+use self::table::{Level1, Level2, Level4, Table};
 
 mod entry;
 mod table;
 
-/// Page size.
+/// The page size on this arch.
 pub const PAGE_SIZE: usize = 0x1000;
-
-/// Error during mapping request.
-#[derive(Debug)]
-pub enum MappingError {
-    /// Out of memory.
-    OOM
-}
-
-/// Map result.
-pub type MappingResult = Result<(), MappingError>;
 
 bitflags! {
     /// Represents a PF error.
@@ -41,27 +30,21 @@ bitflags! {
     }
 }
 
+// TODO: locking etc (e.g. when creating new tables)?
+
 pub struct ActiveMapping {
-    p4: Unique<Table<Level4>>,
+    p4: &'static mut Table<Level4>,
 }
 
+#[allow(dead_code)]
 impl ActiveMapping {
     /// Creates a new PML4 owner.
-    pub fn new() -> Self {
+    /// You need to be very careful if you create a new instance of this!
+    pub unsafe fn new() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self {
-            p4: unsafe { Unique::new_unchecked(p4_ptr) }
+            p4: &mut *p4_ptr
         }
-    }
-
-    /// Gets the PML4 table.
-    fn p4(&self) -> &Table<Level4> {
-        unsafe { self.p4.as_ref() }
-    }
-
-    /// Gets the PML4 table.
-    fn p4_mut(&mut self) -> &mut Table<Level4> {
-        unsafe { self.p4.as_mut() }
     }
 
     /// Invalidates a virtual address.
@@ -71,7 +54,7 @@ impl ActiveMapping {
 
     /// Translate a virtual address to a physical address (if mapped).
     pub fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
-        let p2 = self.p4()
+        let p2 = self.p4
             .next_table(addr.p4_index())
             .and_then(|p3| p3.next_table(addr.p3_index()));
 
@@ -94,59 +77,54 @@ impl ActiveMapping {
         }
     }
 
-    /// Maps a 2MiB page with a caching strategy parameter.
-    pub fn map_2m_cache(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+    /// Ensures the tables for 2M page mapping on this virtual address exist.
+    pub fn ensure_2m_tables_exist(&mut self, vaddr: VirtAddr) -> Result<&mut Table<Level2>, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0x1fffff, 0);
-        debug_assert_eq!(paddr.as_usize() & 0x1fffff, 0);
 
-        let p4 = self.p4_mut();
-        let p3 = p4.next_table_may_create(vaddr.p4_index())?;
-        let p2 = p3.next_table_may_create(vaddr.p3_index())?;
-
-        // TODO: what to do if there was a 4k page mapped here?
-        let e = &mut p2.entries[vaddr.p2_index()];
-        let was_present = e.flags().contains(EntryFlags::PRESENT);
-        e.reset_to(paddr, flags | EntryFlags::HUGE_PAGE, cache_type);
-
-        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
-        if was_present {
-            ActiveMapping::invalidate(vaddr);
-        }
-
-        Ok(())
-    }
-
-    /// Maps a single page with a caching strategy parameter.
-    pub fn map_4k_cache(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
-        debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
-        debug_assert_eq!(paddr.as_usize() & 0xfff, 0);
-
-        let p4 = self.p4_mut();
-        let p3 = p4.next_table_may_create(vaddr.p4_index())?;
-        let p2 = p3.next_table_may_create(vaddr.p3_index())?;
-        let p1 = p2.next_table_may_create(vaddr.p2_index())?;
-
-        let e = &mut p1.entries[vaddr.p1_index()];
-        let was_present = e.flags().contains(EntryFlags::PRESENT);
-        e.reset_to(paddr, flags, cache_type);
-
-        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
-        if was_present {
-            ActiveMapping::invalidate(vaddr);
-        }
-
-        Ok(())
-    }
-
-    /// Maps a single page.
-    #[inline]
-    pub fn map_4k(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        self.map_4k_cache(vaddr, paddr, flags, CacheType::WriteBack)
+        let p3 = self.p4.next_table_may_create(vaddr.p4_index())?;
+        p3.next_table_may_create(vaddr.p3_index())
     }
 
     /// Maps a 2MiB page.
-    #[inline]
-    pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        self.map_2m_cache(vaddr, paddr, flags, CacheType::WriteBack)
+    pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+        debug_assert_eq!(paddr.as_usize() & 0x1fffff, 0);
+
+        let p2 = self.ensure_2m_tables_exist(vaddr)?;
+        let e = &mut p2.entries[vaddr.p2_index()];
+        let was_present = e.flags().contains(EntryFlags::PRESENT);
+        e.set(paddr, flags | EntryFlags::HUGE_PAGE, cache_type);
+
+        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
+        if was_present {
+            ActiveMapping::invalidate(vaddr);
+        }
+
+        Ok(())
+    }
+
+    /// Ensures the tables for 4K page mapping on this virtual address exist.
+    pub fn ensure_4k_tables_exist(&mut self, vaddr: VirtAddr) -> Result<&mut Table<Level1>, MappingError> {
+        debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
+
+        let p3 = self.p4.next_table_may_create(vaddr.p4_index())?;
+        let p2 = p3.next_table_may_create(vaddr.p3_index())?;
+        p2.next_table_may_create(vaddr.p2_index())
+    }
+
+    /// Maps a 4k page.
+    pub fn map_4k(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+        debug_assert_eq!(paddr.as_usize() & 0xfff, 0);
+
+        let p1 = self.ensure_4k_tables_exist(vaddr)?;
+        let e = &mut p1.entries[vaddr.p1_index()];
+        let was_present = e.flags().contains(EntryFlags::PRESENT);
+        e.set(paddr, flags, cache_type);
+
+        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
+        if was_present {
+            ActiveMapping::invalidate(vaddr);
+        }
+
+        Ok(())
     }
 }

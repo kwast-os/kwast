@@ -1,7 +1,9 @@
 use core::marker::PhantomData;
 
+use crate::arch::x86_64::address::VirtAddr;
 use crate::arch::x86_64::paging::entry::*;
 use crate::arch::x86_64::paging::MappingError;
+use crate::mem;
 
 // We use the clever solution for static type safety as described by [Philipp Oppermann's blog](https://os.phil-opp.com/)
 
@@ -46,6 +48,15 @@ pub struct Table<L: Level> {
     _phantom: PhantomData<L>,
 }
 
+impl<L> Table<L> where L: Level {
+    /// Clears the table entries. (internal use only)
+    fn clear(&mut self) {
+        for e in self.entries.iter_mut() {
+            e.clear();
+        }
+    }
+}
+
 impl<L> Table<L> where L: HierarchicalLevel {
     /// Gets the next table address (unchecked).
     /// Internal use only!
@@ -75,16 +86,24 @@ impl<L> Table<L> where L: HierarchicalLevel {
 
     /// Gets the next table (mutable), creates it if it doesn't exist yet.
     pub fn next_table_may_create(&mut self, index: usize) -> Result<&mut Table<L::NextLevel>, MappingError> {
-        let entry = self.entries[index].flags();
-        let addr = self.next_table_address_unchecked(index);
+        let flags = self.entries[index].flags();
+        debug_assert!(!flags.contains(EntryFlags::HUGE_PAGE));
 
-        if entry.contains(EntryFlags::PRESENT) {
-            Ok(unsafe { &mut *(addr as *mut _) })
-        } else {
-            // TODO: allocate phys adress and put in table
-            println!("index: {}", index);
-            unimplemented!();
-            Err(MappingError::OOM)
+        let addr = self.next_table_address_unchecked(index);
+        let reference = unsafe { &mut *(addr as *mut Table<L::NextLevel>) };
+
+        // Need to create a table.
+        if !flags.contains(EntryFlags::PRESENT) {
+            /*self.entries[index].set(
+                PhysAddr::new(...),
+                EntryFlags::PRESENT | EntryFlags::WRITABLE,
+                CacheType::WriteBack,
+            );*/
+
+            mem::map_page(VirtAddr::new(addr), EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX, CacheType::WriteBack)?;
+            reference.clear();
         }
+
+        Ok(reference)
     }
 }

@@ -85,9 +85,9 @@ start:
     // Identity map the first 2MiB (except page 0)
     // TODO: should map sections with correct executable & R/W flags, we could do this in asm by using linker variables
     //       instead of doing it in the rust side, so we don't have to map twice
-    mov $0x1003, %esi
-    mov $(boot_pml1 + 8), %edi
-    mov $511, %ecx
+    mov $0x2003, %esi
+    mov $(boot_pml1 + 8 * 2), %edi
+    mov $510, %ecx
 1:
     mov %esi, (%edi)
     add $0x1000, %esi
@@ -105,7 +105,7 @@ start:
     mov $0x0277, %ecx
     wrmsr
 
-    // Enable PSE, PAE
+    // Enable: PSE, PAE
     mov %cr4, %eax
     orl $(1 << 4 | 1 << 5), %eax
     mov %eax, %cr4

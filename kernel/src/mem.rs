@@ -177,13 +177,14 @@ impl FrameAllocator {
     /// Consumes the top and moves it. This function is used internally for memory management.
     /// It allows the paging component to get the top directly and let it move.
     /// This is faster than going via `map_page`.
-    pub unsafe fn consume_and_move_top<F>(&mut self, f: F) -> MappingResult
+    pub fn consume_and_move_top<F>(&mut self, f: F) -> MappingResult
         where F: FnOnce(PhysAddr) -> VirtAddr {
         if unlikely!(self.top.is_null()) {
             return Err(MappingError::OOM);
         }
 
         self.move_top(f(self.top));
+
         Ok(())
     }
 }

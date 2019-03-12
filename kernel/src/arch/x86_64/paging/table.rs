@@ -90,12 +90,12 @@ impl<L> Table<L> where L: HierarchicalLevel {
         debug_assert!(!flags.contains(EntryFlags::HUGE_PAGE));
 
         let addr = self.next_table_address_unchecked(index);
-        let reference = unsafe { &mut *(addr as *mut Table<L::NextLevel>) };
+        let table = unsafe { &mut *(addr as *mut Table<L::NextLevel>) };
 
         // Need to create a table.
         if !flags.contains(EntryFlags::PRESENT) {
-            // We could use 'map_page` from mem, but it would be much slower.
-            // Therefore, we manipulate the head ourselves. (see docs of `mem`)
+            // We could call the page mapping functions here, but it would be slower than
+            // manipulating the pmm ourselves.
             mem::get_pmm().consume_and_move_top(|top| {
                 self.entries[index].set(
                     top,
@@ -105,9 +105,9 @@ impl<L> Table<L> where L: HierarchicalLevel {
                 VirtAddr::new(addr)
             })?;
 
-            reference.clear();
+            table.clear();
         }
 
-        Ok(reference)
+        Ok(table)
     }
 }

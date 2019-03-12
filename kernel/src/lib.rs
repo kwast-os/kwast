@@ -9,8 +9,8 @@ use core::panic::PanicInfo;
 use arch::interrupts;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::EntryFlags;
-use crate::arch::x86_64::paging::ActiveMapping;
+use crate::arch::paging::{ActiveMapping, EntryFlags};
+use crate::mem::MemoryMapper;
 
 #[macro_use]
 mod macros;
@@ -32,9 +32,9 @@ fn panic(info: &PanicInfo) -> ! {
 pub fn kernel_main() {
     let mut mapping = unsafe { ActiveMapping::get() };
 
-    mapping.get_and_map_4k(VirtAddr::new(0x400_000), EntryFlags::PRESENT | EntryFlags::WRITABLE)
+    mapping.get_and_map_single(VirtAddr::new(0x400_000), EntryFlags::PRESENT | EntryFlags::WRITABLE)
         .expect("could not map page");
-    mapping.get_and_map_4k(VirtAddr::new(0xdeadb000), EntryFlags::PRESENT | EntryFlags::WRITABLE)
+    mapping.get_and_map_single(VirtAddr::new(0xdeadb000), EntryFlags::PRESENT | EntryFlags::WRITABLE)
         .expect("could not map page");
 
     let ptr = 0x400_000 as *mut i32;

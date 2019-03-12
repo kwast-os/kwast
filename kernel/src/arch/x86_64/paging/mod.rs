@@ -2,6 +2,7 @@ use bitflags::bitflags;
 
 use crate::arch::x86_64::address::{PhysAddr, VirtAddr};
 use crate::mem::{get_pmm, MappingError, MappingResult};
+use crate::mem::MemoryMapper;
 
 pub use self::entry::EntryFlags;
 use self::table::{Level1, Level2, Level4, Table};
@@ -37,25 +38,15 @@ pub struct ActiveMapping {
     p4: &'static mut Table<Level4>,
 }
 
-#[allow(dead_code)]
-impl ActiveMapping {
-    /// Gets the active paging mapping.
-    /// You need to be very careful if you create a new instance of this!
-    pub unsafe fn get() -> Self {
+impl MemoryMapper for ActiveMapping {
+    unsafe fn get() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self {
             p4: &mut *p4_ptr
         }
     }
 
-    /// Invalidates a virtual address.
-    #[inline]
-    fn invalidate(addr: VirtAddr) {
-        unsafe { asm!("invlpg ($0)" :: "r" (addr.as_u64()) : "memory"); }
-    }
-
-    /// Translate a virtual address to a physical address (if mapped).
-    pub fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
+    fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
         let p2 = self.p4
             .next_table(addr.p4_index())
             .and_then(|p3| p3.next_table(addr.p3_index()));
@@ -77,6 +68,30 @@ impl ActiveMapping {
             p2.next_table(addr.p2_index())
                 .and_then(|p1| p1.entries[addr.p1_index()].phys_addr())
         }
+    }
+
+    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
+        let p1 = self.ensure_4k_tables_exist(vaddr)?;
+
+        get_pmm().consume_and_move_top(move |top| {
+            unsafe { Self::map_4k_with_table(p1, vaddr, top, flags); }
+            vaddr
+        })
+    }
+
+    fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
+        let p1 = self.ensure_4k_tables_exist(vaddr)?;
+        unsafe { Self::map_4k_with_table(p1, vaddr, paddr, flags); }
+        Ok(())
+    }
+}
+
+#[allow(dead_code)]
+impl ActiveMapping {
+    /// Invalidates a virtual address.
+    #[inline]
+    fn invalidate(addr: VirtAddr) {
+        unsafe { asm!("invlpg ($0)" :: "r" (addr.as_u64()) : "memory"); }
     }
 
     /// Ensures the tables for 2M page mapping on this virtual address exist.
@@ -109,16 +124,6 @@ impl ActiveMapping {
         Ok(())
     }
 
-    /// Gets a 4 KiB physical page and maps it to a given virtual address.
-    pub fn get_and_map_4k(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
-        let p1 = self.ensure_4k_tables_exist(vaddr)?;
-
-        get_pmm().consume_and_move_top(move |top| {
-            unsafe { Self::map_4k_with_table(p1, vaddr, top, flags); }
-            vaddr
-        })
-    }
-
     /// Ensures the tables for 4KiB page mapping on this virtual address exist.
     fn ensure_4k_tables_exist(&mut self, vaddr: VirtAddr) -> Result<&mut Table<Level1>, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
@@ -141,12 +146,5 @@ impl ActiveMapping {
         if was_present {
             Self::invalidate(vaddr);
         }
-    }
-
-    /// Maps a 4KiB page.
-    pub fn map_4k(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        let p1 = self.ensure_4k_tables_exist(vaddr)?;
-        unsafe { Self::map_4k_with_table(p1, vaddr, paddr, flags); }
-        Ok(())
     }
 }

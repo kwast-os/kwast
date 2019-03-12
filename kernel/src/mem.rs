@@ -2,6 +2,23 @@ use multiboot2::BootInformation;
 use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
+use crate::arch::paging::EntryFlags;
+
+/// Trait for memory mapper: maps a physical address to a virtua address.
+pub trait MemoryMapper {
+    /// Gets the active paging mapping.
+    /// You need to be very careful if you create a new instance of this!
+    unsafe fn get() -> Self;
+
+    /// Translate a virtual address to a physical address (if mapped).
+    fn translate(&self, addr: VirtAddr) -> Option<PhysAddr>;
+
+    /// Gets a single physical page and maps it to a given virtual address.
+    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult;
+
+    /// Maps a single page.
+    fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult;
+}
 
 /// Map result.
 pub type MappingResult = Result<(), MappingError>;

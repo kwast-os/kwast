@@ -2,50 +2,24 @@ use multiboot2::MemoryMapTag;
 
 use crate::mem::*;
 
-use super::{ActiveMapping, CacheType, EntryFlags, Level1, Table};
+use super::{ActiveMapping, EntryFlags};
 use super::{PhysAddr, VirtAddr};
 
 impl FrameAllocator {
-    /// Gets a page and maps it to a virtual address.
-    fn map_page(&mut self, p1: &mut Table<Level1>, vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
-        if unlikely!(self.top.is_null()) {
-            return Err(MappingError::OOM);
-        }
-
-        // Maps the page to the destination virtual address, then moves the top.
-        ActiveMapping::map_4k_with_table(p1, vaddr, self.top, flags, cache_type)?;
-        self.move_top(vaddr);
-
-        Ok(())
-    }
-
     /// Applies the memory map.
     pub fn apply_mmap(&mut self, tag: &MemoryMapTag) {
-        let mut mapping = unsafe { ActiveMapping::new() };
+        let mut mapping = unsafe { ActiveMapping::get() };
 
         // Will be the last entry of the PML2 (PML2 exists)
         let tmp_2m_map_addr = VirtAddr::new(511 * 0x200000);
         // PML1 exists for the corresponding PML2
         let tmp_4k_map_addr = VirtAddr::new(0x1000);
+        // Mapping flags
+        let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
         // Previous entry address
         let mut top: usize = 0;
         let mut prev_entry_addr: *mut usize = &mut top as *mut _;
-
-        let mut fill_list_entry = |paddr: usize, vaddr: VirtAddr, count: u16, debug: bool| {
-            let mut paddr = paddr;
-            let mut count = count;
-
-            while count != 0 {
-                if debug { println!("{:p}", prev_entry_addr); }
-                unsafe { prev_entry_addr.write_volatile(paddr); }
-
-                prev_entry_addr = paddr as *mut _;
-
-                count -= 1;
-                paddr += 0x1000;
-            }
-        };
 
         for x in tag.memory_areas() {
             // There is actually no guarantee about the sanitization of the data.
@@ -70,35 +44,43 @@ impl FrameAllocator {
                 top = current;
             }
 
-            // TODO: explain how this works & why 2M mapping
+            let p1 = mapping.ensure_4k_tables_exist(tmp_4k_map_addr).unwrap();
 
             // Process 4K parts at beginning until we have 2M parts.
             while current < end && (current & 0x1fffff) != 0 {
                 unsafe {
                     prev_entry_addr.write_volatile(current);
                 }
-
-                mapping.map_4k(tmp_4k_map_addr, PhysAddr::new(current), EntryFlags::PRESENT | EntryFlags::WRITABLE, CacheType::WriteBack)
-                    .expect("failed to map");
+                unsafe {
+                    ActiveMapping::map_4k_with_table(p1, tmp_4k_map_addr, PhysAddr::new(current), map_flags);
+                }
 
                 prev_entry_addr = tmp_4k_map_addr.as_usize() as *mut _;
-
-                // fill_list_entry(current, tmp_4k_map_addr, 1, false);
-
                 current += 0x1000;
             }
-            /*
-                        // Process 2M parts until a 2M part doesn't fit anymore.
-                        while current + 0x200000 < end {
-                            mapping.map_2m(tmp_2m_map_addr, PhysAddr::new(current), EntryFlags::PRESENT | EntryFlags::WRITABLE)
-                                .expect("failed to map");
 
-                            println!("2M fill");
-                            fill_list_entry(current, tmp_2m_map_addr, 0x200, true);
+            let p2 = mapping.ensure_2m_tables_exist(tmp_2m_map_addr).unwrap();
 
-                            current += 0x200000;
-                        }
-            */
+            // Process 2 MiB parts until a 2 MiB part doesn't fit anymore.
+            // We do this because we only need one invalidation for the whole 2 MiB area.
+            while current + 0x200_000 < end {
+                unsafe {
+                    prev_entry_addr.write_volatile(current);
+                }
+                unsafe {
+                    ActiveMapping::map_2m_with_table(p2, tmp_2m_map_addr, PhysAddr::new(current), map_flags);
+                }
+
+                let mut i = 0;
+                while i < 0x200_000 {
+                    unsafe { prev_entry_addr.write_volatile(current); }
+
+                    prev_entry_addr = (tmp_2m_map_addr.as_usize() + i) as *mut _;
+                    i += 0x1000;
+                    current += 0x1000;
+                }
+            }
+
             /*
                         // Process 4K parts at end.
                         while current < end {
@@ -118,18 +100,5 @@ impl FrameAllocator {
         self.top = PhysAddr::new(top);
 
         // TODO: unmap
-    }
-}
-
-impl PhysMemManagerArchSpecific for PhysMemManager {
-    /// Maps a page.
-    fn map_page(&self, vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
-        let mut mapping = unsafe { ActiveMapping::new() };
-
-        // Pre-allocating the required tables.
-        // This can be done without locking the PMM the whole time, which prevents a deadlock.
-        let p1 = mapping.ensure_4k_tables_exist(vaddr)?;
-
-        self.allocator.lock().map_page(p1, vaddr, flags, cache_type)
     }
 }

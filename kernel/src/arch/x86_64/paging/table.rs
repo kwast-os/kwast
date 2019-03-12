@@ -100,7 +100,6 @@ impl<L> Table<L> where L: HierarchicalLevel {
                 self.entries[index].set(
                     top,
                     EntryFlags::PRESENT | EntryFlags::WRITABLE,
-                    CacheType::WriteBack,
                 );
 
                 VirtAddr::new(addr)

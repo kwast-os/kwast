@@ -12,7 +12,7 @@ crate-type = ["staticlib"]
 
 [profile.release]
 lto = true
-opt-level = 2
+opt-level = "s"
 
 [dependencies]
 volatile = "^0.2.6"

@@ -11,7 +11,7 @@ ISO_IMAGE   = build/img.iso
 ASM_SOURCES = $(wildcard src/arch/$(ARCH)/*.s)
 ASM_OBJECTS = $(patsubst src/arch/$(ARCH)/%.s, build/arch/$(ARCH)/%.o, $(ASM_SOURCES))
 
-QEMUFLAGS   = -m 16 --enable-kvm
+QEMUFLAGS   = -m 128 --enable-kvm
 LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
 LD          = $(ARCH)-elf-ld
 AS          = $(ARCH)-elf-as

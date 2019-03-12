@@ -17,6 +17,7 @@ pub struct VirtAddr(usize);
 
 impl PhysAddr {
     /// Creates a new physical address.
+    #[inline]
     pub fn new(addr: usize) -> Self {
         // Defined limit by the architecture spec.
         debug_assert_eq!(
@@ -38,11 +39,13 @@ impl PhysAddr {
     }
 
     /// Converts the physical address to a usize.
+    #[inline]
     pub fn as_usize(self) -> usize {
         self.0
     }
 
     /// Converts the physical address to a u64.
+    #[inline]
     pub fn as_u64(self) -> u64 {
         self.0 as u64
     }
@@ -74,6 +77,7 @@ impl Debug for PhysAddr {
 
 impl VirtAddr {
     /// Creates a canonical form, virtual address.
+    #[inline]
     pub fn new(addr: usize) -> Self {
         let x = addr.get_bits(47..64);
         debug_assert!(x == 0 || x == 0x1ffff, "address is not in canonical form");
@@ -81,11 +85,13 @@ impl VirtAddr {
     }
 
     /// Converts the virtual address to a usize.
+    #[inline]
     pub fn as_usize(self) -> usize {
         self.0
     }
 
     /// Converts the virtual address to a u64.
+    #[inline]
     pub fn as_u64(self) -> u64 {
         self.0 as u64
     }

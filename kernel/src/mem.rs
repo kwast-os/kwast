@@ -2,7 +2,6 @@ use multiboot2::BootInformation;
 use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::arch::paging::{CacheType, EntryFlags};
 
 /// Map result.
 pub type MappingResult = Result<(), MappingError>;
@@ -72,15 +71,10 @@ impl FrameAllocator {
     }
 }
 
+/// The default frame manager instance.
 #[repr(transparent)]
 pub struct PhysMemManager {
-    /// The default frame allocator instance.
-    pub allocator: Mutex<FrameAllocator>,
-}
-
-pub trait PhysMemManagerArchSpecific {
-    /// Maps a page.
-    fn map_page(&self, vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult;
+    allocator: Mutex<FrameAllocator>,
 }
 
 impl PhysMemManager {

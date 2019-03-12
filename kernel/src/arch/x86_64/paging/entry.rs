@@ -9,17 +9,14 @@ bitflags! {
         const HUGE_PAGE = 1 << 7;
         /// No execute.
         const NX = 1 << 63;
+        // Cache types
+        const CACHE_WB = 0;
+        const CACHE_WT = 1 << 3;
+        const UNCACHED = 1 << 4;
+        const UNCACHABLE = (1 << 3) | (1 << 4);
+        const CACHE_WC = 1 << 7;
+        const CACHE_WP = (1 << 3) | (1 << 7);
     }
-}
-
-#[allow(dead_code)]
-pub enum CacheType {
-    WriteBack = 0,
-    WriteThrough = 1 << 3,
-    Uncached = 1 << 4,
-    Uncacheable = (1 << 3) | (1 << 4),
-    WriteCombine = 1 << 7,
-    WriteProtect = (1 << 3) | (1 << 7),
 }
 
 pub struct Entry(u64);
@@ -27,6 +24,7 @@ pub struct Entry(u64);
 #[allow(dead_code)]
 impl Entry {
     /// Clears the entry.
+    #[inline]
     pub fn clear(&mut self) {
         self.0 = 0
     }
@@ -37,16 +35,18 @@ impl Entry {
     }
 
     /// Sets the flags, keeps the physical address.
-    pub fn set_flags(&mut self, flags: EntryFlags, cache_type: CacheType) {
-        self.0 = flags.bits() | (cache_type as u64) | self.phys_addr_unchecked().as_u64();
+    pub fn set_flags(&mut self, flags: EntryFlags) {
+        self.0 = flags.bits() | self.phys_addr_unchecked().as_u64();
     }
 
     /// Sets the entry to the given address and flags.
-    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags, cache_type: CacheType) {
-        self.0 = flags.bits() | (cache_type as u64) | addr.as_u64();
+    #[inline]
+    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
+        self.0 = flags.bits() | addr.as_u64();
     }
 
     /// Gets the flags of this entry.
+    #[inline]
     pub fn flags(&self) -> EntryFlags {
         EntryFlags::from_bits_truncate(self.0)
     }

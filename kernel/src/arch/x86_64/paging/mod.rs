@@ -8,6 +8,7 @@ use self::table::{Level1, Level2, Level4, Table};
 
 mod entry;
 mod table;
+mod mem;
 
 /// The page size on this arch.
 pub const PAGE_SIZE: usize = 0x1000;
@@ -111,11 +112,10 @@ impl ActiveMapping {
         p2.next_table_may_create(vaddr.p2_index())
     }
 
-    /// Maps a 4k page.
-    pub fn map_4k(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+    /// Maps a 4k page with a given P1 table.
+    fn map_4k_with_table(p1: &mut Table<Level1>, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
         debug_assert_eq!(paddr.as_usize() & 0xfff, 0);
 
-        let p1 = self.ensure_4k_tables_exist(vaddr)?;
         let e = &mut p1.entries[vaddr.p1_index()];
         let was_present = e.flags().contains(EntryFlags::PRESENT);
         e.set(paddr, flags, cache_type);
@@ -126,5 +126,11 @@ impl ActiveMapping {
         }
 
         Ok(())
+    }
+
+    /// Maps a 4k page.
+    pub fn map_4k(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+        let p1 = self.ensure_4k_tables_exist(vaddr)?;
+        Self::map_4k_with_table(p1, vaddr, paddr, flags, cache_type)
     }
 }

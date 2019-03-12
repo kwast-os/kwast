@@ -28,6 +28,7 @@ fn panic(info: &PanicInfo) -> ! {
     }
 }
 
+/// Kernel main, called after arch init is done.
 pub fn kernel_main() {
     mem::get_pmm().map_page(
         VirtAddr::new(0x400_000),

@@ -2,24 +2,25 @@ use multiboot2::MemoryMapTag;
 
 use crate::mem::*;
 
-use super::address::{PhysAddr, VirtAddr};
-use super::paging::{ActiveMapping, CacheType, EntryFlags};
+use super::{ActiveMapping, CacheType, EntryFlags, Level1, Table};
+use super::{PhysAddr, VirtAddr};
 
-impl FrameAllocatorArchSpecific for FrameAllocator {
-    fn map_page(&mut self, vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
+impl FrameAllocator {
+    /// Gets a page and maps it to a virtual address.
+    fn map_page(&mut self, p1: &mut Table<Level1>, vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult {
         if unlikely!(self.top.is_null()) {
             return Err(MappingError::OOM);
         }
 
         // Maps the page to the destination virtual address, then moves the top.
-        let mut mapping = unsafe { ActiveMapping::new() };
-        mapping.map_4k(vaddr, self.top, flags, cache_type)?;
+        ActiveMapping::map_4k_with_table(p1, vaddr, self.top, flags, cache_type)?;
         self.move_top(vaddr);
 
         Ok(())
     }
 
-    fn apply_mmap(&mut self, tag: &MemoryMapTag) {
+    /// Applies the memory map.
+    pub fn apply_mmap(&mut self, tag: &MemoryMapTag) {
         let mut mapping = unsafe { ActiveMapping::new() };
 
         // Will be the last entry of the PML2 (PML2 exists)
@@ -127,8 +128,8 @@ impl PhysMemManagerArchSpecific for PhysMemManager {
 
         // Pre-allocating the required tables.
         // This can be done without locking the PMM the whole time, which prevents a deadlock.
-        mapping.ensure_4k_tables_exist(vaddr)?;
+        let p1 = mapping.ensure_4k_tables_exist(vaddr)?;
 
-        self.allocator.lock().map_page(vaddr, flags, cache_type)
+        self.allocator.lock().map_page(p1, vaddr, flags, cache_type)
     }
 }

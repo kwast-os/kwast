@@ -1,4 +1,4 @@
-use multiboot2::{BootInformation, MemoryMapTag};
+use multiboot2::BootInformation;
 use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
@@ -30,13 +30,6 @@ pub enum MappingError {
 pub struct FrameAllocator {
     pub reserved_end: PhysAddr,
     pub top: PhysAddr,
-}
-
-pub trait FrameAllocatorArchSpecific {
-    /// Gets a page and maps it to a virtual address.
-    fn map_page(&mut self, vaddr: VirtAddr, flags: EntryFlags, cache_type: CacheType) -> MappingResult;
-    /// Applies the memory map.
-    fn apply_mmap(&mut self, tag: &MemoryMapTag);
 }
 
 impl FrameAllocator {

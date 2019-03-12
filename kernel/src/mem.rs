@@ -66,13 +66,6 @@ impl FrameAllocator {
         }
     }
 
-    /// Moves the top of the stack.
-    pub fn move_top(&mut self, vaddr: VirtAddr) {
-        // Read and set the next top address.
-        let ptr = vaddr.as_usize() as *mut usize;
-        self.top = PhysAddr::new(unsafe { *ptr });
-    }
-
     /// Consumes the top and moves it. This function is used internally for memory management.
     /// It allows the paging component to get the top directly and let it move.
     /// This is faster than going via `map_page`.
@@ -82,7 +75,9 @@ impl FrameAllocator {
             return Err(MappingError::OOM);
         }
 
-        self.move_top(f(self.top));
+        // Read and set the next top address.
+        let ptr = f(self.top).as_usize() as *mut usize;
+        self.top = PhysAddr::new(unsafe { *ptr });
 
         Ok(())
     }

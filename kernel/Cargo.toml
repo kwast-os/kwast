@@ -7,9 +7,6 @@ edition = "2018"
 [lib]
 crate-type = ["staticlib"]
 
-#[profile.dev]
-#lto = true
-
 [profile.release]
 lto = true
 opt-level = "s"

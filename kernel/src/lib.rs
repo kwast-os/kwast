@@ -30,6 +30,8 @@ fn panic(info: &PanicInfo) -> ! {
 
 /// Kernel main, called after arch init is done.
 pub fn kernel_main() {
+    println!("entered kernel_main");
+
     let mut mapping = unsafe { ActiveMapping::get() };
 
     mapping.get_and_map_single(VirtAddr::new(0x400_000), EntryFlags::PRESENT | EntryFlags::WRITABLE)

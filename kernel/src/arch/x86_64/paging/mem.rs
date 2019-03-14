@@ -1,5 +1,6 @@
 use multiboot2::MemoryMapTag;
 
+use crate::arch::x86_64::paging::PAGE_SIZE;
 use crate::mem::*;
 
 use super::{ActiveMapping, EntryFlags};
@@ -12,8 +13,6 @@ impl FrameAllocator {
 
         // Will be the last entry of the PML2 (PML2 exists)
         let tmp_2m_map_addr = VirtAddr::new(511 * 0x200000);
-        // PML1 exists for the corresponding PML2
-        let tmp_4k_map_addr = VirtAddr::new(0x1000);
         // Mapping flags
         let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
@@ -39,58 +38,39 @@ impl FrameAllocator {
             let mut current = start.as_usize();
             let end = end.as_usize();
 
-            // Sets the first available address ( = top of the stack).
-            if unlikely!(top == 0) {
-                top = current;
-            }
-
-            let p1 = mapping.ensure_4k_tables_exist(tmp_4k_map_addr).unwrap();
-
-            // Process 4K parts at beginning until we have 2M parts.
-            while current < end && (current & 0x1fffff) != 0 {
-                unsafe {
-                    prev_entry_addr.write_volatile(current);
-                }
-                unsafe {
-                    ActiveMapping::map_4k_with_table(p1, tmp_4k_map_addr, PhysAddr::new(current), map_flags);
-                }
-
-                prev_entry_addr = tmp_4k_map_addr.as_usize() as *mut _;
-                current += 0x1000;
-            }
-
+            // TODO
             let p2 = mapping.ensure_2m_tables_exist(tmp_2m_map_addr).unwrap();
 
-            // Process 2 MiB parts until a 2 MiB part doesn't fit anymore.
-            // We do this because we only need one invalidation for the whole 2 MiB area.
-            while current + 0x200_000 < end {
-                unsafe {
-                    prev_entry_addr.write_volatile(current);
-                }
-                unsafe {
-                    ActiveMapping::map_2m_with_table(p2, tmp_2m_map_addr, PhysAddr::new(current), map_flags);
-                }
-
-                let mut i = 0;
-                while i < 0x200_000 {
-                    unsafe { prev_entry_addr.write_volatile(current); }
-
-                    prev_entry_addr = (tmp_2m_map_addr.as_usize() + i) as *mut _;
-                    i += 0x1000;
-                    current += 0x1000;
-                }
+            unsafe {
+                prev_entry_addr.write_volatile(current);
+                ActiveMapping::map_2m_with_table(
+                    p2,
+                    tmp_2m_map_addr,
+                    PhysAddr::new(current & !0x1fffff),
+                    map_flags,
+                );
             }
 
-            /*
-                        // Process 4K parts at end.
-                        while current < end {
-                            mapping.map_4k(tmp_4k_map_addr, PhysAddr::new(current), EntryFlags::PRESENT | EntryFlags::WRITABLE)
-                                .expect("failed to map");
+            prev_entry_addr = tmp_2m_map_addr.as_usize() as *mut _;
 
-                            fill_list_entry(current, 1);
+            while current < end {
+                unsafe { prev_entry_addr.write_volatile(current); }
 
-                            current += 0x1000;
-                        }*/
+                // When we reach a new 2 MiB part, map that to our temporary mapping.
+                if (current & 0x1fffff) == 0 {
+                    unsafe {
+                        ActiveMapping::map_2m_with_table(
+                            p2,
+                            tmp_2m_map_addr,
+                            PhysAddr::new(current & !0x1fffff),
+                            map_flags,
+                        );
+                    }
+                }
+
+                prev_entry_addr = (tmp_2m_map_addr.as_usize() + (current & 0x1fffff)) as *mut _;
+                current += 0x1000;
+            }
         }
 
         // End
@@ -100,5 +80,25 @@ impl FrameAllocator {
         self.top = PhysAddr::new(top);
 
         // TODO: unmap
+
+        self.debug_print_frames();
+    }
+
+    /// Debug print all frames.
+    fn debug_print_frames(&mut self) {
+        println!("debug print frames");
+
+        let mut mapping = unsafe { ActiveMapping::get() };
+
+        while !self.top.is_null() {
+            self.consume_and_move_top(|top| {
+                print!("{:x} ", top.as_usize() / PAGE_SIZE);
+                let vaddr = VirtAddr::new(0x1000);
+                mapping.map_single(vaddr, top, EntryFlags::PRESENT).unwrap();
+                vaddr
+            }).unwrap();
+        }
+
+        println!();
     }
 }

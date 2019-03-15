@@ -50,6 +50,7 @@ pub fn kernel_main() {
     }
 
     mapping.unmap_single(VirtAddr::new(0xdeadb000));
+    // This should crash
     mapping.unmap_single(VirtAddr::new(0xdeada000));
 
     println!("end");

@@ -1,5 +1,6 @@
 use multiboot2::MemoryMapTag;
 
+use crate::arch::x86_64::paging::invalidate;
 use crate::arch::x86_64::paging::PAGE_SIZE;
 use crate::mem::*;
 
@@ -10,7 +11,8 @@ impl FrameAllocator {
     /// Applies the memory map.
     pub fn apply_mmap(&mut self, tag: &MemoryMapTag) {
         // Will be the last entry of the PML2 (PML2 exists)
-        let tmp_2m_map_addr = VirtAddr::new(511 * 0x200000);
+        const P2_IDX: usize = 511;
+        let tmp_2m_map_addr = VirtAddr::new(P2_IDX * 0x200000);
         // Mapping flags
         let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
 
@@ -65,8 +67,18 @@ impl FrameAllocator {
         self.top = PhysAddr::new(top);
 
         // Unmap
-        // TODO: clear & invalidate
+        {
+            // Somewhat ugly, but better than complicating other code probably (for now)...
+            let p2 = mapping.p4
+                .next_table_mut(0).unwrap()
+                .next_table_mut(0).unwrap();
 
+            p2.entries[P2_IDX].clear();
+            p2.decrease_used_count();
+            invalidate(tmp_2m_map_addr.as_u64());
+        }
+
+        // Debug
         //self.debug_print_frames();
     }
 

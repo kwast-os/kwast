@@ -101,6 +101,7 @@ impl MemoryMapper for ActiveMapping {
         })
     }
 
+    #[inline]
     fn free_and_unmap_single(&mut self, vaddr: VirtAddr) {
         self.unmap_single_internal(vaddr, true)
     }
@@ -110,6 +111,7 @@ impl MemoryMapper for ActiveMapping {
         Ok(self.get_4k_entry(vaddr)?.set(paddr, flags))
     }
 
+    #[inline]
     fn unmap_single(&mut self, vaddr: VirtAddr) {
         self.unmap_single_internal(vaddr, false)
     }

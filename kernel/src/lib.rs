@@ -49,5 +49,8 @@ pub fn kernel_main() {
         println!("{}", *ptr);
     }
 
+    mapping.unmap_single(VirtAddr::new(0xdeadb000));
+    mapping.unmap_single(VirtAddr::new(0xdeada000));
+
     println!("end");
 }

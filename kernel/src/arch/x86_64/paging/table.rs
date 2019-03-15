@@ -57,12 +57,12 @@ impl<L> Table<L> where L: Level {
     }
 
     /// Gets the used count.
-    fn used_count(&self) -> u64 {
+    pub fn used_count(&self) -> u64 {
         self.entries[0].used_count()
     }
 
     /// Sets the used count.
-    fn set_used_count(&mut self, count: u64) {
+    pub fn set_used_count(&mut self, count: u64) {
         self.entries[0].set_used_count(count);
     }
 
@@ -103,6 +103,11 @@ impl<L> Table<L> where L: HierarchicalLevel {
         self.next_table_address(index).map(|x| unsafe { &*(x as *const _) })
     }
 
+    /// Gets the next table level (mutable).
+    pub fn next_table_mut(&self, index: usize) -> Option<&mut Table<L::NextLevel>> {
+        self.next_table_address(index).map(|x| unsafe { &mut *(x as *mut _) })
+    }
+
     /// Gets the next table (mutable), creates it if it doesn't exist yet.
     pub fn next_table_may_create(&mut self, index: usize) -> Result<&mut Table<L::NextLevel>, MappingError> {
         let flags = self.entries[index].flags();
@@ -115,7 +120,7 @@ impl<L> Table<L> where L: HierarchicalLevel {
         if !flags.contains(EntryFlags::PRESENT) {
             // We could call the page mapping functions here, but it would be slower than
             // manipulating the pmm ourselves.
-            mem::get_pmm().consume_and_move_top(|top| {
+            mem::get_pmm().pop_top(|top| {
                 // We don't need to invalidate because it wasn't present.
                 self.entries[index].set(
                     top,

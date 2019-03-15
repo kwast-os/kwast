@@ -2,7 +2,7 @@ use bitflags::bitflags;
 
 use crate::arch::x86_64::address::{PhysAddr, VirtAddr};
 use crate::arch::x86_64::paging::entry::Entry;
-use crate::mem::{get_pmm, MappingError, MappingResult};
+use crate::mem::{self, MappingError, MappingResult};
 use crate::mem::MemoryMapper;
 
 pub use self::entry::EntryFlags;
@@ -10,7 +10,7 @@ use self::table::{Level4, Table};
 
 mod entry;
 mod table;
-mod mem;
+mod frame;
 
 /// The page size on this arch.
 pub const PAGE_SIZE: usize = 0x1000;
@@ -35,6 +35,32 @@ bitflags! {
 
 pub struct ActiveMapping {
     p4: &'static mut Table<Level4>,
+}
+
+/// Entry modifier helper.
+pub struct EntryModifier<'a> {
+    entry: &'a mut Entry,
+    addr: u64,
+}
+
+/// Invalidates page.
+#[inline]
+fn invalidate(addr: u64) {
+    unsafe { asm!("invlpg ($0)" :: "r" (addr) : "memory"); }
+}
+
+impl<'a> EntryModifier<'a> {
+    /// Sets the entry.
+    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
+        let was_present = self.entry.flags().contains(EntryFlags::PRESENT);
+
+        self.entry.set(addr, flags);
+
+        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
+        if was_present {
+            invalidate(self.addr);
+        }
+    }
 }
 
 impl MemoryMapper for ActiveMapping {
@@ -69,14 +95,14 @@ impl MemoryMapper for ActiveMapping {
     fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
         let mut e = self.get_4k_entry(vaddr)?;
 
-        get_pmm().consume_and_move_top(move |top| {
+        mem::get_pmm().pop_top(move |top| {
             e.set(top, flags);
             vaddr
         })
     }
 
     fn free_and_unmap_single(&mut self, vaddr: VirtAddr) {
-        unimplemented!()
+        self.unmap_single_internal(vaddr, true)
     }
 
     fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
@@ -85,32 +111,36 @@ impl MemoryMapper for ActiveMapping {
     }
 
     fn unmap_single(&mut self, vaddr: VirtAddr) {
-        unimplemented!()
-    }
-}
-
-/// Entry modifier helper.
-pub struct EntryModifier<'a> {
-    entry: &'a mut Entry,
-    addr: u64,
-}
-
-impl<'a> EntryModifier<'a> {
-    /// Sets the entry.
-    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
-        let was_present = self.entry.flags().contains(EntryFlags::PRESENT);
-
-        self.entry.set(addr, flags);
-
-        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
-        if was_present {
-            unsafe { asm!("invlpg ($0)" :: "r" (self.addr) : "memory"); }
-        }
+        self.unmap_single_internal(vaddr, false)
     }
 }
 
 #[allow(dead_code)]
 impl ActiveMapping {
+    /// Unmaps single page, if frame is true, also puts the physical frame on the stack. (internal use only).
+    fn unmap_single_internal(&mut self, vaddr: VirtAddr, frame: bool) {
+        debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
+
+        let p3 = self.p4.next_table_mut(vaddr.p4_index()).expect("p3 not mapped");
+        let p2 = p3.next_table_mut(vaddr.p3_index()).expect("p2 not mapped");
+        let p1 = p2.next_table_mut(vaddr.p2_index()).expect("p1 not mapped");
+
+        let e = &mut p1.entries[vaddr.p1_index()];
+        debug_assert!(e.flags().contains(EntryFlags::PRESENT));
+
+        if frame {
+            mem::get_pmm().push_top(vaddr, e.phys_addr_unchecked());
+        }
+
+        e.clear();
+        invalidate(vaddr.as_u64());
+
+        p1.decrease_used_count();
+        if p1.used_count() == 0 {
+            self.unmap_single_internal(VirtAddr::new(p1 as *mut _ as usize), true);
+        }
+    }
+
     /// Gets the entry modifier for a 2 MiB page. Sets the page as used.
     pub fn get_2m_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0x1fffff, 0);

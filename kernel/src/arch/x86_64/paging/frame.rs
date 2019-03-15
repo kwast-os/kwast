@@ -64,7 +64,8 @@ impl FrameAllocator {
         unsafe { prev_entry_addr.write_volatile(0); }
         self.top = PhysAddr::new(top);
 
-        // TODO: unmap
+        // Unmap
+        // TODO: clear & invalidate
 
         //self.debug_print_frames();
     }
@@ -77,7 +78,7 @@ impl FrameAllocator {
         let mut mapping = unsafe { ActiveMapping::get() };
 
         while !self.top.is_null() {
-            self.consume_and_move_top(|top| {
+            self.pop_top(|top| {
                 print!("{:x} ", top.as_usize() / PAGE_SIZE);
                 let vaddr = VirtAddr::new(0x1000);
                 mapping.map_single(vaddr, top, EntryFlags::PRESENT).unwrap();

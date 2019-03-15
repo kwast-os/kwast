@@ -22,6 +22,8 @@ bitflags! {
 /// Page table entry.
 pub struct Entry(u64);
 
+const USED_COUNT_MASK: u64 = 0x1ff0_0000_0000_0000;
+
 #[allow(dead_code)]
 impl Entry {
     /// Gets the used count part of this entry.
@@ -30,10 +32,15 @@ impl Entry {
         (self.0 >> 52) & 511
     }
 
+    /// Raw used count part of this entry.
+    pub fn used_count_raw(&self) -> u64 {
+        self.0 & USED_COUNT_MASK
+    }
+
     /// Sets the used count part of this entry.
     pub fn set_used_count(&mut self, count: u64) {
         debug_assert!(count <= 512);
-        self.0 = (self.0 & 0xe00f_ffff_ffff_ffff) | (count << 52);
+        self.0 = (self.0 & !USED_COUNT_MASK) | (count << 52);
     }
 
     /// Returns true if this entry is unused.
@@ -44,25 +51,25 @@ impl Entry {
     /// Clears the entry.
     #[inline]
     pub fn clear(&mut self) {
-        self.0 = 0;
+        self.0 = self.used_count_raw();
     }
 
     /// Sets the physical address of this entry, keeps flags.
     #[inline]
     pub fn set_phys_addr(&mut self, addr: PhysAddr) {
-        self.0 = self.flags().bits() | addr.as_u64();
+        self.0 = self.used_count_raw() | self.flags().bits() | addr.as_u64();
     }
 
     /// Sets the flags, keeps the physical address.
     #[inline]
     pub fn set_flags(&mut self, flags: EntryFlags) {
-        self.0 = flags.bits() | self.phys_addr_unchecked().as_u64();
+        self.0 = self.used_count_raw() | flags.bits() | self.phys_addr_unchecked().as_u64();
     }
 
     /// Sets the entry to the given address and flags.
     #[inline]
     pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
-        self.0 = flags.bits() | addr.as_u64();
+        self.0 = self.used_count_raw() | flags.bits() | addr.as_u64();
     }
 
     /// Gets the flags of this entry.

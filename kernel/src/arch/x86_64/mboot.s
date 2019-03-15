@@ -75,8 +75,12 @@ start:
 
     // Map kernel code & data PMLs
     movl $(boot_pml3 + 0x3), boot_pml4 + 0 * 8
+    movl $(2 << (52 - 32)), boot_pml4 + 0 * 8 + 4 // Used entry count
     movl $(boot_pml2 + 0x3), boot_pml3 + 0 * 8
+    movl $(1 << (52 - 32)), boot_pml3 + 0 * 8 + 4 // Used entry count
     movl $(boot_pml1 + 0x3), boot_pml2 + 0 * 8
+    movl $(1 << (52 - 32)), boot_pml2 + 0 * 8 + 4 // Used entry count
+    movl $(510 << (52 - 32)), boot_pml1 + 0 * 8 + 4 // Used entry count
 
     // Recursive map
     movl $(boot_pml4 + 0x3), boot_pml4 + 511 * 8

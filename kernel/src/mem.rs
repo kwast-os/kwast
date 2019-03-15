@@ -3,7 +3,6 @@ use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::EntryFlags;
-use crate::arch::x86_64::address::VirtAddr;
 
 /// Trait for memory mapper: maps a physical address to a virtual address.
 pub trait MemoryMapper {
@@ -76,10 +75,10 @@ impl FrameAllocator {
         }
     }
 
-    /// Consumes the top and moves it. This function is used internally for memory management.
+    /// Pops the top and moves it. This function is used internally for memory management.
     /// It allows the paging component to get the top directly and let it move.
     /// This is faster than going via `map_page`.
-    pub fn consume_and_move_top<F>(&mut self, f: F) -> MappingResult
+    pub fn pop_top<F>(&mut self, f: F) -> MappingResult
         where F: FnOnce(PhysAddr) -> VirtAddr {
         if unlikely!(self.top.is_null()) {
             return Err(MappingError::OOM);
@@ -91,6 +90,14 @@ impl FrameAllocator {
 
         Ok(())
     }
+
+    /// Similar to `pop_top`.
+    /// This pushes a new top on the stack and links it to the previous top.
+    pub fn push_top(&mut self, vaddr: VirtAddr, paddr: PhysAddr) {
+        let ptr = vaddr.as_usize() as *mut u64;
+        unsafe { ptr.write_volatile(self.top.as_u64()); }
+        self.top = paddr;
+    }
 }
 
 /// The default frame manager instance.
@@ -99,24 +106,31 @@ pub struct PhysMemManager {
     allocator: Mutex<FrameAllocator>,
 }
 
+static PMM: PhysMemManager = PhysMemManager {
+    allocator: Mutex::new(FrameAllocator::empty())
+};
+
 impl PhysMemManager {
     /// Inits the physical frame allocator.
     pub fn init(&self, mboot_struct: &BootInformation, reserved_end: usize) {
         self.allocator.lock().init(mboot_struct, PhysAddr::new(reserved_end));
     }
 
-    /// Consumes the top and then lets it move. (internal memory management use only)
+    /// Pops the top and then lets it move. (internal memory management use only)
     /// See docs at impl.
     #[inline]
-    pub fn consume_and_move_top<F>(&self, f: F) -> MappingResult
+    pub fn pop_top<F>(&self, f: F) -> MappingResult
         where F: FnOnce(PhysAddr) -> VirtAddr {
-        self.allocator.lock().consume_and_move_top(f)
+        self.allocator.lock().pop_top(f)
+    }
+
+    /// Similar to `pop_top`...
+    /// See docs at impl.
+    #[inline]
+    pub fn push_top(&self, vaddr: VirtAddr, paddr: PhysAddr) {
+        self.allocator.lock().push_top(vaddr, paddr)
     }
 }
-
-static PMM: PhysMemManager = PhysMemManager {
-    allocator: Mutex::new(FrameAllocator::empty())
-};
 
 /// Gets the PMM.
 pub fn get_pmm() -> &'static PhysMemManager {

@@ -89,6 +89,6 @@ impl Entry {
 
     /// Gets the physical address from page entry (unchecked).
     pub fn phys_addr_unchecked(&self) -> PhysAddr {
-        PhysAddr::new((self.0 & 0x000fffff_fffff000) as usize)
+        PhysAddr::new((self.0 & 0x000f_ffff_ffff_f000) as usize)
     }
 }

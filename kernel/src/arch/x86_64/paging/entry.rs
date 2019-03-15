@@ -19,6 +19,7 @@ bitflags! {
     }
 }
 
+/// Page table entry.
 pub struct Entry(u64);
 
 #[allow(dead_code)]
@@ -26,15 +27,17 @@ impl Entry {
     /// Clears the entry.
     #[inline]
     pub fn clear(&mut self) {
-        self.0 = 0
+        self.0 = 0;
     }
 
     /// Sets the physical address of this entry, keeps flags.
+    #[inline]
     pub fn set_phys_addr(&mut self, addr: PhysAddr) {
         self.0 = self.flags().bits() | addr.as_u64();
     }
 
     /// Sets the flags, keeps the physical address.
+    #[inline]
     pub fn set_flags(&mut self, flags: EntryFlags) {
         self.0 = flags.bits() | self.phys_addr_unchecked().as_u64();
     }

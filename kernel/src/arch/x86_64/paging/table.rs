@@ -58,8 +58,7 @@ impl<L> Table<L> where L: Level {
 }
 
 impl<L> Table<L> where L: HierarchicalLevel {
-    /// Gets the next table address (unchecked).
-    /// Internal use only!
+    /// Gets the next table address (unchecked). (internal use only).
     fn next_table_address_unchecked(&self, index: usize) -> usize {
         let addr = self as *const _ as usize;
         (addr << 9) | (index << 12)

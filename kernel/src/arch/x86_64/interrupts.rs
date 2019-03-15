@@ -12,7 +12,7 @@ use crate::arch::x86_64::port::write_port8;
 #[repr(C)]
 struct ISRStackFrame {
     /// Points to the instruction that will be executed when the handler returns.
-    ip: VirtAddr,
+    rip: VirtAddr,
     /// Code segment, high-order 48-bits zeros
     cs: u64,
     /// RFlags

@@ -9,12 +9,13 @@ use super::{PhysAddr, VirtAddr};
 impl FrameAllocator {
     /// Applies the memory map.
     pub fn apply_mmap(&mut self, tag: &MemoryMapTag) {
-        let mut mapping = unsafe { ActiveMapping::get() };
-
         // Will be the last entry of the PML2 (PML2 exists)
         let tmp_2m_map_addr = VirtAddr::new(511 * 0x200000);
         // Mapping flags
-        let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+        let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
+
+        let mut mapping = unsafe { ActiveMapping::get() };
+        let mut e = mapping.get_2m_entry(tmp_2m_map_addr).unwrap();
 
         // Previous entry address
         let mut top: usize = 0;
@@ -38,19 +39,12 @@ impl FrameAllocator {
             let mut current = start.as_usize();
             let end = end.as_usize();
 
-            // TODO
-            let p2 = mapping.ensure_2m_tables_exist(tmp_2m_map_addr).unwrap();
+            // Initial write for this area is a little bit special because we still
+            // need to write to the previous mapping. Otherwise the stack wouldn't be linked.
+            // Can't fail.
+            unsafe { prev_entry_addr.write_volatile(current); }
 
-            unsafe {
-                prev_entry_addr.write_volatile(current);
-                ActiveMapping::map_2m_with_table(
-                    p2,
-                    tmp_2m_map_addr,
-                    PhysAddr::new(current & !0x1fffff),
-                    map_flags,
-                );
-            }
-
+            e.set(PhysAddr::new(current & !0x1fffff), map_flags);
             prev_entry_addr = tmp_2m_map_addr.as_usize() as *mut _;
 
             while current < end {
@@ -58,14 +52,7 @@ impl FrameAllocator {
 
                 // When we reach a new 2 MiB part, map that to our temporary mapping.
                 if (current & 0x1fffff) == 0 {
-                    unsafe {
-                        ActiveMapping::map_2m_with_table(
-                            p2,
-                            tmp_2m_map_addr,
-                            PhysAddr::new(current & !0x1fffff),
-                            map_flags,
-                        );
-                    }
+                    e.set(PhysAddr::new(current & !0x1fffff), map_flags);
                 }
 
                 prev_entry_addr = (tmp_2m_map_addr.as_usize() + (current & 0x1fffff)) as *mut _;
@@ -74,9 +61,7 @@ impl FrameAllocator {
         }
 
         // End
-        unsafe {
-            prev_entry_addr.write_volatile(0);
-        }
+        unsafe { prev_entry_addr.write_volatile(0); }
         self.top = PhysAddr::new(top);
 
         // TODO: unmap

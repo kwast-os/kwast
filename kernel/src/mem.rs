@@ -4,7 +4,7 @@ use spin::Mutex;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::EntryFlags;
 
-/// Trait for memory mapper: maps a physical address to a virtua address.
+/// Trait for memory mapper: maps a physical address to a virtual address.
 pub trait MemoryMapper {
     /// Gets the active paging mapping.
     /// You need to be very careful if you create a new instance of this!
@@ -39,6 +39,9 @@ pub enum MappingError {
 ///
 /// When we allocate a frame, we map it to the virtual memory and read the pointer.
 /// Then we move the head. There is no unnecessary mapping happening here.
+/// There is no additional mapping compared to the classical stack approach:
+/// * When a page is being allocated it'll need to be mapped anyway.
+/// * When a page is being freed it was already mapped.
 ///
 /// It is likely that, for an allocation, the data will be accessed anyway after the mapping.
 /// For a free, it is likely that the data was already accessed.

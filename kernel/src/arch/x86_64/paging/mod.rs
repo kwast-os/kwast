@@ -1,11 +1,12 @@
 use bitflags::bitflags;
 
 use crate::arch::x86_64::address::{PhysAddr, VirtAddr};
+use crate::arch::x86_64::paging::entry::Entry;
 use crate::mem::{get_pmm, MappingError, MappingResult};
 use crate::mem::MemoryMapper;
 
 pub use self::entry::EntryFlags;
-use self::table::{Level1, Level2, Level4, Table};
+use self::table::{Level4, Table};
 
 mod entry;
 mod table;
@@ -31,8 +32,6 @@ bitflags! {
         const CAUSED_BY_INSTRUCTION_FETCH = 1 << 4;
     }
 }
-
-// TODO: locking etc (e.g. when creating new tables)?
 
 pub struct ActiveMapping {
     p4: &'static mut Table<Level4>,
@@ -65,24 +64,42 @@ impl MemoryMapper for ActiveMapping {
             // We know it is present, so we can just wrap it.
             Some(p2_entry.phys_addr_unchecked())
         } else {
-            p2.next_table(addr.p2_index())
-                .and_then(|p1| p1.entries[addr.p1_index()].phys_addr())
+            p2.next_table(addr.p2_index())?.entries[addr.p1_index()].phys_addr()
         }
     }
 
     fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
-        let p1 = self.ensure_4k_tables_exist(vaddr)?;
+        let mut e = self.get_4k_entry(vaddr)?;
 
         get_pmm().consume_and_move_top(move |top| {
-            unsafe { Self::map_4k_with_table(p1, vaddr, top, flags); }
+            e.set(top, flags);
             vaddr
         })
     }
 
     fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        let p1 = self.ensure_4k_tables_exist(vaddr)?;
-        unsafe { Self::map_4k_with_table(p1, vaddr, paddr, flags); }
-        Ok(())
+        debug_assert_eq!(paddr.as_usize() & 0xfff, 0);
+        Ok(self.get_4k_entry(vaddr)?.set(paddr, flags))
+    }
+}
+
+/// Entry modifier helper.
+pub struct EntryModifier<'a> {
+    entry: &'a mut Entry,
+    addr: u64,
+}
+
+impl<'a> EntryModifier<'a> {
+    /// Sets the entry.
+    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
+        let was_present = self.entry.flags().contains(EntryFlags::PRESENT);
+
+        self.entry.set(addr, flags);
+
+        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
+        if was_present {
+            unsafe { asm!("invlpg ($0)" :: "r" (self.addr) : "memory"); }
+        }
     }
 }
 
@@ -94,57 +111,38 @@ impl ActiveMapping {
         unsafe { asm!("invlpg ($0)" :: "r" (addr.as_u64()) : "memory"); }
     }
 
-    /// Ensures the tables for 2M page mapping on this virtual address exist.
-    fn ensure_2m_tables_exist(&mut self, vaddr: VirtAddr) -> Result<&mut Table<Level2>, MappingError> {
+    /// Gets the entry modifier for a 2 MiB page.
+    pub fn get_2m_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0x1fffff, 0);
 
-        let p3 = self.p4.next_table_may_create(vaddr.p4_index())?;
-        p3.next_table_may_create(vaddr.p3_index())
-    }
+        let p2 = self.p4
+            .next_table_may_create(vaddr.p4_index())?
+            .next_table_may_create(vaddr.p3_index())?;
 
-    /// Maps a 2MiB page with a given P2 table.
-    /// Unsafe because we the P2 table has to correspond to the virtual address.
-    unsafe fn map_2m_with_table(p2: &mut Table<Level2>, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) {
-        debug_assert_eq!(paddr.as_usize() & 0x1fffff, 0);
-
-        let e = &mut p2.entries[vaddr.p2_index()];
-        let was_present = e.flags().contains(EntryFlags::PRESENT);
-        e.set(paddr, flags | EntryFlags::HUGE_PAGE);
-
-        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
-        if was_present {
-            Self::invalidate(vaddr);
-        }
+        Ok(EntryModifier {
+            entry: &mut p2.entries[vaddr.p2_index()],
+            addr: vaddr.as_u64(),
+        })
     }
 
     /// Maps a 2MiB page.
     pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        let p2 = self.ensure_2m_tables_exist(vaddr)?;
-        unsafe { Self::map_2m_with_table(p2, vaddr, paddr, flags); }
-        Ok(())
+        debug_assert_eq!(paddr.as_usize() & 0x1fffff, 0);
+        Ok(self.get_2m_entry(vaddr)?.set(paddr, flags | EntryFlags::HUGE_PAGE))
     }
 
-    /// Ensures the tables for 4KiB page mapping on this virtual address exist.
-    fn ensure_4k_tables_exist(&mut self, vaddr: VirtAddr) -> Result<&mut Table<Level1>, MappingError> {
+    /// Gets the entry modifier for a 4 KiB page.
+    pub fn get_4k_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
 
-        let p3 = self.p4.next_table_may_create(vaddr.p4_index())?;
-        let p2 = p3.next_table_may_create(vaddr.p3_index())?;
-        p2.next_table_may_create(vaddr.p2_index())
-    }
+        let p1 = self.p4
+            .next_table_may_create(vaddr.p4_index())?
+            .next_table_may_create(vaddr.p3_index())?
+            .next_table_may_create(vaddr.p2_index())?;
 
-    /// Maps a 4KiB page with a given P1 table.
-    /// Unsafe because we the P1 table has to correspond to the virtual address.
-    unsafe fn map_4k_with_table(p1: &mut Table<Level1>, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) {
-        debug_assert_eq!(paddr.as_usize() & 0xfff, 0);
-
-        let e = &mut p1.entries[vaddr.p1_index()];
-        let was_present = e.flags().contains(EntryFlags::PRESENT);
-        e.set(paddr, flags);
-
-        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
-        if was_present {
-            Self::invalidate(vaddr);
-        }
+        Ok(EntryModifier {
+            entry: &mut p1.entries[vaddr.p1_index()],
+            addr: vaddr.as_u64(),
+        })
     }
 }

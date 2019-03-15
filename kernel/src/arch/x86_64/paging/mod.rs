@@ -46,9 +46,7 @@ impl MemoryMapper for ActiveMapping {
     }
 
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
-        let p2 = self.p4
-            .next_table(addr.p4_index())
-            .and_then(|p3| p3.next_table(addr.p3_index()));
+        let p2 = self.p4.next_table(addr.p4_index())?.next_table(addr.p3_index());
 
         if p2.is_none() {
             return None;
@@ -77,9 +75,17 @@ impl MemoryMapper for ActiveMapping {
         })
     }
 
+    fn free_and_unmap_single(&mut self, vaddr: VirtAddr) {
+        unimplemented!()
+    }
+
     fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
         debug_assert_eq!(paddr.as_usize() & 0xfff, 0);
         Ok(self.get_4k_entry(vaddr)?.set(paddr, flags))
+    }
+
+    fn unmap_single(&mut self, vaddr: VirtAddr) {
+        unimplemented!()
     }
 }
 
@@ -105,19 +111,17 @@ impl<'a> EntryModifier<'a> {
 
 #[allow(dead_code)]
 impl ActiveMapping {
-    /// Invalidates a virtual address.
-    #[inline]
-    fn invalidate(addr: VirtAddr) {
-        unsafe { asm!("invlpg ($0)" :: "r" (addr.as_u64()) : "memory"); }
-    }
-
-    /// Gets the entry modifier for a 2 MiB page.
+    /// Gets the entry modifier for a 2 MiB page. Sets the page as used.
     pub fn get_2m_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0x1fffff, 0);
 
         let p2 = self.p4
             .next_table_may_create(vaddr.p4_index())?
             .next_table_may_create(vaddr.p3_index())?;
+
+        if p2.entries[vaddr.p2_index()].is_unused() {
+            p2.increase_used_count();
+        }
 
         Ok(EntryModifier {
             entry: &mut p2.entries[vaddr.p2_index()],
@@ -131,7 +135,7 @@ impl ActiveMapping {
         Ok(self.get_2m_entry(vaddr)?.set(paddr, flags | EntryFlags::HUGE_PAGE))
     }
 
-    /// Gets the entry modifier for a 4 KiB page.
+    /// Gets the entry modifier for a 4 KiB page. Sets the page as used.
     pub fn get_4k_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
 
@@ -139,6 +143,10 @@ impl ActiveMapping {
             .next_table_may_create(vaddr.p4_index())?
             .next_table_may_create(vaddr.p3_index())?
             .next_table_may_create(vaddr.p2_index())?;
+
+        if p1.entries[vaddr.p1_index()].is_unused() {
+            p1.increase_used_count();
+        }
 
         Ok(EntryModifier {
             entry: &mut p1.entries[vaddr.p1_index()],

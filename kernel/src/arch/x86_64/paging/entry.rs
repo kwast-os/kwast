@@ -24,6 +24,23 @@ pub struct Entry(u64);
 
 #[allow(dead_code)]
 impl Entry {
+    /// Gets the used count part of this entry.
+    /// We keep the used count in the first entry available bits.
+    pub fn used_count(&self) -> u64 {
+        (self.0 >> 52) & 511
+    }
+
+    /// Sets the used count part of this entry.
+    pub fn set_used_count(&mut self, count: u64) {
+        debug_assert!(count <= 512);
+        self.0 = (self.0 & 0xe00f_ffff_ffff_ffff) | (count << 52);
+    }
+
+    /// Returns true if this entry is unused.
+    pub fn is_unused(&self) -> bool {
+        self.phys_addr_unchecked().is_null()
+    }
+
     /// Clears the entry.
     #[inline]
     pub fn clear(&mut self) {

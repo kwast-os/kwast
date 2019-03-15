@@ -55,6 +55,26 @@ impl<L> Table<L> where L: Level {
             e.clear();
         }
     }
+
+    /// Gets the used count.
+    fn used_count(&self) -> u64 {
+        self.entries[0].used_count()
+    }
+
+    /// Sets the used count.
+    fn set_used_count(&mut self, count: u64) {
+        self.entries[0].set_used_count(count);
+    }
+
+    /// Increases the used count.
+    pub fn increase_used_count(&mut self) {
+        self.set_used_count(self.used_count() + 1);
+    }
+
+    /// Decreases the used count.
+    pub fn decrease_used_count(&mut self) {
+        self.set_used_count(self.used_count() - 1);
+    }
 }
 
 impl<L> Table<L> where L: HierarchicalLevel {
@@ -96,6 +116,7 @@ impl<L> Table<L> where L: HierarchicalLevel {
             // We could call the page mapping functions here, but it would be slower than
             // manipulating the pmm ourselves.
             mem::get_pmm().consume_and_move_top(|top| {
+                // We don't need to invalidate because it wasn't present.
                 self.entries[index].set(
                     top,
                     EntryFlags::PRESENT | EntryFlags::WRITABLE,
@@ -103,6 +124,8 @@ impl<L> Table<L> where L: HierarchicalLevel {
 
                 VirtAddr::new(addr)
             })?;
+
+            self.increase_used_count();
 
             table.clear();
         }

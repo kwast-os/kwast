@@ -66,10 +66,11 @@ impl FrameAllocator {
 
         // TODO: unmap
 
-        self.debug_print_frames();
+        //self.debug_print_frames();
     }
 
     /// Debug print all frames.
+    #[allow(dead_code)]
     fn debug_print_frames(&mut self) {
         println!("debug print frames");
 

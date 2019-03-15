@@ -3,6 +3,7 @@ use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::EntryFlags;
+use crate::arch::x86_64::address::VirtAddr;
 
 /// Trait for memory mapper: maps a physical address to a virtual address.
 pub trait MemoryMapper {
@@ -16,8 +17,14 @@ pub trait MemoryMapper {
     /// Gets a single physical page and maps it to a given virtual address.
     fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult;
 
+    /// Unmaps a single page and frees the corresponding physical page.
+    fn free_and_unmap_single(&mut self, vaddr: VirtAddr);
+
     /// Maps a single page.
     fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult;
+
+    /// Unmaps a single page.
+    fn unmap_single(&mut self, vaddr: VirtAddr);
 }
 
 /// Map result.
@@ -79,7 +86,7 @@ impl FrameAllocator {
         }
 
         // Read and set the next top address.
-        let ptr = f(self.top).as_usize() as *mut usize;
+        let ptr = f(self.top).as_usize() as *const usize;
         self.top = PhysAddr::new(unsafe { *ptr });
 
         Ok(())

@@ -36,7 +36,7 @@ pub fn write_port16(port: u16, val: u16) {
 pub fn read_port32(port: u16) -> u32 {
     let ret: u32;
     unsafe {
-        asm!("ins $1, $0" : "={eax}" (ret) : "{dx}N" (port) :: "volatile");
+        asm!("inl $1, $0" : "={eax}" (ret) : "{dx}N" (port) :: "volatile");
     }
     ret
 }
@@ -44,6 +44,6 @@ pub fn read_port32(port: u16) -> u32 {
 #[inline]
 pub fn write_port32(port: u16, val: u32) {
     unsafe {
-        asm!("outs $1, $0" :: "{dx}N" (port), "{eax}" (val) :: "volatile");
+        asm!("outl $1, $0" :: "{dx}N" (port), "{eax}" (val) :: "volatile");
     }
 }

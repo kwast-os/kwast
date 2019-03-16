@@ -3,6 +3,7 @@ export PATH := $(PATH):$(shell realpath ../toolchain/opt/cross/bin)
 ARCH ?= x86_64
 BUILD ?= debug
 CARGOFLAGS ?=
+QEMUFLAGS ?=
 
 RUST_OBJECT = target/src/arch/$(ARCH)/target/$(BUILD)/libkernel.a
 LD_SCRIPT   = src/arch/$(ARCH)/link.ld
@@ -12,21 +13,17 @@ ISO_IMAGE   = build/img.iso
 ASM_SOURCES = $(wildcard src/arch/$(ARCH)/*.s)
 ASM_OBJECTS = $(patsubst src/arch/$(ARCH)/%.s, build/arch/$(ARCH)/%.o, $(ASM_SOURCES))
 
-QEMUFLAGS   = -m 128 --enable-kvm
 LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
 LD          = $(ARCH)-elf-ld
 AS          = $(ARCH)-elf-as
+
+QEMUFLAGS  += -m 128 --enable-kvm --serial mon:stdio
 
 ifeq ($(BUILD), release)
 CARGOFLAGS += --release
 endif
 
-define run-test
-	@printf '\033[1;33mRunning test $(1)\033[0m'
-	@$(MAKE) --no-print-directory run CARGOFLAGS='--features integration-test,$(1)'
-endef
-
-.PHONY: all clean run rust iso run-tests
+.PHONY: all clean run rust iso
 
 all: $(KERNEL)
 
@@ -42,9 +39,6 @@ iso: $(KERNEL)
 
 run: iso
 	@qemu-system-$(ARCH) -cdrom $(ISO_IMAGE) $(QEMUFLAGS)
-
-run-tests:
-	$(call run-test,test-mem)
 
 rust:
 	@RUST_TARGET_PATH=$(shell pwd) cargo xbuild --target src/arch/$(ARCH)/target $(CARGOFLAGS)

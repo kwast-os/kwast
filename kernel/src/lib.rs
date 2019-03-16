@@ -3,6 +3,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(core_intrinsics)]
 #![feature(ptr_internals)]
+#![cfg_attr(feature = "integration-test", allow(unused_imports))]
 
 use core::panic::PanicInfo;
 
@@ -61,4 +62,6 @@ pub fn kernel_main() {
 pub fn kernel_main() {
     // TODO: real test, use serial output, hide qemu etc
     println!("integration test");
+
+    unsafe { arch::x86_64::qemu::qemu_exit(0); }
 }

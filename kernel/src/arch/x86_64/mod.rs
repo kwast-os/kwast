@@ -8,6 +8,7 @@ pub mod address;
 pub mod interrupts;
 pub mod paging;
 pub mod port;
+pub mod qemu; // For debugging
 
 extern "C" {
     static KERNEL_END_PTR: usize;

@@ -2,13 +2,13 @@
 <img alt="Kwast" src="https://github.com/nielsdos/kwast/raw/master/docs/small_logo.png">
 </p>
 
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 **Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture.
 
 Since WebAssembly was designed to be a safe language, we can run it **without** having to use *hardware usermode* and *multiple address spaces*. This enables higher performance and opens more possibilities to implement a microkernel.
 You can read more about "[Why a microkernel?](#history-aka-why-a-microkernel)" below.
 Check out the [goals / ideas](#goals) section.
-
-[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 ### Status
 Currently there are two folders: `kernel` and `wasm_test`. The `wasm_test` folder contains a normal rust project, meant for my experimenting with [Cranelift](https://github.com/CraneStation/cranelift). Eventually, the work in `wasm_test` will be merged into the kernel itself.

@@ -1,6 +1,6 @@
 use core::cmp::max;
 
-use crate::{kernel_main, mem};
+use crate::mem;
 
 #[macro_use]
 pub mod vga_text;
@@ -33,7 +33,11 @@ pub extern "C" fn entry(mboot_addr: usize) {
     println!("kernel end: {:#x} | mboot end: {:#x}", kernel_end, mboot_end);
     mem::get_pmm().init(&mboot_struct, reserved_end);
 
-    kernel_main();
+    #[cfg(not(feature = "integration-test"))]
+        crate::kernel_main();
+
+    #[cfg(feature = "integration-test")]
+        crate::tests::test_main();
 }
 
 /// Halt instruction. Waits for interrupt.

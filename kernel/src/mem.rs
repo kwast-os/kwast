@@ -94,8 +94,8 @@ impl FrameAllocator {
     /// Similar to `pop_top`.
     /// This pushes a new top on the stack and links it to the previous top.
     pub fn push_top(&mut self, vaddr: VirtAddr, paddr: PhysAddr) {
-        let ptr = vaddr.as_usize() as *mut u64;
-        unsafe { ptr.write_volatile(self.top.as_u64()); }
+        let ptr = vaddr.as_usize() as *mut usize;
+        unsafe { ptr.write_volatile(self.top.as_usize()); }
         self.top = paddr;
     }
 }

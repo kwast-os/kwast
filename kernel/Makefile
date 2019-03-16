@@ -34,7 +34,7 @@ iso: $(KERNEL)
 	@mkdir -p $(ISO_FILES)/boot/grub
 	@cp src/arch/$(ARCH)/grub.cfg $(ISO_FILES)/boot/grub
 	@cp $(KERNEL) $(ISO_FILES)/boot/kernel
-	@grub-mkrescue -o $(ISO_IMAGE) $(ISO_FILES) 2> /dev/null
+	@grub-mkrescue -o $(ISO_IMAGE) $(ISO_FILES) 2> /dev/null || (echo "grub-mkrescue failed, do you have the necessary dependencies?" && exit 1)
 	@rm -r $(ISO_FILES)
 
 run: iso

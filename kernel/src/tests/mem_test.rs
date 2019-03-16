@@ -1,5 +1,3 @@
-use core::panic::PanicInfo;
-
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::arch::x86_64::qemu;

@@ -1,5 +1,6 @@
 #!/bin/sh
 
+cookie='built-2019-03-16.cookie'
 cross_rel_path=./opt/cross
 
 if [ ! -d $cross_rel_path ]; then
@@ -11,6 +12,17 @@ cross_path=$(realpath $cross_rel_path)
 binutils_ver=2.32
 binutils="https://ftp.gnu.org/gnu/binutils/binutils-$binutils_ver.tar.xz"
 binutils_file=$(basename $binutils)
+
+# This will check if a toolchain was already built.
+# If it wasn't, then it'll build. Otherwise it won't.
+
+if [ -f "$cookie" ]; then
+    echo Toolchain was already built.
+    exit 0
+else
+    # Cleanup old toolchain
+    rm -rf opt build-binutils binutils-*
+fi
 
 if [ ! -f $binutils_file ]; then
     if hash curl 2>/dev/null; then
@@ -39,5 +51,8 @@ cd build-binutils
     --disable-nls --disable-werror \
     --disable-gdb --disable-libdecnumber --disable-readline --disable-sim
 
-make -j2
-make install
+make -j2 || exit 1
+make install || exit 1
+cd ..
+
+touch "$cookie"

@@ -8,3 +8,4 @@
 /toolchain/binutils-*
 /toolchain/build-*
 /toolchain/opt
+/toolchain/*.cookie

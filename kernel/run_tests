@@ -5,7 +5,7 @@ run_test() {
 	make iso CARGOFLAGS="--features integration-test,$1"
 
 	if [ $? -ne 0 ]; then
-		echo Compile failed
+		printf "\033[1;31mCompile failed\033[0m\n"
 		exit 1
 	fi
 
@@ -13,6 +13,7 @@ run_test() {
 
 	if [ $? -ne 1 ]; then
 		printf "\033[1;31mTest $1 failed\033[0m\n"
+		exit 1
 	else
 		printf "\033[1;32mTest $1 succeeded\033[0m\n"
 	fi

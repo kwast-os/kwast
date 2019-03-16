@@ -1,0 +1,20 @@
+language: rust
+dist: xenial
+rust:
+  - nightly
+addons:
+  apt:
+    packages:
+      - qemu
+      - xorriso
+cache:
+  - apt
+  - directories:
+    - toolchain
+before_install:
+  - rustup component add rust-src
+  - cargo install cargo-xbuild
+install:
+  - cd toolchain && ./setup_cross_binutils.sh && cd ..
+script:
+  - cd kernel && ./run_tests && cd ..

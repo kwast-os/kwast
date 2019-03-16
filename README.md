@@ -48,6 +48,9 @@ make iso # Only builds the iso
 
 # You can make a release build using:
 make iso BUILD=release # (or run)
+
+# You can run tests using
+./run_tests
 ```
 
 The `wasm_test` folder is just a normal rust project and can be run using

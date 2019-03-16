@@ -11,6 +11,7 @@ pub mod port;
 
 // For tests
 pub mod qemu;
+#[macro_use]
 pub mod serial;
 
 extern "C" {

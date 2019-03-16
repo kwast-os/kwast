@@ -258,7 +258,7 @@ extern "x86-interrupt" fn exc_virtualization(frame: &mut ISRStackFrame) {
     panic!("Virtualization exception: {:#?}", frame);
 }
 
-extern "x86-interrupt" fn irq(frame: &mut ISRStackFrame) {
-    println!("IRQ: {:#?}", frame);
+extern "x86-interrupt" fn irq(_frame: &mut ISRStackFrame) {
+    println!("IRQ: {:#?}", _frame);
     // write_port8(0x20, 0x20);
 }

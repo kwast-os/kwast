@@ -8,6 +8,6 @@ mod mem_test;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    serial_println!("{:#?}", info);
+    println!("{:#?}", info);
     unsafe { qemu::qemu_exit(1) }
 }

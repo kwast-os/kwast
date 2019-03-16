@@ -1,4 +1,4 @@
-use core::fmt::{self, Error};
+use core::fmt;
 use core::ptr::Unique;
 
 use spin::Mutex;
@@ -23,6 +23,7 @@ struct Writer {
     buffer: Unique<Buffer>,
 }
 
+#[allow(dead_code)]
 static WRITER: Mutex<Writer> = Mutex::new(Writer {
     x: 0,
     buffer: unsafe { Unique::new_unchecked(0xb8000 as *mut Buffer) },
@@ -82,24 +83,13 @@ impl Writer {
 }
 
 impl fmt::Write for Writer {
-    fn write_str(&mut self, s: &str) -> Result<(), Error> {
+    fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
         for c in s.bytes() {
             self.write_char(c);
         }
 
         Ok(())
     }
-}
-
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::arch::x86_64::vga_text::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
 pub fn _print(args: fmt::Arguments) {

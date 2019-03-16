@@ -1,11 +1,8 @@
 use multiboot2::MemoryMapTag;
 
-use crate::arch::x86_64::paging::invalidate;
-use crate::arch::x86_64::paging::PAGE_SIZE;
 use crate::mem::*;
 
-use super::{ActiveMapping, EntryFlags};
-use super::{PhysAddr, VirtAddr};
+use super::{ActiveMapping, EntryFlags, invalidate, PAGE_SIZE, PhysAddr, VirtAddr};
 
 impl FrameAllocator {
     /// Applies the memory map.

@@ -1,4 +1,4 @@
-use core::fmt::{self, Error};
+use core::fmt;
 
 use lazy_static::lazy_static;
 use spin::Mutex;
@@ -20,16 +20,6 @@ lazy_static! {
 impl SerialPort {
     /// Inits and creates a serial port.
     fn new(port: u16) -> Self {
-        #[cfg(feature = "integration-test")]
-            Self::init(port);
-
-        Self {
-            port
-        }
-    }
-
-    /// Inits the serial port.
-    fn init(port: u16) {
         write_port8(port + 1, 0x00);
         write_port8(port + 3, 0x80);
         write_port8(port + 0, 0x01);
@@ -38,6 +28,10 @@ impl SerialPort {
         write_port8(port + 2, 0xc7);
         write_port8(port + 4, 0x0b);
         write_port8(port + 1, 0x01);
+
+        Self {
+            port
+        }
     }
 
     /// Sends a byte.
@@ -48,24 +42,13 @@ impl SerialPort {
 }
 
 impl fmt::Write for SerialPort {
-    fn write_str(&mut self, s: &str) -> Result<(), Error> {
+    fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
         for byte in s.bytes() {
             self.send(byte);
         }
 
         Ok(())
     }
-}
-
-#[macro_export]
-macro_rules! serial_print {
-    ($($arg:tt)*) => ($crate::arch::x86_64::serial::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! serial_println {
-    () => ($crate::serial_print!("\n"));
-    ($($arg:tt)*) => ($crate::serial_print!("{}\n", format_args!($($arg)*)));
 }
 
 pub fn _print(args: fmt::Arguments) {

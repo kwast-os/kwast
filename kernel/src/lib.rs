@@ -61,7 +61,7 @@ pub fn kernel_main() {
 #[cfg(feature = "test-mem")]
 pub fn kernel_main() {
     // TODO: real test, use serial output, hide qemu etc
-    println!("integration test");
+    serial_println!("integration test");
 
     unsafe { arch::x86_64::qemu::qemu_exit(0); }
 }

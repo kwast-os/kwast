@@ -1,6 +1,6 @@
 use core::cmp::max;
 
-use crate::kernel_main;
+use crate::{kernel_main, mem};
 
 #[macro_use]
 pub mod vga_text;
@@ -8,7 +8,10 @@ pub mod address;
 pub mod interrupts;
 pub mod paging;
 pub mod port;
-pub mod qemu; // For debugging
+
+// For tests
+pub mod qemu;
+pub mod serial;
 
 extern "C" {
     static KERNEL_END_PTR: usize;
@@ -27,7 +30,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let mboot_end = mboot_struct.end_address();
     let reserved_end = max(kernel_end, mboot_end);
     println!("kernel end: {:#x} | mboot end: {:#x}", kernel_end, mboot_end);
-    crate::mem::get_pmm().init(&mboot_struct, reserved_end);
+    mem::get_pmm().init(&mboot_struct, reserved_end);
 
     kernel_main();
 }

@@ -20,6 +20,7 @@ mod arch;
 mod mem;
 
 #[panic_handler]
+#[cfg(not(feature = "integration-test"))]
 fn panic(info: &PanicInfo) -> ! {
     // TODO: notify other processors/cores
     println!("{:#?}", info);
@@ -34,6 +35,22 @@ fn panic(info: &PanicInfo) -> ! {
 pub fn kernel_main() {
     println!("entered kernel_main");
 
+
+    println!("end");
+}
+
+#[panic_handler]
+#[cfg(feature = "integration-test")]
+fn panic(info: &PanicInfo) -> ! {
+    serial_println!("{:#?}", info);
+    unsafe { arch::x86_64::qemu::qemu_exit(1); }
+}
+
+/// Memory test.
+#[cfg(feature = "test-mem")]
+pub fn kernel_main() {
+    // TODO: make this a real test
+
     let mut mapping = unsafe { ActiveMapping::get() };
 
     mapping.get_and_map_single(VirtAddr::new(0x400_000), EntryFlags::PRESENT | EntryFlags::WRITABLE)
@@ -41,27 +58,10 @@ pub fn kernel_main() {
     mapping.get_and_map_single(VirtAddr::new(0xdeadb000), EntryFlags::PRESENT | EntryFlags::WRITABLE)
         .expect("could not map page");
 
-    let ptr = 0x400_000 as *mut i32;
-    unsafe {
-        ptr.write_volatile(222);
-        println!("{}", *ptr);
-    }
-    let ptr = 0xdeadb000 as *mut i32;
-    unsafe {
-        println!("{}", *ptr);
-    }
-
     mapping.unmap_single(VirtAddr::new(0xdeadb000));
-    // This should crash
-    mapping.unmap_single(VirtAddr::new(0xdeada000));
 
-    println!("end");
-}
-
-#[cfg(feature = "test-mem")]
-pub fn kernel_main() {
-    // TODO: real test, use serial output, hide qemu etc
-    serial_println!("integration test");
+    let ptr = 0x400_000 as *mut i32;
+    unsafe { ptr.write_volatile(42); }
 
     unsafe { arch::x86_64::qemu::qemu_exit(0); }
 }

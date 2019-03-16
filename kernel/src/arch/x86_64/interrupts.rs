@@ -167,6 +167,7 @@ pub fn enable_ints() {
     }
 }
 
+#[allow(dead_code)]
 pub fn disable_ints() {
     unsafe {
         asm!("cli" :::: "volatile");

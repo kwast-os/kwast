@@ -36,6 +36,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
 }
 
 /// Halt instruction. Waits for interrupt.
+#[allow(dead_code)]
 pub fn halt() {
     unsafe {
         asm!("hlt" :::: "volatile");

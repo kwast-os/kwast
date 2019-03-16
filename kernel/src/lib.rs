@@ -29,6 +29,7 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 /// Kernel main, called after arch init is done.
+#[cfg(not(feature = "integration-test"))]
 pub fn kernel_main() {
     println!("entered kernel_main");
 
@@ -54,4 +55,10 @@ pub fn kernel_main() {
     mapping.unmap_single(VirtAddr::new(0xdeada000));
 
     println!("end");
+}
+
+#[cfg(feature = "test-mem")]
+pub fn kernel_main() {
+    // TODO: real test, use serial output, hide qemu etc
+    println!("integration test");
 }

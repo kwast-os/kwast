@@ -7,6 +7,10 @@ edition = "2018"
 [lib]
 crate-type = ["staticlib"]
 
+[features]
+integration-test = []
+test-mem = []
+
 [profile.release]
 lto = true
 opt-level = "s"

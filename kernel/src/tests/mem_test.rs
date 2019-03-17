@@ -8,7 +8,7 @@ use crate::mem::MemoryMapper;
 pub fn test_main() {
     let mut mapping = unsafe { ActiveMapping::get() };
 
-    // Note: `va1` and `va2` are in the same P2
+    // Note: `va1` and `va3` are in the same P2
     let va1 = VirtAddr::new(0x400_000);
     let va2 = VirtAddr::new(0xdeadb000);
     let va3 = VirtAddr::new(0x600_000);

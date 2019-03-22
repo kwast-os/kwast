@@ -133,6 +133,6 @@ impl PhysMemManager {
 }
 
 /// Gets the PMM.
-pub fn get_pmm() -> &'static PhysMemManager {
+pub fn get() -> &'static PhysMemManager {
     &PMM
 }

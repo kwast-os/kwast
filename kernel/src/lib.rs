@@ -13,7 +13,7 @@ use arch::interrupts;
 mod macros;
 #[macro_use]
 mod arch;
-mod mem;
+mod mm;
 #[cfg(feature = "integration-test")]
 mod tests;
 

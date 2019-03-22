@@ -1,9 +1,10 @@
 use core::marker::PhantomData;
 
 use crate::arch::x86_64::address::VirtAddr;
-use crate::arch::x86_64::paging::entry::*;
-use crate::arch::x86_64::paging::MappingError;
-use crate::mem;
+use crate::mm;
+
+use super::entry::*;
+use super::MappingError;
 
 // We use the clever solution for static type safety as described by [Philipp Oppermann's blog](https://os.phil-opp.com/)
 
@@ -120,7 +121,7 @@ impl<L> Table<L> where L: HierarchicalLevel {
         if !flags.contains(EntryFlags::PRESENT) {
             // We could call the page mapping functions here, but it would be slower than
             // manipulating the pmm ourselves.
-            mem::get_pmm().pop_top(|top| {
+            mm::pmm::get().pop_top(|top| {
                 // We don't need to invalidate because it wasn't present.
                 self.entries[index].set(
                     top,

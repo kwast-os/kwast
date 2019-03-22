@@ -1,7 +1,7 @@
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::arch::x86_64::qemu;
-use crate::mem::MemoryMapper;
+use crate::pmm::MemoryMapper;
 
 /// Memory test.
 #[cfg(feature = "test-mem")]

@@ -1,6 +1,6 @@
 use core::cmp::max;
 
-use crate::mem;
+use crate::mm;
 
 #[macro_use]
 pub mod macros;
@@ -31,7 +31,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let mboot_end = mboot_struct.end_address();
     let reserved_end = max(kernel_end, mboot_end);
     println!("kernel end: {:#x} | mboot end: {:#x}", kernel_end, mboot_end);
-    mem::get_pmm().init(&mboot_struct, reserved_end);
+    mm::pmm::get().init(&mboot_struct, reserved_end);
 
     #[cfg(not(feature = "integration-test"))]
         crate::kernel_main();

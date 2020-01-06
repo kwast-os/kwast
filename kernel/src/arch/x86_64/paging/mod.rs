@@ -64,10 +64,10 @@ impl<'a> EntryModifier<'a> {
 }
 
 impl MemoryMapper for ActiveMapping {
-    unsafe fn get() -> Self {
+    fn get() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self {
-            p4: &mut *p4_ptr
+            p4: unsafe { &mut *p4_ptr }
         }
     }
 

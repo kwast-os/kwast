@@ -6,7 +6,7 @@ use crate::mm::pmm::MemoryMapper;
 /// Memory test.
 #[cfg(feature = "test-mem")]
 pub fn test_main() {
-    let mut mapping = unsafe { ActiveMapping::get() };
+    let mut mapping = ActiveMapping::get();
 
     // Note: `va1` and `va3` are in the same P2
     let va1 = VirtAddr::new(0x400_000);

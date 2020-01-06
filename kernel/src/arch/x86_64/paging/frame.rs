@@ -6,14 +6,14 @@ use super::{ActiveMapping, EntryFlags, invalidate, PAGE_SIZE, PhysAddr, VirtAddr
 
 impl FrameAllocator {
     /// Applies the memory map.
-    pub fn apply_mmap(&mut self, tag: &MemoryMapTag) {
+    pub fn apply_mmap(&mut self, tag: &MemoryMapTag, reserved_end: PhysAddr) {
         // Will be the last entry of the PML2 (PML2 exists)
         const P2_IDX: usize = 511;
         let tmp_2m_map_addr = VirtAddr::new(P2_IDX * 0x200000);
         // Mapping flags
         let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
 
-        let mut mapping = unsafe { ActiveMapping::get() };
+        let mut mapping = ActiveMapping::get();
         let mut e = mapping.get_2m_entry(tmp_2m_map_addr).unwrap();
 
         // Previous entry address
@@ -28,8 +28,8 @@ impl FrameAllocator {
             let end = PhysAddr::new(x.end_address() as usize).align_down();
 
             // Adjust for reserved area
-            if start < self.reserved_end {
-                start = self.reserved_end;
+            if start < reserved_end {
+                start = reserved_end;
                 if start > end {
                     continue;
                 }
@@ -84,7 +84,7 @@ impl FrameAllocator {
     fn debug_print_frames(&mut self) {
         println!("debug print frames");
 
-        let mut mapping = unsafe { ActiveMapping::get() };
+        let mut mapping = ActiveMapping::get();
 
         while !self.top.is_null() {
             self.pop_top(|top| {

@@ -8,7 +8,7 @@ use crate::arch::paging::EntryFlags;
 pub trait MemoryMapper {
     /// Gets the active paging mapping.
     /// You need to be very careful if you create a new instance of this!
-    unsafe fn get() -> Self;
+    fn get() -> Self;
 
     /// Translate a virtual address to a physical address (if mapped).
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr>;
@@ -53,31 +53,28 @@ pub enum MappingError {
 /// For a free, it is likely that the data was already accessed.
 #[derive(Debug)]
 pub struct FrameAllocator {
-    pub reserved_end: PhysAddr,
     pub top: PhysAddr,
 }
 
 impl FrameAllocator {
     /// Initializes the allocator.
     fn init(&mut self, mboot_struct: &BootInformation, reserved_end: PhysAddr) {
-        self.reserved_end = reserved_end.align_up();
+        let reserved_end = reserved_end.align_up();
 
         self.apply_mmap(
-            mboot_struct.memory_map_tag().expect("Memory map is required")
+            mboot_struct.memory_map_tag().expect("Memory map is required"),
+            reserved_end
         );
     }
 
     /// Empty, uninitialized allocator.
     const fn empty() -> Self {
         FrameAllocator {
-            reserved_end: PhysAddr::null(),
             top: PhysAddr::null(),
         }
     }
 
-    /// Pops the top and moves it. This function is used internally for memory management.
-    /// It allows the paging component to get the top directly and let it move.
-    /// This is faster than going via `map_page`.
+    /// Pops the top and moves the current top pointer. This function is used internally for memory management by paging.
     pub fn pop_top<F>(&mut self, f: F) -> MappingResult
         where F: FnOnce(PhysAddr) -> VirtAddr {
         if unlikely!(self.top.is_null()) {

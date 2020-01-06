@@ -3,11 +3,15 @@
 #![feature(abi_x86_interrupt)]
 #![feature(core_intrinsics)]
 #![feature(ptr_internals)]
+#![feature(alloc_error_handler)]
 #![cfg_attr(feature = "integration-test", allow(unused_imports))]
+
+extern crate alloc;
 
 use core::panic::PanicInfo;
 
 use arch::interrupts;
+use alloc::boxed::Box;
 
 #[macro_use]
 mod macros;
@@ -32,4 +36,8 @@ fn panic(info: &PanicInfo) -> ! {
 #[cfg(not(feature = "integration-test"))]
 pub fn kernel_main() {
     println!("entered kernel_main");
+
+    // TEST
+    let test = Box::new([1, 2, 3]);
+    println!("{:?}", test);
 }

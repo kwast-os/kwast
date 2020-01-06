@@ -17,7 +17,7 @@ LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
 LD          = $(ARCH)-elf-ld
 AS          = $(ARCH)-elf-as
 
-QEMUFLAGS  += -m 128 --enable-kvm
+QEMUFLAGS  += -m 512 --enable-kvm -cpu max
 
 ifeq ($(BUILD), release)
 CARGOFLAGS += --release

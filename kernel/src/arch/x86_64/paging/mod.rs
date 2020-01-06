@@ -54,6 +54,9 @@ impl<'a> EntryModifier<'a> {
     pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
         let was_present = self.entry.flags().contains(EntryFlags::PRESENT);
 
+        // W^X policy
+        debug_assert_ne!(flags.contains(EntryFlags::WRITABLE), !flags.contains(EntryFlags::NX));
+
         self.entry.set(addr, flags);
 
         // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)

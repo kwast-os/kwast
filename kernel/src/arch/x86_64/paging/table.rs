@@ -1,9 +1,10 @@
 use core::marker::PhantomData;
 
-use crate::mm::{mapper::MappingError, pmm::FrameAllocator};
+use crate::arch::x86_64::address::VirtAddr;
+use crate::mm;
 
 use super::entry::*;
-use super::super::address::VirtAddr;
+use super::MappingError;
 
 // We use the clever solution for static type safety as described by [Philipp Oppermann's blog](https://os.phil-opp.com/)
 
@@ -75,21 +76,13 @@ impl<L> Table<L> where L: Level {
     pub fn decrease_used_count(&mut self) {
         self.set_used_count(self.used_count() - 1);
     }
-
-    /// Gets an entry modifier for an index.
-    pub fn entry_modifier(&mut self, vaddr: VirtAddr, index: usize) -> EntryModifier {
-        if self.entries[index].is_unused() {
-            self.increase_used_count();
-        }
-
-        EntryModifier::new(&mut self.entries[index], vaddr)
-    }
 }
 
 impl<L> Table<L> where L: HierarchicalLevel {
     /// Gets the next table address (unchecked). (internal use only).
     fn next_table_address_unchecked(&self, index: usize) -> usize {
-        self.entries[index].phys_addr_unchecked().to_pmap().as_usize()
+        let addr = self as *const _ as usize;
+        (addr << 9) | (index << 12)
     }
 
     /// Gets the next table address.
@@ -117,30 +110,30 @@ impl<L> Table<L> where L: HierarchicalLevel {
     }
 
     /// Gets the next table (mutable), creates it if it doesn't exist yet.
-    pub fn next_table_may_create(&mut self, index: usize, frame_alloc: &mut FrameAllocator) -> Result<&mut Table<L::NextLevel>, MappingError> {
+    pub fn next_table_may_create(&mut self, index: usize) -> Result<&mut Table<L::NextLevel>, MappingError> {
         let flags = self.entries[index].flags();
         debug_assert!(!flags.contains(EntryFlags::HUGE_PAGE));
 
-        let table;
+        let addr = self.next_table_address_unchecked(index);
+        let table = unsafe { &mut *(addr as *mut Table<L::NextLevel>) };
 
         // Need to create a table.
         if !flags.contains(EntryFlags::PRESENT) {
-            let p = match frame_alloc.alloc() {
-                Some(p) => p,
-                None => return Err(MappingError::OOM),
-            };
+            // We could call the page mapping functions here, but it would be slower than
+            // manipulating the pmm ourselves.
+            mm::pmm::get().pop_top(|top| {
+                // We don't need to invalidate because it wasn't present.
+                self.entries[index].set(
+                    top,
+                    EntryFlags::PRESENT | EntryFlags::WRITABLE,
+                );
 
-            table = unsafe { &mut *(p.to_pmap().as_usize() as *mut Table<L::NextLevel>) };
-
-            // We don't need to invalidate because it wasn't present.
-            self.entries[index].set(p, EntryFlags::PRESENT | EntryFlags::WRITABLE);
+                VirtAddr::new(addr)
+            })?;
 
             self.increase_used_count();
 
             table.clear();
-        } else {
-            let addr = self.next_table_address_unchecked(index);
-            table = unsafe { &mut *(addr as *mut Table<L::NextLevel>) };
         }
 
         Ok(table)

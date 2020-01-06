@@ -3,7 +3,7 @@ use core::ops::Add;
 
 use bit_field::BitField;
 
-use super::paging;
+use crate::arch::x86_64::paging::PAGE_SIZE;
 
 /// A 64-bit physical address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -15,7 +15,6 @@ pub struct PhysAddr(usize);
 #[repr(transparent)]
 pub struct VirtAddr(usize);
 
-#[allow(dead_code)]
 impl PhysAddr {
     /// Creates a new physical address.
     #[inline]
@@ -51,20 +50,14 @@ impl PhysAddr {
         self.0 as u64
     }
 
-    /// Converts the physical address to a virtual address within the physical map.
-    #[inline]
-    pub const fn to_pmap(self) -> VirtAddr {
-        VirtAddr(self.0 | paging::PHYS_OFF)
-    }
-
     /// Aligns a memory address down.
     pub fn align_down(&self) -> Self {
-        PhysAddr(self.0 & !(paging::PAGE_SIZE - 1))
+        PhysAddr(self.0 & !(PAGE_SIZE - 1))
     }
 
     /// Aligns a memory address up.
     pub fn align_up(&self) -> Self {
-        self.align_down() + paging::PAGE_SIZE
+        self.align_down() + PAGE_SIZE
     }
 }
 

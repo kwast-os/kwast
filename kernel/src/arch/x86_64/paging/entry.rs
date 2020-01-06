@@ -1,7 +1,6 @@
 use bitflags::bitflags;
 
-use super::invalidate;
-use super::super::address::{PhysAddr, VirtAddr};
+use crate::arch::x86_64::address::PhysAddr;
 
 bitflags! {
     pub struct EntryFlags: u64 {
@@ -20,43 +19,10 @@ bitflags! {
     }
 }
 
-/// Bit mask for used entry count.
-const USED_COUNT_MASK: u64 = 0x1ff0_0000_0000_0000;
-
 /// Page table entry.
-#[repr(transparent)]
 pub struct Entry(u64);
 
-/// Entry modifier helper.
-pub struct EntryModifier<'a> {
-    entry: &'a mut Entry,
-    addr: u64,
-}
-
-impl<'a> EntryModifier<'a> {
-    /// Creates a new entry modifier.
-    pub fn new(entry: &'a mut Entry, addr: VirtAddr) -> Self {
-        Self {
-            entry,
-            addr: addr.as_u64(),
-        }
-    }
-
-    /// Sets the entry.
-    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
-        let was_present = self.entry.flags().contains(EntryFlags::PRESENT);
-
-        // W^X policy
-        debug_assert_ne!(flags.contains(EntryFlags::WRITABLE), !flags.contains(EntryFlags::NX));
-
-        self.entry.set(addr, flags);
-
-        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
-        if was_present {
-            invalidate(self.addr);
-        }
-    }
-}
+const USED_COUNT_MASK: u64 = 0x1ff0_0000_0000_0000;
 
 #[allow(dead_code)]
 impl Entry {

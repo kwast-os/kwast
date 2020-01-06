@@ -1,26 +1,19 @@
 use bitflags::bitflags;
 
-use crate::mm::mapper::{MappingError, MappingResult, MemoryMapper};
-use crate::mm::pmm::{self, FrameAllocator};
+use crate::mm::pmm::{self, MappingError, MappingResult, MemoryMapper};
 
 use super::address::{PhysAddr, VirtAddr};
 
+use self::entry::Entry;
 pub use self::entry::EntryFlags;
-use self::entry::EntryModifier;
 use self::table::{Level4, Table};
 
 mod entry;
 mod table;
 mod frame;
 
-/// The (default) page size on this arch.
+/// The page size on this arch.
 pub const PAGE_SIZE: usize = 0x1000;
-/// The page mask on this arch.
-pub const PAGE_MASK: usize = PAGE_SIZE - 1;
-/// Physical memory map offset.
-pub const PHYS_OFF: usize = 0xffff800000000000;
-/// Kernel offset.
-pub const KERN_OFF: usize = 0xffffffff80000000;
 
 bitflags! {
     /// Represents a PF error.
@@ -40,11 +33,14 @@ bitflags! {
     }
 }
 
-pub struct ActiveMapping<'a> {
-    /// Pointer to PML4
+pub struct ActiveMapping {
     p4: &'static mut Table<Level4>,
-    /// Frame allocator
-    frame_alloc: &'a mut FrameAllocator,
+}
+
+/// Entry modifier helper.
+pub struct EntryModifier<'a> {
+    entry: &'a mut Entry,
+    addr: u64,
 }
 
 /// Invalidates page.
@@ -53,15 +49,25 @@ fn invalidate(addr: u64) {
     unsafe { asm!("invlpg ($0)" :: "r" (addr) : "memory"); }
 }
 
-impl<'a> MemoryMapper<'a> for ActiveMapping<'a> {
-    unsafe fn get(frame_alloc: &'a mut FrameAllocator) -> Self {
-        extern "C" {
-            static mut BOOT_PML4: Table<Level4>;
-        }
+impl<'a> EntryModifier<'a> {
+    /// Sets the entry.
+    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
+        let was_present = self.entry.flags().contains(EntryFlags::PRESENT);
 
+        self.entry.set(addr, flags);
+
+        // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
+        if was_present {
+            invalidate(self.addr);
+        }
+    }
+}
+
+impl MemoryMapper for ActiveMapping {
+    unsafe fn get() -> Self {
+        let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self {
-            p4: &mut *((&mut BOOT_PML4 as *mut _ as usize | PHYS_OFF) as *mut _),
-            frame_alloc,
+            p4: &mut *p4_ptr
         }
     }
 
@@ -89,11 +95,10 @@ impl<'a> MemoryMapper<'a> for ActiveMapping<'a> {
     fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
         let mut e = self.get_4k_entry(vaddr)?;
 
-        /*pmm::get().pop_top(move |top| {
+        pmm::get().pop_top(move |top| {
             e.set(top, flags);
             vaddr
-        })*/
-        unimplemented!()
+        })
     }
 
     #[inline]
@@ -113,7 +118,7 @@ impl<'a> MemoryMapper<'a> for ActiveMapping<'a> {
 }
 
 #[allow(dead_code)]
-impl<'a> ActiveMapping<'a> {
+impl ActiveMapping {
     /// Unmaps single page, if frame is true, also puts the physical frame on the stack. (internal use only).
     fn unmap_single_internal(&mut self, vaddr: VirtAddr, frame: bool) {
         debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
@@ -126,8 +131,7 @@ impl<'a> ActiveMapping<'a> {
         debug_assert!(e.flags().contains(EntryFlags::PRESENT));
 
         if frame {
-            //pmm::get().push_top(vaddr, e.phys_addr_unchecked());
-            unimplemented!()
+            pmm::get().push_top(vaddr, e.phys_addr_unchecked());
         }
 
         e.clear();
@@ -139,32 +143,25 @@ impl<'a> ActiveMapping<'a> {
         }
     }
 
-    /// Gets the entry modifier for a 1 GiB page. Sets the page as used.
-    pub fn get_1g_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
-        debug_assert_eq!(vaddr.as_usize() & 0x3fffffff, 0);
-
-        Ok(self.p4
-            .next_table_may_create(vaddr.p4_index(), self.frame_alloc)?
-            .entry_modifier(vaddr, vaddr.p3_index()))
-    }
-
-    /// Maps a 1 GiB page.
-    pub fn map_1g(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        debug_assert_eq!(paddr.as_usize() & 0x3fffffff, 0);
-        Ok(self.get_1g_entry(vaddr)?.set(paddr, flags | EntryFlags::HUGE_PAGE))
-    }
-
     /// Gets the entry modifier for a 2 MiB page. Sets the page as used.
     pub fn get_2m_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0x1fffff, 0);
 
-        Ok(self.p4
-            .next_table_may_create(vaddr.p4_index(), self.frame_alloc)?
-            .next_table_may_create(vaddr.p3_index(), self.frame_alloc)?
-            .entry_modifier(vaddr, vaddr.p2_index()))
+        let p2 = self.p4
+            .next_table_may_create(vaddr.p4_index())?
+            .next_table_may_create(vaddr.p3_index())?;
+
+        if p2.entries[vaddr.p2_index()].is_unused() {
+            p2.increase_used_count();
+        }
+
+        Ok(EntryModifier {
+            entry: &mut p2.entries[vaddr.p2_index()],
+            addr: vaddr.as_u64(),
+        })
     }
 
-    /// Maps a 2 MiB page.
+    /// Maps a 2MiB page.
     pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
         debug_assert_eq!(paddr.as_usize() & 0x1fffff, 0);
         Ok(self.get_2m_entry(vaddr)?.set(paddr, flags | EntryFlags::HUGE_PAGE))
@@ -174,10 +171,18 @@ impl<'a> ActiveMapping<'a> {
     pub fn get_4k_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert_eq!(vaddr.as_usize() & 0xfff, 0);
 
-        Ok(self.p4
-            .next_table_may_create(vaddr.p4_index(), self.frame_alloc)?
-            .next_table_may_create(vaddr.p3_index(), self.frame_alloc)?
-            .next_table_may_create(vaddr.p2_index(), self.frame_alloc)?
-            .entry_modifier(vaddr, vaddr.p1_index()))
+        let p1 = self.p4
+            .next_table_may_create(vaddr.p4_index())?
+            .next_table_may_create(vaddr.p3_index())?
+            .next_table_may_create(vaddr.p2_index())?;
+
+        if p1.entries[vaddr.p1_index()].is_unused() {
+            p1.increase_used_count();
+        }
+
+        Ok(EntryModifier {
+            entry: &mut p1.entries[vaddr.p1_index()],
+            addr: vaddr.as_u64(),
+        })
     }
 }

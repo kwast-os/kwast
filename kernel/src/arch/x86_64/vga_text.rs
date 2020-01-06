@@ -4,6 +4,8 @@ use core::ptr::Unique;
 use spin::Mutex;
 use volatile::Volatile;
 
+use super::paging;
+
 const VGA_WIDTH: usize = 80;
 const VGA_HEIGHT: usize = 25;
 
@@ -26,7 +28,7 @@ struct Writer {
 #[allow(dead_code)]
 static WRITER: Mutex<Writer> = Mutex::new(Writer {
     x: 0,
-    buffer: unsafe { Unique::new_unchecked(0xb8000 as *mut Buffer) },
+    buffer: unsafe { Unique::new_unchecked((0xb8000 + paging::KERN_OFF) as *mut Buffer) },
 });
 
 impl ScreenChar {

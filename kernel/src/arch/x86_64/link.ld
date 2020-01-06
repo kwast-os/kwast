@@ -1,24 +1,42 @@
 ENTRY(start)
 
+KERN_OFF = 0xffffffff80000000;
+
 SECTIONS {
     . = 1M;
 
-    .rodata : {
+    .rodata.boot : {
         KEEP(*(.mboot))
-        *(.rodata .rodata.*)
+        build/arch/x86_64/mboot.o(.rodata)
     }
 
-    .text : {
-        *(.text .text.*)
+    .text.boot : {
+        build/arch/x86_64/mboot.o(.text)
     }
 
-    .data : {
+    .bss.boot (NOLOAD) : {
+        build/arch/x86_64/mboot.o(.bss)
+    }
+
+    . += KERN_OFF;
+
+    .rodata : AT(ADDR(.rodata) - KERN_OFF) {
+        *(EXCLUDE_FILE (*build/arch/x86_64/mboot.o) .rodata .rodata.*)
+    }
+
+    .text : AT(ADDR(.text) - KERN_OFF) {
+        *(EXCLUDE_FILE (*build/arch/x86_64/mboot.o) .text .text.*)
+    }
+
+    .data : AT(ADDR(.data) - KERN_OFF) {
         *(.data .data.*)
     }
 
-    .bss : {
-        *(.bss .bss.*)
+    .bss : AT(ADDR(.bss) - KERN_OFF) {
+        *(EXCLUDE_FILE (*build/arch/x86_64/mboot.o) .bss .bss.*)
     }
 
-    KERNEL_END_PTR = .;
+    KERNEL_END = .;
+
+    CPUID_EXT_EDX = __CPUID_EXT_EDX + KERN_OFF;
 }

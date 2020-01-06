@@ -17,7 +17,7 @@ LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
 LD          = $(ARCH)-elf-ld
 AS          = $(ARCH)-elf-as
 
-QEMUFLAGS  += -m 128 --enable-kvm
+QEMUFLAGS  += -m 2G --enable-kvm -cpu max
 
 ifeq ($(BUILD), release)
 CARGOFLAGS += --release
@@ -28,7 +28,7 @@ endif
 all: $(KERNEL)
 
 clean:
-	@rm -r build/
+	@rm -r build/ target/
 
 iso: $(KERNEL)
 	@mkdir -p $(ISO_FILES)/boot/grub

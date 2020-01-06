@@ -1,7 +1,9 @@
-.set MB_MAGIC,     0xE85250D6   // Multiboot magic
-.set MB_ARCH,      0            // i386 protected mode
-.set TAG_REQUIRED, 0            // Required tag
-.set TAG_OPTIONAL, 1            // Optional tag
+.set MB_MAGIC,     0xE85250D6           // Multiboot magic
+.set MB_ARCH,      0                    // i386 protected mode
+.set TAG_REQUIRED, 0                    // Required tag
+.set TAG_OPTIONAL, 1                    // Optional tag
+.set PHYS_OFF,     0xffff800000000000   // Offset to physical pages
+.set KERN_OFF,     0xffffffff80000000   // Offset to kernel pages
 
 // Multiboot header
 .section .mboot
@@ -43,25 +45,15 @@ end_tag_start:
 end_tag_end:
 mboot_hdr_end:
 
-// Preallocate for paging
-.section .bss, "aw", @nobits
-.align 0x1000
-boot_pml4:
-.skip 0x1000
-boot_pml3:
-.skip 0x1000
-boot_pml2:
-.skip 0x1000
-boot_pml1:
-.skip 0x1000
-
-.section .text
+.text
 .code32
 
 .global start
 .type start, @function
 start:
-    // Warning: keep the value of ebx, because that's the register that points to the multiboot struct.
+    // Warning: ebx holds the address to the multiboot struct.
+    //          cpuid will overwrite it, but we need it in rdi anyway...
+    mov %ebx, %edi
 
     // Note: I don't bother with checking if Long Mode is supported.
     //       The cpu will just reset when it tries to go to Long Mode if it's not supported.
@@ -71,31 +63,66 @@ start:
     jne halt
 
     cld
-    mov $stack_top, %esp
 
-    // Map kernel code & data PMLs
-    movl $(boot_pml3 + 0x3), boot_pml4 + 0 * 8
-    movl $(2 << (52 - 32)), boot_pml4 + 0 * 8 + 4 // Used entry count
-    movl $(boot_pml2 + 0x3), boot_pml3 + 0 * 8
-    movl $(1 << (52 - 32)), boot_pml3 + 0 * 8 + 4 // Used entry count
-    movl $(boot_pml1 + 0x3), boot_pml2 + 0 * 8
-    movl $(1 << (52 - 32)), boot_pml2 + 0 * 8 + 4 // Used entry count
-    movl $(510 << (52 - 32)), boot_pml1 + 0 * 8 + 4 // Used entry count
+    // Get extended CPU features
+    mov $0x80000001, %eax
+    cpuid
+    #mov %ecx, __CPUID_EXT_ECX
+    mov %edx, __CPUID_EXT_EDX
 
-    // Recursive map
-    movl $(boot_pml4 + 0x3), boot_pml4 + 511 * 8
-    movl $(1 << (63 - 32)), boot_pml4 + 511 * 8 + 4 // NX-bit
+    // We want to do the initial mapping of first 1 GiB direct physical map.
+    movl $(BOOT_PML3_KERN + 0x3), BOOT_PML4 + 0 * 8
+    movl $(BOOT_PML3_PHYS + 0x3), BOOT_PML4 + 256 * 8
+    movl $(BOOT_PML3_KERN + 0x3), BOOT_PML4 + 511 * 8
+    // Entry count should be 2, because we will unmap the first mapping later.
+    movl $(2 << (52 - 32)), BOOT_PML4 + 0 * 8 + 4
 
-    // Identity map the first 2MiB (except page 0)
-    // TODO: should map sections with correct executable & R/W flags, we could do this in asm by using linker variables
-    //       instead of doing it in the rust side, so we don't have to map twice
-    mov $0x2003, %esi
-    mov $(boot_pml1 + 8 * 2), %edi
-    mov $510, %ecx
+    // Check if 1 GiB pages are supported, if it is, map the direct physical map using GiB pages.
+    // Otherwise use 2 MiB pages.
+    btl $26, %edx
+    jnc .no_gib_pages
+
+    // Setup GiB mapping starting from address 0.
+    // Set used entry count to 1 and NX bit.
+    movl $0x083, BOOT_PML3_PHYS + 0 * 8
+    movl $(1 << (52 - 32) | 1 << (63 - 32)), BOOT_PML3_PHYS + 0 * 8 + 4
+
+    jmp .map_kernel
+
+.no_gib_pages:
+    // Setup mapping using 512 2 MiB pages.
+    // Set used entry count to 512 and NX bit.
+    movl $(BOOT_PML2_PHYS + 0x3), BOOT_PML3_PHYS + 0 * 8
+    movl $(512 << (52 - 32) | 1 << (63 - 32)), BOOT_PML3_PHYS + 0 * 8 + 4
+
+    mov $0x083, %eax
+    mov $(BOOT_PML2_PHYS + 0 * 8), %ebx
+    mov $512, %ecx
 1:
-    mov %esi, (%edi)
-    add $0x1000, %esi
-    add $8, %edi
+    mov %eax, (%ebx)
+    add $0x200000, %eax
+    add $8, %ebx
+    loop 1b
+
+.map_kernel:
+    // TODO: should we map to -1 GiB or maybe even less mapping for kernel?
+
+    // Map first 2 MiB for kernel (except 0)
+    movl $(BOOT_PML2_KERN + 0x3), BOOT_PML3_KERN + 0 * 8
+    movl $(BOOT_PML2_KERN + 0x3), BOOT_PML3_KERN + 510 * 8
+    // Note: We will unmap entry 0 later, set used count to 1
+    movl $(1 << (52 - 32)), BOOT_PML3_KERN + 0 * 8 + 4
+    movl $(BOOT_PML1 + 0x3), BOOT_PML2_KERN + 0 * 8
+    // Set entry count to 511
+    movl $(511 << (52 - 32)), BOOT_PML2_KERN + 0 * 8 + 4
+
+    mov $0x1003, %eax
+    mov $(BOOT_PML1 + 1 * 8), %ebx
+    mov $511, %ecx
+1:
+    mov %eax, (%ebx)
+    add $0x1000, %eax
+    add $8, %ebx
     loop 1b
 
     /**
@@ -117,14 +144,14 @@ start:
     // Enable: long mode and NX bit
     mov $0xC0000080, %ecx
     rdmsr
-    orl $((1 << 8) | (1 << 11)), %eax
+    orl $(1 << 8 | 1 << 11), %eax
     wrmsr
 
-    // Enable paging
-    mov $boot_pml4, %eax
+    // Enable paging, WP
+    mov $BOOT_PML4, %eax
     mov %eax, %cr3
     mov %cr0, %eax
-    orl $(1 << 31), %eax
+    orl $(1 << 31 | 1 << 16), %eax
     mov %eax, %cr0
 
     // Switch to long mode
@@ -134,10 +161,12 @@ start:
 .code64
 1:
     // The upper 32 bits are undefined when switching from 32-bit to 64-bit or vice versa.
-    // Clear the top bits of the stack to prevent issues.
-    // ebx contains our multiboot ptr, also clear ebx upper bits.
-    mov %esp, %esp
-    mov %ebx, %ebx
+    // A 32-bit move will clear out the top 32-bits.
+    mov %edi, %edi
+    mov $PHYS_OFF, %rsi
+    add %rsi, %rdi
+
+    mov $(stack_top + KERN_OFF), %rsp
 
     // Switch segments
     movw $0, %ax
@@ -145,9 +174,18 @@ start:
     movw %ax, %es
     movw %ax, %ss
 
+    // No need to reload segments
+    lgdt virt_gdt_descriptor
+
+    jmp 1f + KERN_OFF
+1:
+    // Unmap lower addresses
+    movl $0, BOOT_PML3_KERN + 0 * 8
+    movl $0, (BOOT_PML4 + KERN_OFF) + 0 * 8
+
     .extern entry
-    mov %rbx, %rdi
-    call entry
+    movq $entry, %rax
+    call *%rax
 
 halt:
     hlt
@@ -160,7 +198,37 @@ gdt:
 gdt_descriptor:
 .word gdt_descriptor - gdt - 1
 .quad gdt
+virt_gdt_descriptor:
+.word gdt_descriptor - gdt - 1
+.quad gdt + KERN_OFF
 
-.section .bss, "aw", @nobits
+.bss
+
+// Preallocate for paging
+.align 0x1000
+.globl BOOT_PML4
+BOOT_PML4:
+.skip 0x1000
+BOOT_PML3_KERN:
+.skip 0x1000
+BOOT_PML3_PHYS:
+.skip 0x1000
+BOOT_PML2_KERN:
+.skip 0x1000
+BOOT_PML2_PHYS:
+.skip 0x1000
+BOOT_PML1:
+.skip 0x1000
+
+// Stack
 .skip 16384
 stack_top:
+
+// CPUID stuff
+.align 4
+#.globl CPUID_EXT_ECX
+#__CPUID_EXT_ECX:
+#.skip 4
+.globl __CPUID_EXT_EDX
+__CPUID_EXT_EDX:
+.skip 4

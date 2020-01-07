@@ -113,17 +113,11 @@ impl PhysMemManager {
         self.allocator.lock().init(mboot_struct, PhysAddr::new(reserved_end));
     }
 
-    /// Pops the top and then lets it move. (internal memory management use only)
-    /// See docs at impl.
-    #[inline]
     pub fn pop_top<F>(&self, f: F) -> MappingResult
         where F: FnOnce(PhysAddr) -> VirtAddr {
         self.allocator.lock().pop_top(f)
     }
 
-    /// Similar to `pop_top`...
-    /// See docs at impl.
-    #[inline]
     pub fn push_top(&self, vaddr: VirtAddr, paddr: PhysAddr) {
         self.allocator.lock().push_top(vaddr, paddr)
     }

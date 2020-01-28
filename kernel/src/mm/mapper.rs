@@ -21,8 +21,11 @@ pub trait MemoryMapper {
     /// Unmaps a single page.
     fn unmap_single(&mut self, vaddr: VirtAddr);
 
-    /// Maps a range of pages.
-    fn map_range(&mut self, vaddr: VirtAddr, paddr: PhysAddr, size: usize, flags: EntryFlags) -> MappingResult;
+    /// Maps a range of pages to a range of physical frames.
+    fn map_range_physical(&mut self, vaddr: VirtAddr, paddr: PhysAddr, size: usize, flags: EntryFlags) -> MappingResult;
+
+    /// Maps a range.
+    fn map_range(&mut self, vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MappingResult;
 }
 
 /// Map result.

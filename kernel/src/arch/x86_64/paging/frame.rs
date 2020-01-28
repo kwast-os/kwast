@@ -20,6 +20,8 @@ impl FrameAllocator {
         let mut top: usize = 0;
         let mut prev_entry_addr: *mut usize = &mut top as *mut _;
 
+        //let mut count: usize = 0;
+
         for x in tag.memory_areas() {
             // There is actually no guarantee about the sanitization of the data.
             // While it is rare that the addresses won't be page aligned, there's apparently been
@@ -50,12 +52,13 @@ impl FrameAllocator {
                 unsafe { prev_entry_addr.write(current); }
 
                 // When we reach a new 2 MiB part, map that to our temporary mapping.
-                if (current & 0x1fffff) == 0 {
+                if current & 0x1fffff == 0 {
                     e.set(PhysAddr::new(current & !0x1fffff), map_flags);
                 }
 
                 prev_entry_addr = (tmp_2m_map_addr.as_usize() + (current & 0x1fffff)) as *mut _;
                 current += 0x1000;
+                //count += 1;
             }
         }
 
@@ -92,7 +95,7 @@ impl FrameAllocator {
                 let vaddr = VirtAddr::new(0x1000);
                 mapping.map_single(vaddr, top, EntryFlags::PRESENT).unwrap();
                 vaddr
-            }).unwrap();
+            });
         }
 
         println!();

@@ -117,7 +117,7 @@ impl MemoryMapper for ActiveMapping {
         self.unmap_single_internal(vaddr, false)
     }
 
-    fn map_range(&mut self, mut vaddr: VirtAddr, mut paddr: PhysAddr, size: usize, flags: EntryFlags) -> MappingResult {
+    fn map_range_physical(&mut self, mut vaddr: VirtAddr, mut paddr: PhysAddr, size: usize, flags: EntryFlags) -> MappingResult {
         debug_assert!(vaddr.is_page_aligned());
         debug_assert!(paddr.is_page_aligned());
 
@@ -130,6 +130,22 @@ impl MemoryMapper for ActiveMapping {
 
             vaddr += PAGE_SIZE;
             paddr += PAGE_SIZE;
+        }
+
+        Ok(())
+    }
+
+    fn map_range(&mut self, mut vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MappingResult {
+        debug_assert!(vaddr.is_page_aligned());
+
+        for offset in (0..size).step_by(PAGE_SIZE) {
+            let res = self.get_and_map_single(vaddr, flags);
+            if unlikely!(res.is_err()) {
+                // TODO: unmap the mapped range
+                return res;
+            }
+
+            vaddr += PAGE_SIZE;
         }
 
         Ok(())

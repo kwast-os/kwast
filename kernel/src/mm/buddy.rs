@@ -1,7 +1,7 @@
 use core::mem::size_of;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
-use crate::arch::x86_64::address::{VirtAddr, PhysAddr};
+use crate::arch::x86_64::address::VirtAddr;
 
 /// Amount of top nodes.
 const TOP_NODE_COUNT: usize = 128;
@@ -107,13 +107,14 @@ pub fn test() {
         let mut xx: u8 = 0;
 
         println!("size: {:?}", size_of::<Tree>());
+        println!("size2: {:?}KiB", size_of::<Tree>() * 64 / 1024);
         println!("{} KiB", TOP_NODE_COUNT * 4096 * (1 << (12 - 1)) / 1024);
 
         let a = rdtscp(&mut xx);
 
         let lol = 0;
         let mut mapping = ActiveMapping::get();
-        mapping.map_range(VirtAddr::new(0xFC00000), PhysAddr::new(0xFC00000), 4096 * 8, EntryFlags::PRESENT | EntryFlags::WRITABLE);
+        mapping.map_range(VirtAddr::new(0xFC00000), size_of::<Tree>() * 1, EntryFlags::PRESENT | EntryFlags::WRITABLE).unwrap();
 
         let b = rdtscp(&mut xx);
 

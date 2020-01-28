@@ -140,7 +140,7 @@ start:
     mov %ebx, %ebx
 
     // Switch segments
-    movw $0, %ax
+    xor %ax, %ax
     movw %ax, %ds
     movw %ax, %es
     movw %ax, %ss

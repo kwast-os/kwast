@@ -1,8 +1,8 @@
 use multiboot2::MemoryMapTag;
 
-use crate::mm::pmm::*;
-
 use super::{ActiveMapping, EntryFlags, invalidate, PAGE_SIZE, PhysAddr, VirtAddr};
+use crate::mm::mapper::MemoryMapper;
+use crate::mm::pmm::FrameAllocator;
 
 impl FrameAllocator {
     /// Applies the memory map.

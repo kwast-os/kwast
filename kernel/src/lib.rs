@@ -4,6 +4,9 @@
 #![feature(core_intrinsics)]
 #![feature(ptr_internals)]
 #![feature(alloc_error_handler)]
+#![allow(incomplete_features)]
+#![feature(const_generics)]
+#![feature(link_llvm_intrinsics)] // TODO: remove me
 #![cfg_attr(feature = "integration-test", allow(unused_imports))]
 
 extern crate alloc;
@@ -36,6 +39,8 @@ fn panic(info: &PanicInfo) -> ! {
 #[cfg(not(feature = "integration-test"))]
 pub fn kernel_main() {
     println!("entered kernel_main");
+
+    mm::test();
 
     // TEST
     let test = Box::new([1, 2, 3]);

@@ -4,6 +4,7 @@ use core::ops::Add;
 use bit_field::BitField;
 
 use crate::arch::x86_64::paging::PAGE_SIZE;
+use bitflags::_core::ops::AddAssign;
 
 /// A 64-bit physical address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -38,6 +39,11 @@ impl PhysAddr {
         self.0 == 0
     }
 
+    /// Checks if the address is page aligned.
+    pub fn is_page_aligned(self) -> bool {
+        self.0 & (PAGE_SIZE - 1) == 0
+    }
+
     /// Converts the physical address to a usize.
     #[inline]
     pub fn as_usize(self) -> usize {
@@ -69,6 +75,12 @@ impl Add<usize> for PhysAddr {
     }
 }
 
+impl AddAssign<usize> for PhysAddr {
+    fn add_assign(&mut self, rhs: usize) {
+        self.0 += rhs;
+    }
+}
+
 impl Debug for PhysAddr {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "PhysAddr({:#x})", self.0)
@@ -96,6 +108,11 @@ impl VirtAddr {
         self.0 as u64
     }
 
+    /// Checks if the address is page aligned.
+    pub fn is_page_aligned(self) -> bool {
+        self.0 & (PAGE_SIZE - 1) == 0
+    }
+
     /// Gets the level 4 index for paging.
     pub fn p4_index(self) -> usize {
         (self.0 >> 39) & 511
@@ -120,5 +137,19 @@ impl VirtAddr {
 impl Debug for VirtAddr {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "VirtAddr({:#x})", self.0)
+    }
+}
+
+impl Add<usize> for VirtAddr {
+    type Output = Self;
+
+    fn add(self, rhs: usize) -> Self::Output {
+        VirtAddr::new(self.0 + rhs)
+    }
+}
+
+impl AddAssign<usize> for VirtAddr {
+    fn add_assign(&mut self, rhs: usize) {
+        self.0 += rhs;
     }
 }

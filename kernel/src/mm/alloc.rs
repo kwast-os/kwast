@@ -2,6 +2,46 @@ use core::alloc::GlobalAlloc;
 use bitflags::_core::alloc::Layout;
 use bitflags::_core::ptr::null_mut;
 
+// TODO: locking
+
+struct Slab {
+    /// Linked list of slab headers.
+    next: Option<&'static Slab>,
+}
+
+/// A cache in the slab allocator.
+struct Cache {
+    partial: Option<&'static Slab>,
+    free: Option<&'static Slab>,
+    // TODO: color stuff
+}
+
+impl Slab {
+
+}
+
+impl Cache {
+    /// Creates a new cache.
+    fn new() -> Self {
+        Self {
+            partial: None,
+            free: None
+        }
+    }
+
+    fn create_free_slab() {
+        // TODO
+    }
+
+    fn alloc(&self) {
+        // TODO
+
+        if self.partial.is_none() {
+
+        }
+    }
+}
+
 struct Dummy;
 
 // TODO: more efficient realloc
@@ -22,3 +62,11 @@ fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
 
 #[global_allocator]
 static ALLOCATOR: Dummy = Dummy {};
+
+pub fn test() {
+    // TODO
+
+    let c = Cache::new();
+
+    c.alloc();
+}

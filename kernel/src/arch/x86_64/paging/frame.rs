@@ -41,13 +41,13 @@ impl FrameAllocator {
             // Initial write for this area is a little bit special because we still
             // need to write to the previous mapping. Otherwise the stack wouldn't be linked.
             // Can't fail.
-            unsafe { prev_entry_addr.write_volatile(current); }
+            unsafe { prev_entry_addr.write(current); }
 
             e.set(PhysAddr::new(current & !0x1fffff), map_flags);
             prev_entry_addr = tmp_2m_map_addr.as_usize() as *mut _;
 
             while current < end {
-                unsafe { prev_entry_addr.write_volatile(current); }
+                unsafe { prev_entry_addr.write(current); }
 
                 // When we reach a new 2 MiB part, map that to our temporary mapping.
                 if (current & 0x1fffff) == 0 {
@@ -60,7 +60,7 @@ impl FrameAllocator {
         }
 
         // End
-        unsafe { prev_entry_addr.write_volatile(0); }
+        unsafe { prev_entry_addr.write(0); }
         self.top = PhysAddr::new(top);
 
         // Unmap

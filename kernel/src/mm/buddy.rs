@@ -138,12 +138,12 @@ pub fn test() {
 
         println!("size: {:?}", size_of::<Tree>());
 
-        let a = rdtscp(&mut xx);
-
         let mut mapping = ActiveMapping::get();
         mapping.map_range(VirtAddr::new(0xFC00000), size_of::<Tree>(), EntryFlags::PRESENT | EntryFlags::WRITABLE).unwrap();
         let tree = &mut *(0xFC00000 as *mut Tree);
         tree.init();
+
+        let a = rdtscp(&mut xx);
 
         assert_eq!(tree.alloc(3), Some(0));
         assert_eq!(tree.alloc(2), Some(8));

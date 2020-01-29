@@ -21,8 +21,8 @@ use alloc::boxed::Box;
 mod macros;
 #[macro_use]
 mod arch;
-//mod mm;
-mod util;
+mod mm;
+//mod util;
 #[cfg(feature = "integration-test")]
 mod tests;
 

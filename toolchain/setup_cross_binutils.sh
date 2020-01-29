@@ -1,6 +1,6 @@
 #!/bin/sh
 
-cookie='built-2019-03-16.cookie'
+cookie='built-2020-01-29.cookie'
 cross_rel_path=./opt/cross
 
 if [ ! -d $cross_rel_path ]; then
@@ -9,7 +9,7 @@ fi
 
 cross_path=$(realpath $cross_rel_path)
 
-binutils_ver=2.32
+binutils_ver=2.33.1
 binutils="https://ftp.gnu.org/gnu/binutils/binutils-$binutils_ver.tar.xz"
 binutils_file=$(basename $binutils)
 

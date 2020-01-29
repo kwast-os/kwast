@@ -6,8 +6,10 @@
 #![feature(alloc_error_handler)]
 #![allow(incomplete_features)]
 #![feature(const_generics)]
+#![feature(lang_items)]
 #![feature(link_llvm_intrinsics)] // TODO: remove me
-#![cfg_attr(feature = "integration-test", allow(unused_imports))]
+#![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
+#![allow(clippy::verbose_bit_mask)]
 
 extern crate alloc;
 
@@ -46,3 +48,6 @@ pub fn kernel_main() {
     let test = Box::new([1, 2, 3]);
     println!("{:?}", test);
 }
+
+#[lang = "eh_personality"]
+extern "C" fn eh_personality() {}

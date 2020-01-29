@@ -42,9 +42,9 @@ bitflags! {
         /// Specifies whether this entry is present.
         const PRESENT = 1 << 7;
         /// Interrupt gate.
-        const INT_GATE = 0b1110 << 0;
+        const INT_GATE = 0b1110;
         /// Trap gate: same as interrupt gate, but doesn't automatically disable/re-enable interrupts.
-        const TRAP_GATE = 0b1111 << 0;
+        const TRAP_GATE = 0b1111;
     }
 }
 
@@ -59,7 +59,7 @@ const ENTRY_COUNT: usize = 64;
 struct IDT([Entry; ENTRY_COUNT]);
 
 impl Entry {
-    fn new(handler: u64, flags: EntryFlags) -> Self {
+    fn new(handler: usize, flags: EntryFlags) -> Self {
         Self {
             offset_1: handler as u16,
             selector: 0x08,
@@ -92,7 +92,7 @@ impl IDT {
         }
     }
 
-    fn set_handler(&mut self, n: u8, handler: u64, flags: EntryFlags) {
+    fn set_handler(&mut self, n: usize, handler: usize, flags: EntryFlags) {
         self.0[n as usize] = Entry::new(handler, flags);
     }
 }
@@ -102,41 +102,41 @@ lazy_static! {
         let exc_flags = EntryFlags::PRESENT | EntryFlags::INT_GATE;
 
         let mut idt = IDT::new();
-        idt.set_handler(0, exc_divide_by_zero as u64, exc_flags);
-        idt.set_handler(1, exc_debug as u64, exc_flags);
-        idt.set_handler(2, exc_nmi as u64, exc_flags);
-        idt.set_handler(3, exc_breakpoint as u64, exc_flags);
-        idt.set_handler(4, exc_overflow as u64, exc_flags);
-        idt.set_handler(5, exc_bound_range_exceeded as u64, exc_flags);
-        idt.set_handler(6, exc_invalid_opcode as u64, exc_flags);
-        idt.set_handler(7, exc_device_not_available as u64, exc_flags);
-        idt.set_handler(8, exc_double_fault as u64, exc_flags);
-        idt.set_handler(9, exc_unknown as u64, exc_flags);
-        idt.set_handler(10, exc_invalid_tss as u64, exc_flags);
-        idt.set_handler(11, exc_segment_not_present as u64, exc_flags);
-        idt.set_handler(12, exc_stack_segment as u64, exc_flags);
-        idt.set_handler(13, exc_gpf as u64, exc_flags);
-        idt.set_handler(14, exc_pf as u64, exc_flags);
-        idt.set_handler(15, exc_unknown as u64, exc_flags);
-        idt.set_handler(16, exc_fp as u64, exc_flags);
-        idt.set_handler(17, exc_alignment_check as u64, exc_flags);
-        idt.set_handler(18, exc_machine_check as u64, exc_flags);
-        idt.set_handler(19, exc_simd_fp as u64, exc_flags);
-        idt.set_handler(20, exc_virtualization as u64, exc_flags);
-        idt.set_handler(21, exc_unknown as u64, exc_flags);
-        idt.set_handler(22, exc_unknown as u64, exc_flags);
-        idt.set_handler(23, exc_unknown as u64, exc_flags);
-        idt.set_handler(24, exc_unknown as u64, exc_flags);
-        idt.set_handler(25, exc_unknown as u64, exc_flags);
-        idt.set_handler(26, exc_unknown as u64, exc_flags);
-        idt.set_handler(27, exc_unknown as u64, exc_flags);
-        idt.set_handler(28, exc_unknown as u64, exc_flags);
-        idt.set_handler(29, exc_unknown as u64, exc_flags);
-        idt.set_handler(30, exc_unknown as u64, exc_flags);
-        idt.set_handler(31, exc_unknown as u64, exc_flags);
+        idt.set_handler(0, exc_divide_by_zero as usize, exc_flags);
+        idt.set_handler(1, exc_debug as usize, exc_flags);
+        idt.set_handler(2, exc_nmi as usize, exc_flags);
+        idt.set_handler(3, exc_breakpoint as usize, exc_flags);
+        idt.set_handler(4, exc_overflow as usize, exc_flags);
+        idt.set_handler(5, exc_bound_range_exceeded as usize, exc_flags);
+        idt.set_handler(6, exc_invalid_opcode as usize, exc_flags);
+        idt.set_handler(7, exc_device_not_available as usize, exc_flags);
+        idt.set_handler(8, exc_double_fault as usize, exc_flags);
+        idt.set_handler(9, exc_unknown as usize, exc_flags);
+        idt.set_handler(10, exc_invalid_tss as usize, exc_flags);
+        idt.set_handler(11, exc_segment_not_present as usize, exc_flags);
+        idt.set_handler(12, exc_stack_segment as usize, exc_flags);
+        idt.set_handler(13, exc_gpf as usize, exc_flags);
+        idt.set_handler(14, exc_pf as usize, exc_flags);
+        idt.set_handler(15, exc_unknown as usize, exc_flags);
+        idt.set_handler(16, exc_fp as usize, exc_flags);
+        idt.set_handler(17, exc_alignment_check as usize, exc_flags);
+        idt.set_handler(18, exc_machine_check as usize, exc_flags);
+        idt.set_handler(19, exc_simd_fp as usize, exc_flags);
+        idt.set_handler(20, exc_virtualization as usize, exc_flags);
+        idt.set_handler(21, exc_unknown as usize, exc_flags);
+        idt.set_handler(22, exc_unknown as usize, exc_flags);
+        idt.set_handler(23, exc_unknown as usize, exc_flags);
+        idt.set_handler(24, exc_unknown as usize, exc_flags);
+        idt.set_handler(25, exc_unknown as usize, exc_flags);
+        idt.set_handler(26, exc_unknown as usize, exc_flags);
+        idt.set_handler(27, exc_unknown as usize, exc_flags);
+        idt.set_handler(28, exc_unknown as usize, exc_flags);
+        idt.set_handler(29, exc_unknown as usize, exc_flags);
+        idt.set_handler(30, exc_unknown as usize, exc_flags);
+        idt.set_handler(31, exc_unknown as usize, exc_flags);
 
         for i in 32..(32 + 16) {
-            idt.set_handler(i, irq as u64, exc_flags);
+            idt.set_handler(i, irq as usize, exc_flags);
         }
 
         idt

@@ -4,7 +4,7 @@ use crate::arch::x86_64::address::PhysAddr;
 
 bitflags! {
     pub struct EntryFlags: u64 {
-        const PRESENT = 1 << 0;
+        const PRESENT = 1;
         const WRITABLE = 1 << 1;
         const HUGE_PAGE = 1 << 7;
         /// No execute.
@@ -27,10 +27,6 @@ const USED_COUNT_MASK: u64 = 0x3ff0_0000_0000_0000;
 
 #[allow(dead_code)]
 impl Entry {
-    pub fn lol(&self) -> u64 {
-        self.0
-    }
-
     /// Gets the used count part of this entry.
     /// We keep the used count in the first entry available bits.
     pub fn used_count(&self) -> u64 {

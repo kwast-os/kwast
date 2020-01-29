@@ -22,7 +22,7 @@ bitflags! {
     pub struct PageFaultError: u64 {
         /// If set, the fault was caused by a protection violation.
         /// Otherwise, it was caused by a non-present page
-        const PROTECTION_VIOLATION = 1 << 0;
+        const PROTECTION_VIOLATION = 1;
         /// If set, a write caused the fault, otherwise it was a read.
         const CAUSED_BY_WRITE = 1 << 1;
         /// If set, fault caused in user mode, otherwise in kernel mode.
@@ -73,13 +73,8 @@ impl MemoryMapper for ActiveMapping {
     }
 
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
-        let p2 = self.p4.next_table(addr.p4_index())?.next_table(addr.p3_index());
+        let p2 = self.p4.next_table(addr.p4_index())?.next_table(addr.p3_index())?;
 
-        if p2.is_none() {
-            return None;
-        }
-
-        let p2 = p2.unwrap();
         let p2_entry = &p2.entries[addr.p2_index()];
         if !p2_entry.flags().contains(EntryFlags::PRESENT) {
             return None;
@@ -109,7 +104,8 @@ impl MemoryMapper for ActiveMapping {
 
     fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
         debug_assert!(paddr.is_page_aligned());
-        Ok(self.get_4k_entry(vaddr)?.set(paddr, flags))
+        self.get_4k_entry(vaddr)?.set(paddr, flags);
+        Ok(())
     }
 
     #[inline]
@@ -158,7 +154,7 @@ impl MemoryMapper for ActiveMapping {
     fn unmap_range(&mut self, mut vaddr: VirtAddr, size: usize) {
         debug_assert!(vaddr.is_page_aligned());
 
-        for offset in (0..size).step_by(PAGE_SIZE) {
+        for _ in (0..size).step_by(PAGE_SIZE) {
             self.free_and_unmap_single(vaddr);
             vaddr += PAGE_SIZE;
         }
@@ -212,8 +208,9 @@ impl ActiveMapping {
 
     /// Maps a 2MiB page.
     pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
-        debug_assert_eq!(paddr.as_usize() & 0x1fffff, 0);
-        Ok(self.get_2m_entry(vaddr)?.set(paddr, flags | EntryFlags::HUGE_PAGE))
+        debug_assert!(paddr.is_2m_aligned());
+        self.get_2m_entry(vaddr)?.set(paddr, flags | EntryFlags::HUGE_PAGE);
+        Ok(())
     }
 
     /// Gets the entry modifier for a 4 KiB page. Sets the page as used.

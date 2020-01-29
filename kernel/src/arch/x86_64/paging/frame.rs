@@ -9,7 +9,7 @@ impl FrameAllocator {
     pub fn apply_mmap(&mut self, tag: &MemoryMapTag, reserved_end: PhysAddr) {
         // Will be the last entry of the PML2 (PML2 exists)
         const P2_IDX: usize = 511;
-        let tmp_2m_map_addr = VirtAddr::new(P2_IDX * 0x200000);
+        let tmp_2m_map_addr = VirtAddr::new(P2_IDX * 0x200_000);
         // Mapping flags
         let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
 
@@ -45,18 +45,18 @@ impl FrameAllocator {
             // Can't fail.
             unsafe { prev_entry_addr.write(current); }
 
-            e.set(PhysAddr::new(current & !0x1fffff), map_flags);
+            e.set(PhysAddr::new(current & !0x1ff_fff), map_flags);
             prev_entry_addr = tmp_2m_map_addr.as_usize() as *mut _;
 
             while current < end {
                 unsafe { prev_entry_addr.write(current); }
 
                 // When we reach a new 2 MiB part, map that to our temporary mapping.
-                if current & 0x1fffff == 0 {
-                    e.set(PhysAddr::new(current & !0x1fffff), map_flags);
+                if current & 0x1ff_fff == 0 {
+                    e.set(PhysAddr::new(current & !0x1ff_fff), map_flags);
                 }
 
-                prev_entry_addr = (tmp_2m_map_addr.as_usize() + (current & 0x1fffff)) as *mut _;
+                prev_entry_addr = (tmp_2m_map_addr.as_usize() + (current & 0x1ff_fff)) as *mut _;
                 current += 0x1000;
                 //count += 1;
             }

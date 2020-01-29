@@ -16,6 +16,7 @@ pub struct PhysAddr(usize);
 #[repr(transparent)]
 pub struct VirtAddr(usize);
 
+#[allow(dead_code)]
 impl PhysAddr {
     /// Creates a new physical address.
     #[inline]
@@ -44,6 +45,11 @@ impl PhysAddr {
         self.0 & (PAGE_SIZE - 1) == 0
     }
 
+    /// Checks if the address is 2M aligned.
+    pub fn is_2m_aligned(self) -> bool {
+        self.0 & 0x1ff_fff == 0
+    }
+
     /// Converts the physical address to a usize.
     #[inline]
     pub fn as_usize(self) -> usize {
@@ -57,12 +63,12 @@ impl PhysAddr {
     }
 
     /// Aligns a memory address down.
-    pub fn align_down(&self) -> Self {
+    pub fn align_down(self) -> Self {
         PhysAddr(self.0 & !(PAGE_SIZE - 1))
     }
 
     /// Aligns a memory address up.
-    pub fn align_up(&self) -> Self {
+    pub fn align_up(self) -> Self {
         self.align_down() + PAGE_SIZE
     }
 }
@@ -87,6 +93,7 @@ impl Debug for PhysAddr {
     }
 }
 
+#[allow(dead_code)]
 impl VirtAddr {
     /// Creates a canonical form, virtual address.
     #[inline]
@@ -111,6 +118,11 @@ impl VirtAddr {
     /// Checks if the address is page aligned.
     pub fn is_page_aligned(self) -> bool {
         self.0 & (PAGE_SIZE - 1) == 0
+    }
+
+    /// Checks if the address is 2M aligned.
+    pub fn is_2m_aligned(self) -> bool {
+        self.0 & 0x1ff_fff == 0
     }
 
     /// Gets the level 4 index for paging.

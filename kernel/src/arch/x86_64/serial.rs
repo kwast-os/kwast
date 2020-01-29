@@ -22,7 +22,7 @@ impl SerialPort {
     fn new(port: u16) -> Self {
         write_port8(port + 1, 0x00);
         write_port8(port + 3, 0x80);
-        write_port8(port + 0, 0x01);
+        write_port8(port, 0x01);
         write_port8(port + 1, 0x00);
         write_port8(port + 3, 0x03);
         write_port8(port + 2, 0xc7);

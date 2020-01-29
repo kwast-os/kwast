@@ -8,7 +8,7 @@ use core::cmp;
 const MAX_LEVEL: usize = 15;
 
 /// Amount of nodes.
-const NODE_COUNT: usize = 1 << MAX_LEVEL - 1;
+const NODE_COUNT: usize = (1 << MAX_LEVEL) - 1;
 
 // Amount of bytes needed.
 const NODE_BYTES_NEEDED: usize = NODE_COUNT;
@@ -64,7 +64,7 @@ impl Tree {
         // Find node with smallest size large enough to hold the requested size
         let wanted_level = MAX_LEVEL - size as usize;
         let mut index = 0;
-        for level in 0..wanted_level {
+        for _ in 0..wanted_level {
             let left_index = self.left_index(index);
             let right_index = self.right_index(index);
 

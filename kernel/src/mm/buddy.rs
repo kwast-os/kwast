@@ -2,7 +2,7 @@ use core::mem::size_of;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::arch::x86_64::address::VirtAddr;
-use core::{ptr, cmp};
+use core::cmp;
 
 /// Amount of top nodes.
 const MAX_LEVEL: usize = 15;
@@ -10,42 +10,13 @@ const MAX_LEVEL: usize = 15;
 /// Amount of nodes.
 const NODE_COUNT: usize = 1 << MAX_LEVEL - 1;
 
-// Amount of bytes needed for top (see issue).
-const NODE_BYTES_NEEDED: usize = (NODE_COUNT + 1) / 2;
-
-/// Nibble array.
-// TODO: Once https://github.com/rust-lang/rust/issues/68567 is fixed, we can do the ugly
-//       calculation in here.
-struct NibbleArray<const N: usize> {
-    /// Entries, stored as nibbles.
-    entries: [u8; N],
-}
-
-impl<const N: usize> NibbleArray<N> {
-    /// Gets the shift for the nibble.
-    #[inline]
-    fn get_shift(index: usize) -> u8 {
-        ((index & 1) << 2) as u8
-    }
-
-    /// Gets a nibble at a logical index.
-    fn get_nibble_at(&self, index: usize) -> u8 {
-        (self.entries[index >> 1] >> NibbleArray::<N>::get_shift(index)) & 15
-    }
-
-    /// Sets a nibble at a logical index to a value.
-    fn set_nibble_at(&mut self, index: usize, value: u8) {
-        debug_assert!(value < 16);
-        let shift = NibbleArray::<N>::get_shift(index);
-        let masked = self.entries[index >> 1] & (0b11110000 >> shift);
-        self.entries[index >> 1] = masked | (value << shift);
-    }
-}
+// Amount of bytes needed.
+const NODE_BYTES_NEEDED: usize = NODE_COUNT;
 
 /// The buddy tree.
 struct Tree {
     /// Entries in the tree.
-    nodes: NibbleArray<NODE_BYTES_NEEDED>,
+    nodes: [u8; NODE_BYTES_NEEDED],
 }
 
 impl Tree {
@@ -62,7 +33,7 @@ impl Tree {
                 size -= 1;
             }
 
-            self.nodes.set_nibble_at(i, size);
+            self.nodes[i] = size;
         }
     }
 
@@ -86,7 +57,7 @@ impl Tree {
 
     /// Allocate in tree.
     pub fn alloc(&mut self, size: usize) -> Option<usize> {
-        if unlikely!(self.nodes.get_nibble_at(0) < size as u8) {
+        if unlikely!(self.nodes[0] < size as u8) {
             return None;
         }
 
@@ -98,7 +69,7 @@ impl Tree {
             let right_index = self.right_index(index);
 
             // Because of the check at the beginning, we know one of these two is big enough
-            index = if self.nodes.get_nibble_at(left_index) >= size as u8 {
+            index = if self.nodes[left_index] >= size as u8 {
                 left_index
             } else {
                 right_index
@@ -112,13 +83,13 @@ impl Tree {
 
         // Update the values in the tree so that each node still contains the largest available
         // power of two size in their subtree.
-        self.nodes.set_nibble_at(index, 0);
+        self.nodes[index] = 0;
         while index > 0 {
             index = self.parent_index(index);
             let left_index = self.left_index(index);
             let right_index = self.right_index(index);
-            let max = cmp::max(self.nodes.get_nibble_at(left_index), self.nodes.get_nibble_at(right_index));
-            self.nodes.set_nibble_at(index, max);
+            let max = cmp::max(self.nodes[left_index], self.nodes[right_index]);
+            self.nodes[index] = max;
         }
 
         Some(offset)

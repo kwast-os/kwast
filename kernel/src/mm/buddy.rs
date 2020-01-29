@@ -144,10 +144,15 @@ pub fn test() {
         mapping.map_range(VirtAddr::new(0xFC00000), size_of::<Tree>(), EntryFlags::PRESENT | EntryFlags::WRITABLE).unwrap();
         let tree = &mut *(0xFC00000 as *mut Tree);
         tree.init();
-        println!("{:?}", tree.alloc(3));
-        println!("{:?}", tree.alloc(3)); // 8
-        println!("{:?}", tree.alloc(3)); // 16
-        println!("{:?}", tree.alloc(3)); // 24
+
+        assert_eq!(tree.alloc(3), Some(0));
+        assert_eq!(tree.alloc(2), Some(8));
+        assert_eq!(tree.alloc(3), Some(16));
+        assert_eq!(tree.alloc(4), Some(32));
+        assert_eq!(tree.alloc(2), Some(12));
+        assert_eq!(tree.alloc(3), Some(24));
+        assert_eq!(tree.alloc(6), Some(64));
+        assert_eq!(tree.alloc(MAX_LEVEL), None);
 
         let b = rdtscp(&mut xx);
 

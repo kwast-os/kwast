@@ -16,13 +16,14 @@ use core::panic::PanicInfo;
 
 use arch::interrupts;
 use alloc::boxed::Box;
+use crate::arch::x86_64::address::VirtAddr;
 
 #[macro_use]
 mod macros;
 #[macro_use]
 mod arch;
 mod mm;
-//mod util;
+mod util;
 #[cfg(feature = "integration-test")]
 mod tests;
 
@@ -39,10 +40,11 @@ fn panic(info: &PanicInfo) -> ! {
 
 /// Kernel main, called after arch init is done.
 #[cfg(not(feature = "integration-test"))]
-pub fn kernel_main() {
+pub fn kernel_main(reserved_end: VirtAddr) {
     println!("entered kernel_main");
 
-    mm::test();
+    // May only be called once.
+    unsafe { mm::init(reserved_end); }
 
     // TEST
     let test = Box::new([1, 2, 3]);

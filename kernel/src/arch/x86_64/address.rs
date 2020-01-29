@@ -98,8 +98,10 @@ impl VirtAddr {
     /// Creates a canonical form, virtual address.
     #[inline]
     pub fn new(addr: usize) -> Self {
-        let x = addr.get_bits(47..64);
-        debug_assert!(x == 0 || x == 0x1ffff, "address is not in canonical form");
+        debug_assert!({
+                          let x = addr.get_bits(47..64);
+                          x == 0 || x == 0x1ffff
+                      }, "Virtual address is not in canonical form");
         Self(addr)
     }
 
@@ -143,6 +145,16 @@ impl VirtAddr {
     /// Gets the level 1 index for paging.
     pub fn p1_index(self) -> usize {
         (self.0 >> 12) & 511
+    }
+
+    /// Aligns a memory address down.
+    pub fn align_down(self) -> Self {
+        VirtAddr(self.0 & !(PAGE_SIZE - 1))
+    }
+
+    /// Aligns a memory address up.
+    pub fn align_up(self) -> Self {
+        self.align_down() + PAGE_SIZE
     }
 }
 

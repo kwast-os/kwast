@@ -79,7 +79,7 @@ impl Tree {
         // Calculate offset from the index
         let first_index_in_this_level = (1 << wanted_level) - 1;
         let index_in_this_level = index - first_index_in_this_level;
-        let offset = index_in_this_level << size;
+        let offset = index_in_this_level << (size - 1);
 
         // Update the values in the tree so that each node still contains the largest available
         // power of two size in their subtree.
@@ -93,6 +93,34 @@ impl Tree {
         }
 
         Some(offset)
+    }
+
+    // Deallocate in tree.
+    pub fn dealloc(&mut self, offset: usize) {
+        // Go from the bottom row to the top to find our allocation.
+        let mut index = (1 << (MAX_LEVEL - 1)) - 1 + offset;
+        let mut size: u8 = 1;
+        while self.nodes[index] != 0 {
+            index = self.parent_index(index);
+            size += 1;
+        }
+
+        // Update value in the tree to undo the allocation.
+        self.nodes[index] = size;
+        while index > 0 {
+            index = self.parent_index(index);
+            size += 1;
+
+            let left_index = self.left_index(index);
+            let right_index = self.right_index(index);
+
+            // Tree will be correct from this point on.
+            self.nodes[index] = if self.nodes[left_index] == self.nodes[right_index] {
+                size
+            } else {
+                cmp::max(self.nodes[left_index], self.nodes[right_index])
+            };
+        }
     }
 }
 
@@ -117,13 +145,26 @@ pub fn test() {
         let a = rdtscp(&mut xx);
 
         assert_eq!(tree.alloc(3), Some(0));
-        assert_eq!(tree.alloc(2), Some(8));
-        assert_eq!(tree.alloc(3), Some(16));
-        assert_eq!(tree.alloc(4), Some(32));
-        assert_eq!(tree.alloc(2), Some(12));
-        assert_eq!(tree.alloc(3), Some(24));
-        assert_eq!(tree.alloc(6), Some(64));
+        assert_eq!(tree.alloc(2), Some(4));
+        assert_eq!(tree.alloc(3), Some(8));
+        assert_eq!(tree.alloc(4), Some(16));
+        assert_eq!(tree.alloc(2), Some(6));
+        assert_eq!(tree.alloc(3), Some(12));
+        assert_eq!(tree.alloc(6), Some(32));
+        assert_eq!(tree.alloc(7), Some(64));
         assert_eq!(tree.alloc(MAX_LEVEL), None);
+
+        println!("{:?}", tree.alloc(3));
+        tree.dealloc(0);
+        println!("{:?}", tree.alloc(3));
+        tree.dealloc(24);
+        println!("{:?}", tree.alloc(3));
+        tree.dealloc(16);
+        println!("{:?}", tree.alloc(2));
+        println!("{:?}", tree.alloc(2));
+        println!("{:?}", tree.alloc(4));
+        println!("{:?}", tree.alloc(2));
+        println!("{:?}", tree.alloc(2));
 
         let b = rdtscp(&mut xx);
 

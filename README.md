@@ -12,7 +12,7 @@ Check out the [goals / ideas](#goals) section.
 
 ### Status
 Currently there are two folders: `kernel` and `wasm_test`. The `wasm_test` folder contains a normal rust project, meant for my experimenting with [Cranelift](https://github.com/CraneStation/cranelift). Eventually, the work in `wasm_test` will be merged into the kernel itself.
-I'll be working on Kwast when I have time, commits may happen at random times, depends on school.
+
 
 ## Getting Started
 

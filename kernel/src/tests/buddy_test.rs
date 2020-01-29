@@ -14,24 +14,24 @@ pub fn test_main() {
     tree.init();
 
     assert_eq!(tree.alloc(3), Some(0));
-    assert_eq!(tree.alloc(2), Some(4));
-    assert_eq!(tree.alloc(3), Some(8));
-    assert_eq!(tree.alloc(4), Some(16));
-    assert_eq!(tree.alloc(2), Some(6));
-    assert_eq!(tree.alloc(3), Some(12));
-    assert_eq!(tree.alloc(6), Some(32));
-    assert_eq!(tree.alloc(7), Some(64));
+    assert_eq!(tree.alloc(2), Some(8));
+    assert_eq!(tree.alloc(3), Some(16));
+    assert_eq!(tree.alloc(4), Some(32));
+    assert_eq!(tree.alloc(2), Some(12));
+    assert_eq!(tree.alloc(3), Some(24));
+    assert_eq!(tree.alloc(6), Some(64));
+    assert_eq!(tree.alloc(7), Some(128));
     assert_eq!(tree.alloc(MAX_LEVEL), None);
 
-    assert_eq!(tree.alloc(3), Some(24));
+    assert_eq!(tree.alloc(3), Some(48));
     tree.dealloc(0);
     assert_eq!(tree.alloc(3), Some(0));
-    tree.dealloc(24);
-    assert_eq!(tree.alloc(3), Some(24));
-    tree.dealloc(16);
-    assert_eq!(tree.alloc(2), Some(16));
-    assert_eq!(tree.alloc(2), Some(18));
-    assert_eq!(tree.alloc(4), Some(128));
-    assert_eq!(tree.alloc(2), Some(20));
-    assert_eq!(tree.alloc(2), Some(22));
+    tree.dealloc(48);
+    assert_eq!(tree.alloc(3), Some(48));
+    tree.dealloc(32);
+    assert_eq!(tree.alloc(2), Some(32));
+    assert_eq!(tree.alloc(2), Some(36));
+    assert_eq!(tree.alloc(4), Some(256));
+    assert_eq!(tree.alloc(2), Some(40));
+    assert_eq!(tree.alloc(2), Some(44));
 }

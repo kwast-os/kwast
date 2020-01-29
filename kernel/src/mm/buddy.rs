@@ -53,12 +53,15 @@ impl Tree {
 
     /// Allocate in tree.
     pub fn alloc(&mut self, size: usize) -> Option<usize> {
+        // Make logical
+        let size = size + 1;
+
         if unlikely!(self.nodes[0] < size as u8) {
             return None;
         }
 
         // Find node with smallest size large enough to hold the requested size
-        let wanted_level = MAX_LEVEL - size as usize;
+        let wanted_level = MAX_LEVEL - size;
         let mut index = 0;
         for _ in 0..wanted_level {
             let left_index = self.left_index(index);

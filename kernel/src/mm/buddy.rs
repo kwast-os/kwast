@@ -2,24 +2,16 @@ use core::mem::size_of;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::arch::x86_64::address::VirtAddr;
+use core::{ptr, cmp};
 
 /// Amount of top nodes.
-const TOP_NODE_COUNT: usize = 128;
+const MAX_LEVEL: usize = 15;
 
-/// Amount of bytes needed for top (see issue).
-const L0_COUNT_BYTES: usize = TOP_NODE_COUNT / 2;
-const L1_COUNT_BYTES: usize = L0_COUNT_BYTES * 2;
-const L2_COUNT_BYTES: usize = L1_COUNT_BYTES * 2;
-const L3_COUNT_BYTES: usize = L2_COUNT_BYTES * 2;
-const L4_COUNT_BYTES: usize = L3_COUNT_BYTES * 2;
-const L5_COUNT_BYTES: usize = L4_COUNT_BYTES * 2;
-const L6_COUNT_BYTES: usize = L5_COUNT_BYTES * 2;
-const L7_COUNT_BYTES: usize = L6_COUNT_BYTES * 2;
-const L8_COUNT_BYTES: usize = L7_COUNT_BYTES * 2;
-const L9_COUNT_BYTES: usize = L8_COUNT_BYTES * 2;
-const L10_COUNT_BYTES: usize = L9_COUNT_BYTES * 2;
-const L11_COUNT_BYTES: usize = L10_COUNT_BYTES * 2;
-const L12_COUNT_BYTES: usize = L11_COUNT_BYTES * 2;
+/// Amount of nodes.
+const NODE_COUNT: usize = 1 << MAX_LEVEL - 1;
+
+// Amount of bytes needed for top (see issue).
+const NODE_BYTES_NEEDED: usize = (NODE_COUNT + 1) / 2;
 
 /// Nibble array.
 // TODO: Once https://github.com/rust-lang/rust/issues/68567 is fixed, we can do the ugly
@@ -52,30 +44,84 @@ impl<const N: usize> NibbleArray<N> {
 
 /// The buddy tree.
 struct Tree {
-    /// Levels of the tree.
-    l0: NibbleArray<L0_COUNT_BYTES>,
-    l1: NibbleArray<L1_COUNT_BYTES>,
-    l2: NibbleArray<L2_COUNT_BYTES>,
-    l3: NibbleArray<L3_COUNT_BYTES>,
-    l4: NibbleArray<L4_COUNT_BYTES>,
-    l5: NibbleArray<L5_COUNT_BYTES>,
-    l6: NibbleArray<L6_COUNT_BYTES>,
-    l7: NibbleArray<L7_COUNT_BYTES>,
-    l8: NibbleArray<L8_COUNT_BYTES>,
-    l9: NibbleArray<L9_COUNT_BYTES>,
-    l10: NibbleArray<L10_COUNT_BYTES>,
-    l11: NibbleArray<L11_COUNT_BYTES>,
-    l12: NibbleArray<L12_COUNT_BYTES>,
+    /// Entries in the tree.
+    nodes: NibbleArray<NODE_BYTES_NEEDED>,
 }
 
 impl Tree {
-    /// Construct new tree.
-    pub fn new() {
-        // TODO
+    /// Initializes the tree.
+    pub fn init(&mut self) {
+        // Is power of 2? We don't care about the case of x == 0 here.
+        fn is_pow2(x: usize) -> bool {
+            x & (x - 1) == 0
+        }
+
+        let mut size = (MAX_LEVEL + 1) as u8;
+        for i in 0..NODE_COUNT {
+            if is_pow2(i + 1) {
+                size -= 1;
+            }
+
+            self.nodes.set_nibble_at(i, size);
+        }
     }
 
-    pub fn test(&mut self) {
-        // TODO
+    /// Left index of a node.
+    #[inline]
+    fn left_index(&self, index: usize) -> usize {
+        (index << 1) | 1
+    }
+
+    /// Right index of a node.
+    #[inline]
+    fn right_index(&self, index: usize) -> usize {
+        self.left_index(index) + 1
+    }
+
+    /// Parent index of a node.
+    #[inline]
+    fn parent_index(&self, index: usize) -> usize {
+        ((index + 1) >> 1) - 1
+    }
+
+    /// Allocate in tree.
+    pub fn alloc(&mut self, size: usize) -> Option<usize> {
+        if unlikely!(self.nodes.get_nibble_at(0) < size as u8) {
+            return None;
+        }
+
+        // Find node with smallest size large enough to hold the requested size
+        let wanted_level = MAX_LEVEL - size as usize;
+        let mut index = 0;
+        for level in 0..wanted_level {
+            let left_index = self.left_index(index);
+            let right_index = self.right_index(index);
+
+            // Because of the check at the beginning, we know one of these two is big enough
+            index = if self.nodes.get_nibble_at(left_index) >= size as u8 {
+                left_index
+            } else {
+                right_index
+            };
+        }
+
+        // Calculate offset from the index
+        let first_index_in_this_level = (1 << wanted_level) - 1;
+        let index_in_this_level = index - first_index_in_this_level;
+        let offset = index_in_this_level << size;
+
+        // Update the values in the tree so that each node still contains the largest available
+        // power of two size in their subtree.
+        self.nodes.set_nibble_at(index, 0);
+        while index > 0 {
+            index = self.parent_index(index);
+            let left_index = self.left_index(index);
+            let right_index = self.right_index(index);
+            let max = cmp::max(self.nodes.get_nibble_at(left_index), self.nodes.get_nibble_at(right_index));
+            self.nodes.set_nibble_at(index, max);
+        }
+
+        Some(offset)
     }
 }
 
@@ -87,38 +133,24 @@ extern "C" {
 
 // TODO
 pub fn test() {
-    /*let mut x = Tree {
-        l0: NibbleArray { entries: [0; 2 * TOP_NODE_COUNT / 4] },
-        l1: NibbleArray { entries: [0; 4 * TOP_NODE_COUNT / 4] },
-        l2: NibbleArray { entries: [0; 8 * TOP_NODE_COUNT / 4] },
-        l3: NibbleArray { entries: [0; 16 * TOP_NODE_COUNT / 4] },
-        l4: NibbleArray { entries: [0; 32 * TOP_NODE_COUNT / 4] },
-        l5: NibbleArray { entries: [0; 64 * TOP_NODE_COUNT / 4] },
-        l6: NibbleArray { entries: [0; 128 * TOP_NODE_COUNT / 4] },
-        l7: NibbleArray { entries: [0; 256 * TOP_NODE_COUNT / 4] },
-        l8: NibbleArray { entries: [0; 512 * TOP_NODE_COUNT / 4] },
-        l9: NibbleArray { entries: [0; 1024 * TOP_NODE_COUNT / 4] },
-        l10: NibbleArray { entries: [0; 2048 * TOP_NODE_COUNT / 4] },
-        l11: NibbleArray { entries: [0; 4096 * TOP_NODE_COUNT / 4] },
-        l12: NibbleArray { entries: [0; 8192 * TOP_NODE_COUNT / 4] },
-    };*/
-
     unsafe {
         let mut xx: u8 = 0;
 
         println!("size: {:?}", size_of::<Tree>());
-        println!("size2: {:?}KiB", size_of::<Tree>() * 64 / 1024);
-        println!("{} KiB", TOP_NODE_COUNT * 4096 * (1 << (12 - 1)) / 1024);
 
         let a = rdtscp(&mut xx);
 
-        let lol = 0;
         let mut mapping = ActiveMapping::get();
-        mapping.map_range(VirtAddr::new(0xFC00000), size_of::<Tree>() * 1, EntryFlags::PRESENT | EntryFlags::WRITABLE).unwrap();
+        mapping.map_range(VirtAddr::new(0xFC00000), size_of::<Tree>(), EntryFlags::PRESENT | EntryFlags::WRITABLE).unwrap();
+        let tree = &mut *(0xFC00000 as *mut Tree);
+        tree.init();
+        println!("{:?}", tree.alloc(3));
+        println!("{:?}", tree.alloc(3)); // 8
+        println!("{:?}", tree.alloc(3)); // 16
+        println!("{:?}", tree.alloc(3)); // 24
 
         let b = rdtscp(&mut xx);
 
-        println!("{}ns", ((b - a - 5) * 284) >> 10);
-        println!("res: {}", lol);
+        println!("{}ns", ((b - a) * 284) >> 10);
     }
 }

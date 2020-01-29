@@ -22,14 +22,19 @@ bitflags! {
 /// Page table entry.
 pub struct Entry(u64);
 
-const USED_COUNT_MASK: u64 = 0x1ff0_0000_0000_0000;
+// See Intel Volume 3: bits 62:52 are ignored
+const USED_COUNT_MASK: u64 = 0x3ff0_0000_0000_0000;
 
 #[allow(dead_code)]
 impl Entry {
+    pub fn lol(&self) -> u64 {
+        self.0
+    }
+
     /// Gets the used count part of this entry.
     /// We keep the used count in the first entry available bits.
     pub fn used_count(&self) -> u64 {
-        (self.0 >> 52) & 511
+        (self.0 & USED_COUNT_MASK) >> 52
     }
 
     /// Raw used count part of this entry.

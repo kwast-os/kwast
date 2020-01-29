@@ -26,6 +26,9 @@ pub trait MemoryMapper {
 
     /// Maps a range.
     fn map_range(&mut self, vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MappingResult;
+
+    /// Unmaps a range.
+    fn unmap_range(&mut self, vaddr: VirtAddr, size: usize);
 }
 
 /// Map result.

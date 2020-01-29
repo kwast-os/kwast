@@ -74,6 +74,7 @@ impl<L> Table<L> where L: Level {
 
     /// Decreases the used count.
     pub fn decrease_used_count(&mut self) {
+        debug_assert!(self.used_count() > 0);
         self.set_used_count(self.used_count() - 1);
     }
 }

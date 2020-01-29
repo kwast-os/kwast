@@ -86,5 +86,5 @@ I originally started with a C++ microkernel, but found the **performance overhea
 
 ## Similar projects
 * [Nebulet](https://github.com/nebulet/nebulet) - A microkernel that implements a WebAssembly "usermode" that runs in Ring 0
-* [wasmjit](https://github.com/rianhunter/wasmjit) - Small Embeddable WebAssembly Runtime
+* [wasmjit](https://github.com/kenny-ngo/wasmjit) - Small Embeddable WebAssembly Runtime
 * [cervus](https://github.com/cervus-v/cervus) - A WebAssembly subsystem for Linux

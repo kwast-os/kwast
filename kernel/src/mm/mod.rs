@@ -1,9 +1,8 @@
 pub mod pmm;
 pub mod mapper;
+pub mod buddy;
 mod alloc;
-mod buddy;
 
 pub fn test() {
-    buddy::test();
     alloc::test();
 }

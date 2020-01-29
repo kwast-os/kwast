@@ -7,7 +7,6 @@
 #![allow(incomplete_features)]
 #![feature(const_generics)]
 #![feature(lang_items)]
-#![feature(link_llvm_intrinsics)] // TODO: remove me
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]
 

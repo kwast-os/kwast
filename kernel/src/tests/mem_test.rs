@@ -1,6 +1,5 @@
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
-use crate::arch::x86_64::qemu;
 use crate::mm::mapper::MemoryMapper;
 
 /// Memory test.
@@ -31,6 +30,4 @@ pub fn test_main() {
         .expect("could not map page #3");
     assert_eq!(mapping.translate(va3), phys);
     mapping.free_and_unmap_single(va3);
-
-    unsafe { qemu::qemu_exit(0); }
 }

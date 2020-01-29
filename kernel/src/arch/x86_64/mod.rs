@@ -42,7 +42,10 @@ pub extern "C" fn entry(mboot_addr: usize) {
     #[cfg(not(feature = "integration-test"))]
         crate::kernel_main();
     #[cfg(feature = "integration-test")]
-        crate::tests::test_main();
+        {
+            crate::tests::test_main();
+            unsafe { qemu::qemu_exit(0); }
+        }
 }
 
 /// Halt instruction. Waits for interrupt.

@@ -1,11 +1,7 @@
-use core::mem::size_of;
-use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
-use crate::mm::mapper::MemoryMapper;
-use crate::arch::x86_64::address::VirtAddr;
 use core::cmp;
 
 /// Amount of top nodes.
-const MAX_LEVEL: usize = 15;
+pub const MAX_LEVEL: usize = 15;
 
 /// Amount of nodes.
 const NODE_COUNT: usize = (1 << MAX_LEVEL) - 1;
@@ -14,7 +10,7 @@ const NODE_COUNT: usize = (1 << MAX_LEVEL) - 1;
 const NODE_BYTES_NEEDED: usize = NODE_COUNT;
 
 /// The buddy tree.
-struct Tree {
+pub struct Tree {
     /// Entries in the tree.
     nodes: [u8; NODE_BYTES_NEEDED],
 }
@@ -121,53 +117,5 @@ impl Tree {
                 cmp::max(self.nodes[left_index], self.nodes[right_index])
             };
         }
-    }
-}
-
-#[allow(improper_ctypes)]
-extern "C" {
-    #[link_name = "llvm.x86.rdtscp"]
-    fn rdtscp(aux: *mut u8) -> u64;
-}
-
-// TODO
-pub fn test() {
-    unsafe {
-        let mut xx: u8 = 0;
-
-        println!("size: {:?}", size_of::<Tree>());
-
-        let mut mapping = ActiveMapping::get();
-        mapping.map_range(VirtAddr::new(0xFC00000), size_of::<Tree>(), EntryFlags::PRESENT | EntryFlags::WRITABLE).unwrap();
-        let tree = &mut *(0xFC00000 as *mut Tree);
-        tree.init();
-
-        let a = rdtscp(&mut xx);
-
-        assert_eq!(tree.alloc(3), Some(0));
-        assert_eq!(tree.alloc(2), Some(4));
-        assert_eq!(tree.alloc(3), Some(8));
-        assert_eq!(tree.alloc(4), Some(16));
-        assert_eq!(tree.alloc(2), Some(6));
-        assert_eq!(tree.alloc(3), Some(12));
-        assert_eq!(tree.alloc(6), Some(32));
-        assert_eq!(tree.alloc(7), Some(64));
-        assert_eq!(tree.alloc(MAX_LEVEL), None);
-
-        println!("{:?}", tree.alloc(3));
-        tree.dealloc(0);
-        println!("{:?}", tree.alloc(3));
-        tree.dealloc(24);
-        println!("{:?}", tree.alloc(3));
-        tree.dealloc(16);
-        println!("{:?}", tree.alloc(2));
-        println!("{:?}", tree.alloc(2));
-        println!("{:?}", tree.alloc(4));
-        println!("{:?}", tree.alloc(2));
-        println!("{:?}", tree.alloc(2));
-
-        let b = rdtscp(&mut xx);
-
-        println!("{}ns", ((b - a) * 284) >> 10);
     }
 }

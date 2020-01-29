@@ -10,6 +10,7 @@ crate-type = ["staticlib"]
 [features]
 integration-test = []
 test-mem = []
+test-buddy = []
 
 [profile.release]
 lto = true

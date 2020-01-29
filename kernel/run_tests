@@ -20,3 +20,4 @@ run_test() {
 }
 
 run_test 'test-mem'
+run_test 'test-buddy'

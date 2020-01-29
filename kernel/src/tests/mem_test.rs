@@ -1,7 +1,7 @@
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::arch::x86_64::qemu;
-use crate::mm::pmm::MemoryMapper;
+use crate::mm::mapper::MemoryMapper;
 
 /// Memory test.
 #[cfg(feature = "test-mem")]
@@ -22,7 +22,7 @@ pub fn test_main() {
 
     // Should not PF
     let ptr = va1.as_usize() as *mut i32;
-    unsafe { ptr.write_volatile(42); }
+    unsafe { ptr.write(42); }
 
     let phys = mapping.translate(va1);
     mapping.free_and_unmap_single(va1);

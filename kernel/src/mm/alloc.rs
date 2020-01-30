@@ -200,9 +200,8 @@ impl Cache {
             self.partial = NonNull::new(slab);
         } else {
             // It was linked, either as a free or as a partial slab.
-            println!("{}, {}", old_free_count+1, self.slots_count);
             if old_free_count + 1 == self.slots_count {
-                println!("Convert partial to free slab");
+                //println!("Convert partial to free slab");
 
                 // It was a partial slab and it became a free slab.
                 if slab.next.is_some() {
@@ -252,16 +251,17 @@ impl Heap {
             None
         } else {
             let slab = unsafe { &mut *(addr.as_usize() as *mut Slab) };
-            println!("Slab at {:?}", addr.as_usize() as *mut Slab);
             slab.init(start_offset, slots_count, obj_size);
             Some(slab)
         }
     }
 
+    /// Allocate.
     pub fn alloc(&self, layout: Layout) -> *mut u8 {
         null_mut()
     }
 
+    /// Deallocate.
     pub fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         unimplemented!()
     }
@@ -289,6 +289,57 @@ impl Heap {
         cache.dealloc(self, b);
         println!("dealloc: {:?}", c);
         cache.dealloc(self, c);
+
+        let a = cache.alloc(self);
+        let b = cache.alloc(self);
+        let c = cache.alloc(self);
+
+        println!("alloc: {:?}", a);
+        println!("alloc: {:?}", b);
+        println!("alloc: {:?}", c);
+
+        println!("----");
+
+        let d = cache.alloc(self);
+        let e = cache.alloc(self);
+        let f = cache.alloc(self);
+
+        println!("alloc: {:?}", d);
+        println!("alloc: {:?}", e);
+        println!("alloc: {:?}", f);
+
+        println!("----");
+
+        let g = cache.alloc(self);
+        let h = cache.alloc(self);
+        let i = cache.alloc(self);
+
+        println!("alloc: {:?}", g);
+        println!("alloc: {:?}", h);
+        println!("alloc: {:?}", i);
+
+        println!("dealloc: {:?}", e);
+        cache.dealloc(self, e);
+        println!("alloc: {:?}", cache.alloc(self));
+        println!("dealloc: {:?}", e);
+        cache.dealloc(self, e);
+        println!("dealloc: {:?}", f);
+        cache.dealloc(self, f);
+        println!("dealloc: {:?}", d);
+        cache.dealloc(self, d);
+
+
+        println!("alloc: {:?}", cache.alloc(self));
+        println!("dealloc: {:?}", g);
+        cache.dealloc(self, g);
+        println!("dealloc: {:?}", b);
+        cache.dealloc(self, b);
+        println!("alloc: {:?}", cache.alloc(self));
+        println!("alloc: {:?}", cache.alloc(self));
+        println!("alloc: {:?}", cache.alloc(self));
+        println!("alloc: {:?}", cache.alloc(self));
+
+        loop {}
     }
 }
 

@@ -3,7 +3,7 @@ use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 
 /// Memory test.
-#[cfg(feature = "test-mem")]
+#[cfg(feature = "test-vmm")]
 pub fn test_main() {
     let mut mapping = ActiveMapping::get();
 

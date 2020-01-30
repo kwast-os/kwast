@@ -9,7 +9,7 @@ crate-type = ["staticlib"]
 
 [features]
 integration-test = []
-test-mem = []
+test-vmm = []
 test-buddy = []
 
 [profile.release]

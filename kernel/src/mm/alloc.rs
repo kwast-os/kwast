@@ -8,10 +8,9 @@ use crate::arch::paging::PAGE_SIZE;
 use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::util::unchecked::UncheckedUnwrap;
+use core::cmp;
 
 // TODO: free "free slabs" once there are a couple
-// TODO: more efficient realloc, now uses the default, which always copies...
-// TODO: less high orders? (acceptable fragmentation threshold?)
 
 struct HeapManager {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -21,6 +20,7 @@ struct HeapManager {
     alloc_area_start: VirtAddr,
 }
 
+#[derive(Debug)]
 struct HeapCaches {
     /// Generic size caches.
     cache32: Cache,
@@ -373,28 +373,56 @@ impl HeapManager {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum CacheType {
+    C32,
+    C64,
+    C128,
+    C256,
+    C512,
+    C1024,
+    C2048,
+    C4096,
+    C8192,
+}
+
 impl HeapCaches {
     /// Converts a layout to a cache.
     fn layout_to_cache(&mut self, layout: Layout) -> &mut Cache {
+        match Self::layout_to_cache_type(layout) {
+            CacheType::C32 => &mut self.cache32,
+            CacheType::C64 => &mut self.cache64,
+            CacheType::C128 => &mut self.cache128,
+            CacheType::C256 => &mut self.cache256,
+            CacheType::C512 => &mut self.cache512,
+            CacheType::C1024 => &mut self.cache1024,
+            CacheType::C2048 => &mut self.cache2048,
+            CacheType::C4096 => &mut self.cache4096,
+            CacheType::C8192 => &mut self.cache8192,
+        }
+    }
+
+    /// Converts the layout to a cache type.
+    fn layout_to_cache_type(layout: Layout) -> CacheType {
         if layout.size() <= 32 && layout.align() <= 32 {
-            &mut self.cache32
+            CacheType::C32
         } else if layout.size() <= 64 && layout.align() <= 64 {
-            &mut self.cache64
+            CacheType::C64
         } else if layout.size() <= 128 && layout.align() <= 128 {
-            &mut self.cache128
+            CacheType::C128
         } else if layout.size() <= 256 && layout.align() <= 256 {
-            &mut self.cache256
+            CacheType::C256
         } else if layout.size() <= 512 && layout.align() <= 512 {
-            &mut self.cache512
+            CacheType::C512
         } else if layout.size() <= 1024 && layout.align() <= 1024 {
-            &mut self.cache1024
+            CacheType::C1024
         } else if layout.size() <= 2048 && layout.align() <= 2048 {
-            &mut self.cache2048
+            CacheType::C2048
         } else if layout.size() <= 4096 && layout.align() <= 4096 {
-            &mut self.cache4096
+            CacheType::C4096
         } else {
             debug_assert!(layout.size() <= 8192 && layout.align() <= 8192);
-            &mut self.cache8192
+            CacheType::C8192
         }
     }
 }
@@ -442,6 +470,22 @@ unsafe impl GlobalAlloc for LockedHeap {
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.inner.lock().as_mut().unchecked_unwrap().dealloc(ptr, layout)
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        // Check if we need to reallocate. If the layouts map to the same cache, we don't.
+        let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
+        if HeapCaches::layout_to_cache_type(layout) == HeapCaches::layout_to_cache_type(new_layout) {
+            ptr
+        } else {
+            // This is the default implementation of realloc provided by the alloc library.
+            let new_ptr = self.alloc(new_layout);
+            if !new_ptr.is_null() {
+                core::ptr::copy_nonoverlapping(ptr, new_ptr, cmp::min(layout.size(), new_size));
+                self.dealloc(ptr, layout);
+            }
+            new_ptr
+        }
     }
 }
 

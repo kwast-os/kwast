@@ -28,7 +28,6 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let mboot_struct = unsafe { multiboot2::load(mboot_addr) };
     let mboot_end = mboot_struct.end_address();
     let reserved_end = max(kernel_end, mboot_end);
-    println!("kernel end: {:#x} | mboot end: {:#x}", kernel_end, mboot_end);
     mm::pmm::get().init(&mboot_struct, reserved_end);
 
     // TODO: map sections correctly

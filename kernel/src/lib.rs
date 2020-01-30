@@ -16,7 +16,7 @@ use core::panic::PanicInfo;
 
 use arch::interrupts;
 use alloc::boxed::Box;
-use crate::arch::x86_64::address::VirtAddr;
+use crate::arch::address::VirtAddr;
 
 #[macro_use]
 mod macros;

@@ -1,14 +1,13 @@
-use core::alloc::GlobalAlloc;
-use bitflags::_core::alloc::Layout;
-use bitflags::_core::ptr::null_mut;
-use crate::mm::buddy::Tree;
+use core::alloc::{GlobalAlloc, Layout};
+use core::ptr::{null_mut, NonNull};
+use core::mem::size_of;
 use spin::Mutex;
 use crate::arch::address::VirtAddr;
-use crate::util::unchecked::UncheckedUnwrap;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
+use crate::arch::paging::PAGE_SIZE;
+use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
-use core::mem::size_of;
-use crate::arch::x86_64::paging::PAGE_SIZE;
+use crate::util::unchecked::UncheckedUnwrap;
 
 struct Heap {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -26,7 +25,8 @@ struct LockedHeap {
 #[derive(Debug)]
 struct Slab {
     /// Maintain a linked list of slabs.
-    next: Option<&'static mut Slab>,
+    next: Option<NonNull<Slab>>,
+    prev: Option<NonNull<Slab>>,
     /// Next free offset, 0 if no more free space.
     next_offset: u32,
     /// Amount of free items.
@@ -35,9 +35,10 @@ struct Slab {
 
 /// A cache in the slab allocator.
 struct Cache {
-    partial: Option<&'static mut Slab>,
-    free: Option<&'static mut Slab>,
+    partial: Option<NonNull<Slab>>,
+    free: Option<NonNull<Slab>>,
     obj_size: u32,
+    slots_count: u32,
     slab_order: u8,
     // TODO: color stuff
 }
@@ -46,6 +47,7 @@ impl Slab {
     /// Inits the slab.
     pub fn init(&mut self, start_offset: u32, slots_count: u32, obj_size: u32) {
         self.next = None;
+        self.prev = None;
         self.next_offset = start_offset;
         self.free_count = slots_count;
 
@@ -71,6 +73,16 @@ impl Slab {
         unsafe { self.self_ptr().offset(offset as isize) as *mut u32 }
     }
 
+    /// Unlink from next slab.
+    pub fn unlink_from_next(&mut self) -> Option<NonNull<Slab>> {
+        if self.next.is_some() {
+            unsafe { self.next.unwrap().as_mut() }.prev = None;
+            self.next.take()
+        } else {
+            None
+        }
+    }
+
     /// Allocate inside the slab.
     pub fn alloc(&mut self) -> *mut u8 {
         debug_assert!(!self.is_full());
@@ -93,17 +105,19 @@ impl Slab {
 
     /// Is full?
     pub fn is_full(&self) -> bool {
+        debug_assert!((self.next_offset == 0) == (self.free_count == 0));
         self.next_offset == 0
     }
 }
 
 impl Cache {
     /// Creates a new cache.
-    fn new(obj_size: u32, slab_order: u8) -> Self {
+    fn new(obj_size: u32, slots_count: u32, slab_order: u8) -> Self {
         Self {
             partial: None,
             free: None,
             obj_size,
+            slots_count,
             slab_order,
         }
     }
@@ -111,11 +125,11 @@ impl Cache {
     /// Create a new slab and allocate from there.
     fn alloc_new_slab(&mut self, heap: &mut Heap) -> *mut u8 {
         // Create a new slab to allocate from. This will become a partial slab.
-        if let Some(slab) = heap.create_free_slab(self.slab_order as usize, 16 /* TODO */, 3 /* TODO */, self.obj_size) {
+        if let Some(slab) = heap.create_free_slab(self.slab_order as usize, 24 /* TODO */, self.slots_count, self.obj_size) {
             let result = slab.alloc();
 
             // There were no partial or free slabs, otherwise we would've allocated from there.
-            self.partial = Some(slab);
+            self.partial = NonNull::new(slab);
 
             result
         } else {
@@ -130,24 +144,33 @@ impl Cache {
          * If there are none, try the free slabs.
          * If there are no free slabs, we have to create a new slab.
          */
-        if let Some(ref mut slab) = self.partial {
+        if let Some(mut tmp) = self.partial {
+            // Reference is valid and not shared.
+            let slab = unsafe { tmp.as_mut() };
+            debug_assert!(slab.prev.is_none());
+
             // Cannot fail, because otherwise it wouldn't be a partial slab!
             let result = slab.alloc();
 
             // Do we still have slots left? If not, this became a full slab instead of a partial.
             if slab.is_full() {
-                self.partial = slab.next.take();
+                // Remove from linked list.
+                self.partial = slab.unlink_from_next();
             }
 
             result
-        } else if let Some(slab) = self.free.take() {
+        } else if let Some(mut tmp) = self.free {
+            // Reference is valid and not shared.
+            let slab = unsafe { tmp.as_mut() };
+            debug_assert!(slab.prev.is_none());
+
             // Cannot fail, because otherwise it wouldn't be a free slab!
             let result = slab.alloc();
 
             // Since this now holds an object, this became a partial slab.
             // We also know there are no partial slabs atm, because we always try partials first.
-            self.free = slab.next.take();
-            self.partial = Some(slab);
+            self.free = slab.unlink_from_next();
+            self.partial = NonNull::new(slab);
 
             result
         } else {
@@ -163,19 +186,37 @@ impl Cache {
         let alignment = PAGE_SIZE << self.slab_order as usize;
         let slab_addr = heap.alloc_area_start.as_usize() + (offset & !(alignment - 1));
         let slab = unsafe { &mut *(slab_addr as *mut Slab) };
-        let was_full = slab.free_count == 0;
+        let old_free_count = slab.free_count;
 
         // Can now deallocate
         slab.dealloc(ptr);
 
         // Update partial & free pointers
-        if was_full {
-            // It became a partial, and it was full, so it wasn't linked.
+        if old_free_count == 0 {
+            // It became a partial, and it was full, so it wasn't linked to.
+            debug_assert!(slab.next.is_none());
+            debug_assert!(slab.prev.is_none());
             slab.next = self.partial.take();
-            self.partial = Some(slab);
+            self.partial = NonNull::new(slab);
         } else {
             // It was linked, either as a free or as a partial slab.
-            // TODO: figure out which
+            println!("{}, {}", old_free_count+1, self.slots_count);
+            if old_free_count + 1 == self.slots_count {
+                println!("Convert partial to free slab");
+
+                // It was a partial slab and it became a free slab.
+                if slab.next.is_some() {
+                    unsafe { slab.next.unwrap().as_mut() }.prev = slab.prev;
+                }
+                if slab.prev.is_some() {
+                    unsafe { slab.prev.unwrap().as_mut() }.next = slab.next;
+                } else {
+                    // No previous, so must be the first.
+                    self.partial = slab.next;
+                }
+                slab.next = self.free;
+                self.free = NonNull::new(slab);
+            }
         }
     }
 }
@@ -199,11 +240,11 @@ impl Heap {
     }
 
     /// Creates a free slab of the requested order.
-    pub fn create_free_slab(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
-                            -> Option<&'static mut Slab> {
+    pub fn create_free_slab<'s>(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
+                                -> Option<&'s mut Slab> {
         let offset = self.tree.alloc(order)?;
         let addr = self.alloc_area_start + offset * PAGE_SIZE;
-        let size = (1 << order) * PAGE_SIZE;
+        let size = PAGE_SIZE << order;
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
         if unlikely!(ActiveMapping::get().map_range(addr, size, flags).is_err()) {
@@ -226,9 +267,7 @@ impl Heap {
     }
 
     pub fn test(&mut self) { // TODO
-        let mut cache = Cache::new(24, 2);
-
-        // TODO: grondig testen
+        let mut cache = Cache::new(24, 3, 2);
 
         let a = cache.alloc(self);
         let b = cache.alloc(self);
@@ -238,10 +277,18 @@ impl Heap {
         println!("alloc: {:?}", b);
         println!("alloc: {:?}", c);
 
+        println!("dealloc: {:?}", a);
         cache.dealloc(self, a);
 
         let a = cache.alloc(self);
-        println!("alloc: {:?}", a);
+        println!("alloc: {:?}", a); // must be the same as the original a
+
+        println!("dealloc: {:?}", a);
+        cache.dealloc(self, a);
+        println!("dealloc: {:?}", b);
+        cache.dealloc(self, b);
+        println!("dealloc: {:?}", c);
+        cache.dealloc(self, c);
     }
 }
 

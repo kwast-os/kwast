@@ -19,5 +19,5 @@ run_test() {
 	fi
 }
 
-run_test 'test-mem'
+run_test 'test-vmm'
 run_test 'test-buddy'

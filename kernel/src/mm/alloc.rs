@@ -210,7 +210,7 @@ impl Cache {
         let mut slots_count = 0;
 
         for i in 0..=MAX {
-            if PAGE_SIZE << i < obj_size {
+            if (PAGE_SIZE << i) < obj_size + slab_rounded_up {
                 continue;
             }
 
@@ -219,8 +219,10 @@ impl Cache {
 
             if wastage < best_wastage {
                 slots_count = size / obj_size;
-                best_wastage = wastage;
-                order = i;
+                if slots_count > 1 {
+                    best_wastage = wastage;
+                    order = i;
+                }
             }
         }
 

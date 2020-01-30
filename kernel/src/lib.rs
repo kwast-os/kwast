@@ -17,6 +17,7 @@ use core::panic::PanicInfo;
 use arch::interrupts;
 use alloc::boxed::Box;
 use crate::arch::address::VirtAddr;
+use alloc::vec::Vec;
 
 #[macro_use]
 mod macros;
@@ -49,6 +50,12 @@ pub fn kernel_main(reserved_end: VirtAddr) {
     // TEST
     let test = Box::new([1, 2, 3]);
     println!("{:?}", test);
+    let n = 1000;
+    let mut vec = Vec::new();
+    for i in 0..n {
+        vec.push(i);
+    }
+    assert_eq!(vec.iter().sum::<u64>(), (n - 1) * n / 2);
 }
 
 #[lang = "eh_personality"]

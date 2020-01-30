@@ -9,6 +9,8 @@ use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::util::unchecked::UncheckedUnwrap;
 
+// TODO: free "free slabs" once there are a couple
+
 struct Heap {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
     /// Currently there is only one tree, but this can be extended in the future to use multiple.
@@ -204,11 +206,11 @@ impl Cache {
                 //println!("Convert partial to free slab");
 
                 // It was a partial slab and it became a free slab.
-                if slab.next.is_some() {
-                    unsafe { slab.next.unwrap().as_mut() }.prev = slab.prev;
+                if let Some(mut next) = slab.next {
+                    unsafe { next.as_mut() }.prev = slab.prev;
                 }
-                if slab.prev.is_some() {
-                    unsafe { slab.prev.unwrap().as_mut() }.next = slab.next;
+                if let Some(mut prev) = slab.prev {
+                    unsafe { prev.as_mut() }.next = slab.next;
                 } else {
                     // No previous, so must be the first.
                     self.partial = slab.next;

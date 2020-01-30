@@ -1,5 +1,6 @@
 pub trait UncheckedUnwrap<T> {
-    /// Unwraps a type without the cost of the branch. If you're in debug mode, will assert.
+    /// Unwraps a type without the cost of the branch: no safety check will be performed.
+    /// If you're in debug mode, will assert.
     unsafe fn unchecked_unwrap(self) -> T;
 }
 

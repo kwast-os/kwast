@@ -10,6 +10,8 @@ use crate::mm::mapper::MemoryMapper;
 use crate::util::unchecked::UncheckedUnwrap;
 
 // TODO: free "free slabs" once there are a couple
+// TODO: more efficient realloc, now uses the default, which always copies...
+// TODO: less high orders? (acceptable fragmentation threshold?)
 
 struct Heap {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -24,6 +26,7 @@ struct LockedHeap {
     inner: Mutex<Option<Heap>>,
 }
 
+/// A slab for a cache.
 #[derive(Debug)]
 struct Slab {
     /// Maintain a linked list of slabs.
@@ -36,6 +39,7 @@ struct Slab {
 }
 
 /// A cache in the slab allocator.
+#[derive(Debug)]
 struct Cache {
     partial: Option<NonNull<Slab>>,
     free: Option<NonNull<Slab>>,
@@ -72,7 +76,9 @@ impl Slab {
 
     /// Gets a pointer at an offset from this struct.
     fn ptr_at(&mut self, offset: u32) -> *mut u32 {
-        unsafe { self.self_ptr().offset(offset as isize) as *mut u32 }
+        debug_assert!(offset % 4 == 0);
+        #[allow(clippy::cast_ptr_alignment)]
+            unsafe { self.self_ptr().offset(offset as isize) as *mut u32 }
     }
 
     /// Unlink from next slab.
@@ -99,7 +105,9 @@ impl Slab {
     /// Deallocate inside the slab.
     pub fn dealloc(&mut self, ptr: *mut u8) {
         let allocated_offset = ptr as usize - self.self_ptr() as usize;
-        let allocated_offset_ptr = ptr as *mut u32;
+        debug_assert!(ptr as usize % 4 == 0);
+        #[allow(clippy::cast_ptr_alignment)]
+            let allocated_offset_ptr = ptr as *mut u32;
         unsafe { *allocated_offset_ptr = self.next_offset; }
         self.next_offset = allocated_offset as u32;
         self.free_count += 1;
@@ -114,7 +122,7 @@ impl Slab {
 
 impl Cache {
     /// Creates a new cache.
-    fn new(obj_size: u32, slots_count: u32, slab_order: u8) -> Self {
+    const fn new(obj_size: u32, slots_count: u32, slab_order: u8) -> Self {
         Self {
             partial: None,
             free: None,
@@ -198,7 +206,7 @@ impl Cache {
             // It became a partial, and it was full, so it wasn't linked to.
             debug_assert!(slab.next.is_none());
             debug_assert!(slab.prev.is_none());
-            slab.next = self.partial.take();
+            slab.next = self.partial;
             self.partial = NonNull::new(slab);
         } else {
             // It was linked, either as a free or as a partial slab.
@@ -240,6 +248,34 @@ impl Heap {
         }
     }
 
+    /// Create cache.
+    fn create_cache(obj_size: usize, alignment: usize) -> Cache {
+        fn align(x: usize, alignment: usize) -> usize {
+            ((x + alignment - 1) / alignment) * alignment
+        }
+
+        let obj_size = align(obj_size, alignment);
+        let slab_rounded_up = align(size_of::<Slab>(), alignment);
+
+        const MAX: usize = 5;
+        let mut best_wastage = PAGE_SIZE;
+        let mut order = 0;
+        let mut slots_count = 0;
+
+        for i in 0..=MAX {
+            let size = (PAGE_SIZE << i) - slab_rounded_up;
+            let wastage = size % obj_size;
+
+            if wastage < best_wastage {
+                slots_count = size / obj_size;
+                best_wastage = wastage;
+                order = i;
+            }
+        }
+
+        Cache::new(obj_size as u32, slots_count as u32, order as u8)
+    }
+
     /// Creates a free slab of the requested order.
     pub fn create_free_slab<'s>(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
                                 -> Option<&'s mut Slab> {
@@ -269,83 +305,35 @@ impl Heap {
     }
 
     pub fn test(&mut self) { // TODO
-        let mut cache = Cache::new(24, 3, 2);
+        let mut cache = Heap::create_cache(80, 16);
+        println!("{:?}", cache);
+
+        for _ in 0..49 {
+            cache.alloc(self);
+        }
 
         let a = cache.alloc(self);
+        println!("{:?}", a);
         let b = cache.alloc(self);
+        println!("{:?}", b);
         let c = cache.alloc(self);
-
-        println!("alloc: {:?}", a);
-        println!("alloc: {:?}", b);
-        println!("alloc: {:?}", c);
-
-        println!("dealloc: {:?}", a);
-        cache.dealloc(self, a);
-
-        let a = cache.alloc(self);
-        println!("alloc: {:?}", a); // must be the same as the original a
-
-        println!("dealloc: {:?}", a);
-        cache.dealloc(self, a);
-        println!("dealloc: {:?}", b);
-        cache.dealloc(self, b);
-        println!("dealloc: {:?}", c);
-        cache.dealloc(self, c);
-
-        let a = cache.alloc(self);
-        let b = cache.alloc(self);
-        let c = cache.alloc(self);
-
-        println!("alloc: {:?}", a);
-        println!("alloc: {:?}", b);
-        println!("alloc: {:?}", c);
-
-        println!("----");
-
+        println!("{:?}", c);
         let d = cache.alloc(self);
-        let e = cache.alloc(self);
-        let f = cache.alloc(self);
-
-        println!("alloc: {:?}", d);
-        println!("alloc: {:?}", e);
-        println!("alloc: {:?}", f);
-
-        println!("----");
-
-        let g = cache.alloc(self);
-        let h = cache.alloc(self);
-        let i = cache.alloc(self);
-
-        println!("alloc: {:?}", g);
-        println!("alloc: {:?}", h);
-        println!("alloc: {:?}", i);
-
-        println!("dealloc: {:?}", e);
-        cache.dealloc(self, e);
-        println!("alloc: {:?}", cache.alloc(self));
-        println!("dealloc: {:?}", e);
-        cache.dealloc(self, e);
-        println!("dealloc: {:?}", f);
-        cache.dealloc(self, f);
-        println!("dealloc: {:?}", d);
-        cache.dealloc(self, d);
-
-
-        println!("alloc: {:?}", cache.alloc(self));
-        println!("dealloc: {:?}", g);
-        cache.dealloc(self, g);
-        println!("dealloc: {:?}", b);
+        println!("{:?}", d);
+        println!("{:?}", cache);
+        cache.dealloc(self, c);
         cache.dealloc(self, b);
-        println!("alloc: {:?}", cache.alloc(self));
-        println!("alloc: {:?}", cache.alloc(self));
-        println!("alloc: {:?}", cache.alloc(self));
-        println!("alloc: {:?}", cache.alloc(self));
+        let d = cache.alloc(self);
+        println!("{:?}", d);
+        let d = cache.alloc(self);
+        println!("{:?}", d);
+        let d = cache.alloc(self);
+        println!("{:?}", d);
 
         loop {}
     }
 }
 
-// TODO: more efficient realloc, now uses the default, which always copies...
 unsafe impl GlobalAlloc for LockedHeap {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {

@@ -11,6 +11,10 @@ crate-type = ["staticlib"]
 integration-test = []
 test-vmm = []
 test-buddy = []
+test-heap-one-alloc = []
+test-heap-big-alloc = []
+test-heap-realloc = []
+test-heap-pointers = []
 
 [profile.release]
 lto = true

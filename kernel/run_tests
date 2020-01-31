@@ -21,3 +21,7 @@ run_test() {
 
 run_test 'test-vmm'
 run_test 'test-buddy'
+run_test 'test-heap-one-alloc'
+run_test 'test-heap-big-alloc'
+run_test 'test-heap-realloc'
+run_test 'test-heap-pointers'

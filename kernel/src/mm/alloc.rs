@@ -1,16 +1,13 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::{null_mut, NonNull};
 use core::mem::size_of;
+use core::cmp;
 use spin::Mutex;
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{ActiveMapping, EntryFlags};
-use crate::arch::paging::PAGE_SIZE;
+use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::util::unchecked::UncheckedUnwrap;
-use core::cmp;
-
-// TODO: free "free slabs" once there are a couple
 
 struct SpaceManager {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -379,14 +376,14 @@ impl SpaceManager {
 
     /// Creates a free slab of the requested order.
     fn create_free_slab<'s>(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
-                                -> Option<&'s mut Slab> {
+                            -> Option<&'s mut Slab> {
         let offset = self.tree.alloc(order)?;
         let ptr = self.offset_to_ptr_and_map(order, offset);
 
-        if unlikely!(ptr == null_mut()) {
+        if unlikely!(ptr.is_null()) {
             None
         } else {
-            let slab = unsafe { &mut *(ptr as *mut Slab) };
+            let slab = unsafe { &mut *(ptr as usize as *mut Slab) };
             slab.init(start_offset, slots_count, obj_size);
             Some(slab)
         }
@@ -494,20 +491,10 @@ impl Heap {
         63 - size.leading_zeros() as usize
     }
 
-    /// Allocate big.
-    fn alloc_big(&mut self, size: usize) -> *mut u8 {
-        self.space_manager.alloc_big(Self::size_to_order(size))
-    }
-
-    /// Deallocate big.
-    fn dealloc_big(&mut self, size: usize, ptr: *mut u8) {
-        self.space_manager.dealloc_big(Self::size_to_order(size), ptr)
-    }
-
     /// Allocate.
     pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
         if layout.size() > Self::BIG_THRESHOLD {
-            self.alloc_big(layout.size())
+            self.space_manager.alloc_big(Self::size_to_order(layout.size()))
         } else {
             self.caches.layout_to_cache(layout).alloc(&mut self.space_manager)
         }
@@ -516,7 +503,7 @@ impl Heap {
     /// Deallocate.
     pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
         if layout.size() > Self::BIG_THRESHOLD {
-            self.dealloc_big(layout.size(), ptr)
+            self.space_manager.dealloc_big(Self::size_to_order(layout.size()), ptr)
         } else {
             self.caches.layout_to_cache(layout).dealloc(&self.space_manager, ptr)
         }

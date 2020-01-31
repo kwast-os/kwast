@@ -2,6 +2,10 @@ use core::cmp::max;
 
 use crate::mm;
 use crate::arch::address::VirtAddr;
+use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
+use crate::mm::mapper::MemoryMapper;
+use crate::arch::x86_64::address::PhysAddr;
+use multiboot2::ElfSectionFlags;
 
 #[macro_use]
 pub mod macros;
@@ -30,14 +34,37 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let reserved_end = max(kernel_end, mboot_end);
     mm::pmm::get().init(&mboot_struct, reserved_end);
 
-    // TODO: map sections correctly
-    let sections = mboot_struct.elf_sections_tag().expect("no elf sections found");
-    for x in sections.sections() {
-        println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
+    // Map sections correctly
+    {
+        let mut mapping = ActiveMapping::get();
+        let sections = mboot_struct.elf_sections_tag().expect("no elf sections tag");
+        for x in sections.sections() {
+            if x.flags().is_empty() {
+                continue;
+            }
+
+            let mut paging_flags: EntryFlags = EntryFlags::PRESENT;
+
+            if x.flags().contains(ElfSectionFlags::WRITABLE) {
+                paging_flags |= EntryFlags::WRITABLE | EntryFlags::NX;
+            }
+
+            //println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
+
+            let start = VirtAddr::new(x.start_address() as usize).align_down();
+            mapping.map_range_physical(
+                start,
+                PhysAddr::new(start.as_usize()),
+                (x.end_address() - start.as_u64()) as usize, // No need for page alignment of size
+                paging_flags,
+            ).unwrap();
+        }
     }
 
+    let reserved_end = VirtAddr::new(reserved_end).align_up();
+
     #[cfg(not(feature = "integration-test"))]
-        crate::kernel_main(VirtAddr::new(reserved_end).align_up());
+        crate::kernel_main(reserved_end);
     #[cfg(feature = "integration-test")]
         {
             crate::tests::test_main();
@@ -46,7 +73,6 @@ pub extern "C" fn entry(mboot_addr: usize) {
 }
 
 /// Halt instruction. Waits for interrupt.
-#[allow(dead_code)]
 pub fn halt() {
     unsafe {
         asm!("hlt" :::: "volatile");

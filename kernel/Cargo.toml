@@ -18,10 +18,12 @@ test-heap-pointers = []
 
 [profile.dev]
 opt-level = 1
+panic = "abort"
 
 [profile.release]
 lto = true
 opt-level = 3
+panic = "abort"
 
 [dependencies]
 volatile = "^0.2.6"

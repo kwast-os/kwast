@@ -3,20 +3,20 @@ ENTRY(start)
 SECTIONS {
     . = 1M;
 
-    .rodata : {
+    .rodata BLOCK(4K) : ALIGN(4K) {
         KEEP(*(.mboot))
         *(.rodata .rodata.*)
     }
 
-    .text : {
+    .text BLOCK(4K) : ALIGN(4K) {
         *(.text .text.*)
     }
 
-    .data : {
+    .data BLOCK(4K) : ALIGN(4K) {
         *(.data .data.*)
     }
 
-    .bss : {
+    .bss BLOCK(4K) : ALIGN(4K) {
         *(.bss .bss.*)
     }
 

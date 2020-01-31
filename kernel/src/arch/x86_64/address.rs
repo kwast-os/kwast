@@ -154,7 +154,7 @@ impl VirtAddr {
 
     /// Aligns a memory address up.
     pub fn align_up(self) -> Self {
-        self.align_down() + PAGE_SIZE
+        VirtAddr(((self.0 - 1) & !(PAGE_SIZE - 1)) + PAGE_SIZE)
     }
 }
 

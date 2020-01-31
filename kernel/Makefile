@@ -5,7 +5,7 @@ BUILD ?= debug
 CARGOFLAGS ?=
 QEMUFLAGS ?=
 
-RUST_OBJECT = target/src/arch/$(ARCH)/target/$(BUILD)/libkernel.a
+RUST_OBJECT = target/$(ARCH)-kwast/$(BUILD)/libkernel.a
 LD_SCRIPT   = src/arch/$(ARCH)/link.ld
 KERNEL      = build/kernel-$(ARCH)
 ISO_FILES   = build/iso

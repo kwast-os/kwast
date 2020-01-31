@@ -9,10 +9,10 @@ use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::util::unchecked::UncheckedUnwrap;
 
-struct SpaceManager {
+struct SpaceManager<'t> {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
     /// Currently there is only one tree, but this can be extended in the future to use multiple.
-    tree: &'static mut Tree,
+    tree: &'t mut Tree,
     /// Allocation area start.
     alloc_area_start: VirtAddr,
 }
@@ -34,7 +34,7 @@ struct HeapCaches {
 /// The heap.
 struct Heap {
     /// Management for expansion and shrinking.
-    space_manager: SpaceManager,
+    space_manager: SpaceManager<'static>,
     /// Caches.
     caches: HeapCaches,
 }
@@ -102,6 +102,7 @@ struct Cache {
     color: u16,
     max_color: u16,
     slab_order: u8,
+    free_slab_count: u8,
 }
 
 impl Slab {
@@ -138,7 +139,7 @@ impl Slab {
     }
 
     /// Unlink from next slab.
-    pub fn unlink_from_next(&mut self) -> SlabLink {
+    fn unlink_from_next(&mut self) -> SlabLink {
         if self.next.is_some() {
             unsafe { self.next.unwrap().as_mut() }.prev = SlabLink(None);
             self.next.take()
@@ -148,7 +149,7 @@ impl Slab {
     }
 
     /// Allocate inside the slab.
-    pub fn alloc(&mut self) -> *mut u8 {
+    fn alloc(&mut self) -> *mut u8 {
         debug_assert!(!self.is_full());
 
         let allocated_offset = self.next_offset;
@@ -160,7 +161,7 @@ impl Slab {
 
     /// Deallocate inside the slab.
     #[allow(clippy::cast_ptr_alignment)]
-    pub fn dealloc(&mut self, ptr: *mut u8) {
+    fn dealloc(&mut self, ptr: *mut u8) {
         let allocated_offset = ptr as usize - self.self_ptr() as usize;
         debug_assert!(ptr as usize % 4 == 0);
         let allocated_offset_ptr = ptr as *mut u32;
@@ -170,7 +171,8 @@ impl Slab {
     }
 
     /// Is full?
-    pub fn is_full(&self) -> bool {
+    #[inline]
+    fn is_full(&self) -> bool {
         debug_assert!((self.next_offset == 0) == (self.free_count == 0));
         self.next_offset == 0
     }
@@ -189,6 +191,7 @@ impl Cache {
             color: 0,
             max_color,
             slab_order,
+            free_slab_count: 0,
         }
     }
 
@@ -223,14 +226,41 @@ impl Cache {
             }
         }
 
+        debug_assert!(slots_count > 1);
+
         let max_color = (best_wastage / alignment) * alignment;
         //println!("best_wastage: {}, max_color: {}", best_wastage, max_color);
 
         Cache::new(obj_size as u32, alignment as u32, max_color as u16, slab_rounded_up as u32, slots_count as u32, order as u8)
     }
 
+    /// Cleans up free slab(s).
+    fn cleanup_free_slab(&mut self, space_manager: &mut SpaceManager) {
+        debug_assert!(self.free_slab_count > 0);
+
+        // Find oldest in chain.
+        let mut oldest = unsafe {
+            let mut it = self.free;
+            while let SlabLink(Some(next)) = it.unwrap().as_ref().next {
+                it = SlabLink(Some(next));
+            }
+            it.unwrap()
+        };
+        let oldest = unsafe { oldest.as_mut() };
+
+        // Cleanup oldest
+        if unlikely!(oldest.prev.is_none()) {
+            // No previous, so must be the first one in the chain.
+            self.free = SlabLink(None);
+        } else {
+            unsafe { oldest.prev.unwrap().as_mut() }.next = SlabLink(None);
+        }
+        self.free_slab_count -= 1;
+        space_manager.free_slab(self.slab_order as usize, oldest);
+    }
+
     /// Create a new slab and allocate from there.
-    fn alloc_new_slab(&mut self, heap: &mut SpaceManager) -> *mut u8 {
+    fn alloc_new_slab(&mut self, space_manager: &mut SpaceManager) -> *mut u8 {
         let start_offset = self.start_offset + self.color as u32;
         self.color += self.alignment as u16;
         if self.color > self.max_color {
@@ -238,7 +268,7 @@ impl Cache {
         }
 
         // Create a new slab to allocate from. This will become a partial slab.
-        if let Some(slab) = heap.create_free_slab(self.slab_order as usize, start_offset, self.slots_count, self.obj_size) {
+        if let Some(slab) = space_manager.create_free_slab(self.slab_order as usize, start_offset, self.slots_count, self.obj_size) {
             let result = slab.alloc();
 
             // There were no partial or free slabs, otherwise we would've allocated from there.
@@ -251,7 +281,7 @@ impl Cache {
     }
 
     /// Allocate.
-    fn alloc(&mut self, heap: &mut SpaceManager) -> *mut u8 {
+    fn alloc(&mut self, space_manager: &mut SpaceManager) -> *mut u8 {
         /*
          * Try to allocate from partial slabs first.
          * If there are none, try the free slabs.
@@ -283,21 +313,22 @@ impl Cache {
             // Since this now holds an object, this became a partial slab.
             // We also know there are no partial slabs atm, because we always try partials first.
             self.free = slab.unlink_from_next();
+            self.free_slab_count -= 1;
             self.partial = SlabLink(NonNull::new(slab));
 
             result
         } else {
-            self.alloc_new_slab(heap)
+            self.alloc_new_slab(space_manager)
         }
     }
 
     /// Deallocate.
-    fn dealloc(&mut self, heap: &SpaceManager, ptr: *mut u8) {
+    fn dealloc(&mut self, space_manager: &mut SpaceManager, ptr: *mut u8) {
         // First, figure out which slab it was from.
         // The slab is aligned at a multiple of 2^order pages.
-        let offset = ptr as usize - heap.alloc_area_start.as_usize();
+        let offset = ptr as usize - space_manager.alloc_area_start.as_usize();
         let alignment = PAGE_SIZE << self.slab_order as usize;
-        let slab_addr = heap.alloc_area_start.as_usize() + (offset & !(alignment - 1));
+        let slab_addr = space_manager.alloc_area_start.as_usize() + (offset & !(alignment - 1));
         let slab = unsafe { &mut *(slab_addr as *mut Slab) };
         let old_free_count = slab.free_count;
 
@@ -328,18 +359,24 @@ impl Cache {
                 }
                 slab.next = self.free;
                 self.free = SlabLink(NonNull::new(slab));
+                self.free_slab_count += 1;
+
+                if self.free_slab_count >= 2 {
+                    self.cleanup_free_slab(space_manager);
+                }
             }
         }
     }
 }
 
-impl SpaceManager {
+impl<'t> SpaceManager<'t> {
     /// Creates a new manager.
     fn new(tree_location: VirtAddr) -> Self {
         // Map space for the tree
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
         let mut mapping = ActiveMapping::get();
-        mapping.map_range(tree_location, size_of::<Tree>(), flags).unwrap();
+        mapping.map_range(tree_location, size_of::<Tree>(), flags)
+            .expect("cannot map range for tree");
 
         // Create the tree
         let tree = unsafe { &mut *(tree_location.as_usize() as *mut Tree) };
@@ -387,6 +424,12 @@ impl SpaceManager {
             slab.init(start_offset, slots_count, obj_size);
             Some(slab)
         }
+    }
+
+    /// Free the slab.
+    fn free_slab(&mut self, order: usize, slab: &mut Slab) {
+        let ptr = slab as *mut Slab as *mut u8;
+        self.ptr_unmap(order, ptr);
     }
 
     /// Allocate big chunk.
@@ -455,6 +498,8 @@ impl HeapCaches {
 }
 
 impl Heap {
+    /// Threshold for big allocations.
+    /// Sizes above this will use the big allocator.
     const BIG_THRESHOLD: usize = 8192;
 
     /// Creates a new heap.
@@ -505,18 +550,16 @@ impl Heap {
         if layout.size() > Self::BIG_THRESHOLD {
             self.space_manager.dealloc_big(Self::size_to_order(layout.size()), ptr)
         } else {
-            self.caches.layout_to_cache(layout).dealloc(&self.space_manager, ptr)
+            self.caches.layout_to_cache(layout).dealloc(&mut self.space_manager, ptr)
         }
     }
 }
 
 unsafe impl GlobalAlloc for LockedHeap {
-    #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         self.inner.lock().as_mut().unchecked_unwrap().alloc(layout)
     }
 
-    #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.inner.lock().as_mut().unchecked_unwrap().dealloc(ptr, layout)
     }

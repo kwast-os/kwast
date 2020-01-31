@@ -53,18 +53,12 @@ make iso BUILD=release # (or run)
 ./run_tests
 ```
 
-The `wasm_test` folder is just a normal rust project and can be run using
-```bash
-cargo run
-```
-
 ### Contributing
 Interested in contributing to the project? Check the issues for TODO items.
 
 ## Goals
 
 ### Short-term goals
-* Finish physical frame allocator + paging + heap
 * Getting some simple wasm running
 * Simple PS/2 server & similar small servers
 * SMP

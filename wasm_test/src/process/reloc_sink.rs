@@ -22,6 +22,10 @@ impl binemit::RelocSink for RelocSink {
         println!("reloc_external: {:?} {:?} {:?} {:?}", code_offset, reloc, name, addend);
     }
 
+    fn reloc_constant(&mut self, _: u32, _: Reloc, _: u32) {
+        unimplemented!()
+    }
+
     fn reloc_jt(&mut self, _: u32, _: Reloc, _: JumpTable) {
         unimplemented!()
     }

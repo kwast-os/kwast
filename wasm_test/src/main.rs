@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::prelude::*;
 
-use cranelift_codegen::binemit::NullTrapSink;
+use cranelift_codegen::binemit::{NullTrapSink, NullStackmapSink};
 use cranelift_codegen::Context;
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_native;
@@ -24,14 +24,14 @@ fn main() {
     let mut flag_builder = settings::builder();
 
     // Flags
-    flag_builder.set("opt_level", "best").unwrap(); // default, best, fastest
+    flag_builder.set("opt_level", "speed_and_size").unwrap();
 
     let flags = settings::Flags::new(flag_builder);
     let isa = isa_builder.finish(flags);
 
     // Translate
     let mut env = ModuleEnv::new(isa.frontend_config());
-    translate_module(&buffer, &mut env).unwrap();
+    let mut translation = translate_module(&buffer, &mut env).unwrap();
 
     for i in 0..=0 {
         //
@@ -39,19 +39,22 @@ fn main() {
         let mut ctx = Context::new(); // TODO: compile_and_emit -> emit_to_memory
         let mut reloc_sink = RelocSink::new();
         let mut trap_sink = NullTrapSink {};
+        let mut null_stackmap_sink = NullStackmapSink {};
 
         ctx.func.signature = env.signatures[i].clone(); // TODO: idx, clone?
 
         let mut func_trans = FuncTranslator::new();
         func_trans
             .translate(
+                &mut translation,
                 &env.func_bodies[i],
+                0,
                 &mut ctx.func,
                 &mut FuncEnv::new(&env),
             )
             .unwrap();
 
-        ctx.compile_and_emit(&*isa, &mut mem, &mut reloc_sink, &mut trap_sink)
+        ctx.compile_and_emit(&*isa, &mut mem, &mut reloc_sink, &mut trap_sink, &mut null_stackmap_sink)
             .unwrap();
 
         println!("-----------------");

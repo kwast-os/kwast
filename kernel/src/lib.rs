@@ -41,7 +41,7 @@ fn panic(info: &PanicInfo) -> ! {
 /// Kernel main, called after arch init is done.
 #[cfg(not(feature = "integration-test"))]
 pub fn kernel_main(reserved_end: VirtAddr) {
-    println!("entered kernel_main");
+    println!("entered kernel_main, reserved_end: {:?}", reserved_end);
 
     // May only be called once.
     unsafe { mm::init(reserved_end); }

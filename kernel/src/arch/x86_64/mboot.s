@@ -91,8 +91,8 @@ start:
     movl $(1 << (63 - 32)), boot_pml4 + 511 * 8 + 4 // NX-bit
 
     // Identity map the first 4MiB (except page 0)
-    mov $0x2003, %esi
-    mov $(boot_pml1_1 + 8 * 2), %edi // Continues to boot_pml1_2
+    mov $0x1003, %esi
+    mov $(boot_pml1_1 + 8 * 1), %edi // Continues to boot_pml1_2
     mov $(511 + 512), %ecx
 1:
     mov %esi, (%edi)

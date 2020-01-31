@@ -31,10 +31,10 @@ pub extern "C" fn entry(mboot_addr: usize) {
     mm::pmm::get().init(&mboot_struct, reserved_end);
 
     // TODO: map sections correctly
-    /*let sections = mboot_struct.elf_sections_tag().expect("no elf sections found");
+    let sections = mboot_struct.elf_sections_tag().expect("no elf sections found");
     for x in sections.sections() {
         println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
-    }*/
+    }
 
     #[cfg(not(feature = "integration-test"))]
         crate::kernel_main(VirtAddr::new(reserved_end).align_up());

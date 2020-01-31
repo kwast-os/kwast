@@ -30,7 +30,7 @@ pub fn test() {
 
     // Translate
     let mut env = ModuleEnv::new(isa.frontend_config());
-    let mut translation = translate_module(&buffer, &mut env).unwrap();
+    let translation = translate_module(&buffer, &mut env).unwrap();
 
     for i in 0..=0 {
         //
@@ -45,7 +45,7 @@ pub fn test() {
         let mut func_trans = FuncTranslator::new();
         func_trans
             .translate(
-                &mut translation,
+                &translation,
                 &env.func_bodies[i],
                 0,
                 &mut ctx.func,

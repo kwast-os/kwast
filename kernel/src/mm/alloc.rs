@@ -354,8 +354,8 @@ impl SpaceManager {
         }
     }
 
-    /// Converts an offset to a mapped pointer.
-    fn offset_to_mapped_ptr(&mut self, order: usize, offset: usize) -> *mut u8 {
+    /// Converts an offset to a pointer and map the area.
+    fn offset_to_ptr_and_map(&mut self, order: usize, offset: usize) -> *mut u8 {
         let addr = self.alloc_area_start + offset * PAGE_SIZE;
         let size = PAGE_SIZE << order;
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
@@ -368,11 +368,20 @@ impl SpaceManager {
         }
     }
 
+    /// Unmaps the area assigned to the pointer.
+    fn ptr_unmap(&mut self, order: usize, ptr: *mut u8) {
+        let offset = (ptr as usize - self.alloc_area_start.as_usize()) / PAGE_SIZE;
+        self.tree.dealloc(offset);
+
+        let size = PAGE_SIZE << order;
+        ActiveMapping::get().unmap_range(VirtAddr::new(ptr as usize), size);
+    }
+
     /// Creates a free slab of the requested order.
     fn create_free_slab<'s>(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
                                 -> Option<&'s mut Slab> {
         let offset = self.tree.alloc(order)?;
-        let ptr = self.offset_to_mapped_ptr(order, offset);
+        let ptr = self.offset_to_ptr_and_map(order, offset);
 
         if unlikely!(ptr == null_mut()) {
             None
@@ -385,12 +394,12 @@ impl SpaceManager {
 
     /// Allocate big chunk.
     fn alloc_big(&mut self, order: usize) -> *mut u8 {
-        self.tree.alloc(order).map_or(null_mut(), |offset| self.offset_to_mapped_ptr(order, offset))
+        self.tree.alloc(order).map_or(null_mut(), |offset| self.offset_to_ptr_and_map(order, offset))
     }
 
     /// Deallocate big chunk.
     fn dealloc_big(&mut self, order: usize, ptr: *mut u8) {
-        unimplemented!()
+        self.ptr_unmap(order, ptr)
     }
 }
 

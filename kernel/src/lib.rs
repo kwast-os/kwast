@@ -56,6 +56,10 @@ pub fn kernel_main(reserved_end: VirtAddr) {
         vec.push(i);
     }
     assert_eq!(vec.iter().sum::<u64>(), (n - 1) * n / 2);*/
+    {
+    let mut vec: Vec<i8> = Vec::new();
+    vec.reserve(8193);
+    println!("{:?}", vec.as_mut_ptr());}
     let mut vec: Vec<i8> = Vec::new();
     vec.reserve(8193);
     println!("{:?}", vec.as_mut_ptr());

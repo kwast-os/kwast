@@ -50,12 +50,15 @@ pub fn kernel_main(reserved_end: VirtAddr) {
     // TEST
     let test = Box::new([1, 2, 3]);
     println!("{:?}", test);
-    let n = 1000;
+    /*let n = 1000;
     let mut vec = Vec::new();
     for i in 0..n {
         vec.push(i);
     }
-    assert_eq!(vec.iter().sum::<u64>(), (n - 1) * n / 2);
+    assert_eq!(vec.iter().sum::<u64>(), (n - 1) * n / 2);*/
+    let mut vec: Vec<i8> = Vec::new();
+    vec.reserve(8193);
+    println!("{:?}", vec.as_mut_ptr());
 }
 
 #[lang = "eh_personality"]

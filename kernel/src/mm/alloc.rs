@@ -12,7 +12,7 @@ use core::cmp;
 
 // TODO: free "free slabs" once there are a couple
 
-struct HeapManager {
+struct SpaceManager {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
     /// Currently there is only one tree, but this can be extended in the future to use multiple.
     tree: &'static mut Tree,
@@ -36,8 +36,8 @@ struct HeapCaches {
 
 /// The heap.
 struct Heap {
-    /// Heap management for expansion and shrinking.
-    manager: HeapManager,
+    /// Management for expansion and shrinking.
+    space_manager: SpaceManager,
     /// Caches.
     caches: HeapCaches,
 }
@@ -233,7 +233,7 @@ impl Cache {
     }
 
     /// Create a new slab and allocate from there.
-    fn alloc_new_slab(&mut self, heap: &mut HeapManager) -> *mut u8 {
+    fn alloc_new_slab(&mut self, heap: &mut SpaceManager) -> *mut u8 {
         let start_offset = self.start_offset + self.color as u32;
         self.color += self.alignment as u16;
         if self.color > self.max_color {
@@ -254,7 +254,7 @@ impl Cache {
     }
 
     /// Allocate.
-    fn alloc(&mut self, heap: &mut HeapManager) -> *mut u8 {
+    fn alloc(&mut self, heap: &mut SpaceManager) -> *mut u8 {
         /*
          * Try to allocate from partial slabs first.
          * If there are none, try the free slabs.
@@ -295,7 +295,7 @@ impl Cache {
     }
 
     /// Deallocate.
-    fn dealloc(&mut self, heap: &HeapManager, ptr: *mut u8) {
+    fn dealloc(&mut self, heap: &SpaceManager, ptr: *mut u8) {
         // First, figure out which slab it was from.
         // The slab is aligned at a multiple of 2^order pages.
         let offset = ptr as usize - heap.alloc_area_start.as_usize();
@@ -336,9 +336,9 @@ impl Cache {
     }
 }
 
-impl HeapManager {
+impl SpaceManager {
     /// Creates a new manager.
-    pub fn new(tree_location: VirtAddr) -> Self {
+    fn new(tree_location: VirtAddr) -> Self {
         // Map space for the tree
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
         let mut mapping = ActiveMapping::get();
@@ -354,22 +354,43 @@ impl HeapManager {
         }
     }
 
-    /// Creates a free slab of the requested order.
-    pub fn create_free_slab<'s>(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
-                                -> Option<&'s mut Slab> {
-        let offset = self.tree.alloc(order)?;
+    /// Converts an offset to a mapped pointer.
+    fn offset_to_mapped_ptr(&mut self, order: usize, offset: usize) -> *mut u8 {
         let addr = self.alloc_area_start + offset * PAGE_SIZE;
         let size = PAGE_SIZE << order;
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
         if unlikely!(ActiveMapping::get().map_range(addr, size, flags).is_err()) {
             self.tree.dealloc(offset);
+            null_mut()
+        } else {
+            addr.as_usize() as *mut u8
+        }
+    }
+
+    /// Creates a free slab of the requested order.
+    fn create_free_slab<'s>(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
+                                -> Option<&'s mut Slab> {
+        let offset = self.tree.alloc(order)?;
+        let ptr = self.offset_to_mapped_ptr(order, offset);
+
+        if unlikely!(ptr == null_mut()) {
             None
         } else {
-            let slab = unsafe { &mut *(addr.as_usize() as *mut Slab) };
+            let slab = unsafe { &mut *(ptr as *mut Slab) };
             slab.init(start_offset, slots_count, obj_size);
             Some(slab)
         }
+    }
+
+    /// Allocate big chunk.
+    fn alloc_big(&mut self, order: usize) -> *mut u8 {
+        self.tree.alloc(order).map_or(null_mut(), |offset| self.offset_to_mapped_ptr(order, offset))
+    }
+
+    /// Deallocate big chunk.
+    fn dealloc_big(&mut self, order: usize, ptr: *mut u8) {
+        unimplemented!()
     }
 }
 
@@ -428,10 +449,12 @@ impl HeapCaches {
 }
 
 impl Heap {
+    const BIG_THRESHOLD: usize = 8192;
+
     /// Creates a new heap.
     pub fn new(tree_location: VirtAddr) -> Self {
         Heap {
-            manager: HeapManager::new(tree_location),
+            space_manager: SpaceManager::new(tree_location),
             caches: HeapCaches {
                 cache32: Cache::calculate_and_create(32, 32),
                 cache64: Cache::calculate_and_create(64, 64),
@@ -446,18 +469,48 @@ impl Heap {
         }
     }
 
+    /// Converts a size to an order.
+    fn size_to_order(size: usize) -> usize {
+        let mut size = size / PAGE_SIZE;
+
+        size -= 1;
+        size |= size >> 1;
+        size |= size >> 2;
+        size |= size >> 4;
+        size |= size >> 8;
+        size |= size >> 16;
+        size |= size >> 32;
+        size += 1;
+
+        63 - size.leading_zeros() as usize
+    }
+
+    /// Allocate big.
+    fn alloc_big(&mut self, size: usize) -> *mut u8 {
+        self.space_manager.alloc_big(Self::size_to_order(size))
+    }
+
+    /// Deallocate big.
+    fn dealloc_big(&mut self, size: usize, ptr: *mut u8) {
+        self.space_manager.dealloc_big(Self::size_to_order(size), ptr)
+    }
+
     /// Allocate.
     pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
-        // TODO: big allocations
-
-        self.caches.layout_to_cache(layout).alloc(&mut self.manager)
+        if layout.size() > Self::BIG_THRESHOLD {
+            self.alloc_big(layout.size())
+        } else {
+            self.caches.layout_to_cache(layout).alloc(&mut self.space_manager)
+        }
     }
 
     /// Deallocate.
     pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
-        // TODO: big deallocations
-
-        self.caches.layout_to_cache(layout).dealloc(&self.manager, ptr)
+        if layout.size() > Self::BIG_THRESHOLD {
+            self.dealloc_big(layout.size(), ptr)
+        } else {
+            self.caches.layout_to_cache(layout).dealloc(&self.space_manager, ptr)
+        }
     }
 }
 

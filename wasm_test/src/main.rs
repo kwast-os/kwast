@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::prelude::*;
-
 use cranelift_codegen::binemit::{NullTrapSink, NullStackmapSink};
 use cranelift_codegen::Context;
 use cranelift_codegen::settings::{self, Configurable};
@@ -61,12 +58,7 @@ fn main() {
             .unwrap();
 
         println!("-----------------");
-        println!("-----------------");
-        println!("-----------------");
         println!("survived: {:?}", mem);
         println!("{:?}", ctx.func);
-
-        let mut of = File::create("output").expect("Unable to create output file");
-        of.write(&mem).unwrap();
     }
 }

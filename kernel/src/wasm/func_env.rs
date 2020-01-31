@@ -1,9 +1,9 @@
 use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir::{ExternalName, ExtFuncData, FuncRef, Function, Heap, Inst, SigRef, Table, Value};
+use cranelift_codegen::ir::{ExternalName, ExtFuncData, FuncRef, Function, Heap, Inst, SigRef, Value, Table};
 use cranelift_wasm::{FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex, WasmError, FuncEnvironment, TargetEnvironment, WasmResult};
 
-use crate::process::module_env::ModuleEnv;
 use cranelift_codegen::isa::TargetFrontendConfig;
+use crate::wasm::module_env::ModuleEnv;
 
 // TODO: private?
 
@@ -36,7 +36,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         unimplemented!()
     }
 
-    fn make_table(&mut self, _func: &mut Function, _index: TableIndex) -> WasmResult<Table> {
+    fn make_table(&mut self, _func: &mut Function, _index: TableIndex) -> Result<Table, WasmError> {
         unimplemented!()
     }
 
@@ -90,7 +90,23 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         unimplemented!()
     }
 
+    fn translate_table_grow(&mut self, _pos: FuncCursor, _table_index: u32, _delta: Value, _init_value: Value) -> Result<Value, WasmError> {
+        unimplemented!()
+    }
+
+    fn translate_table_get(&mut self, _pos: FuncCursor, _table_index: u32, _index: Value) -> Result<Value, WasmError> {
+        unimplemented!()
+    }
+
+    fn translate_table_set(&mut self, _pos: FuncCursor, _table_index: u32, _value: Value, _index: Value) -> Result<(), WasmError> {
+        unimplemented!()
+    }
+
     fn translate_table_copy(&mut self, _pos: FuncCursor, _dst_table_index: TableIndex, _dst_table: Table, _src_table_index: TableIndex, _src_table: Table, _dst: Value, _src: Value, _len: Value) -> Result<(), WasmError> {
+        unimplemented!()
+    }
+
+    fn translate_table_fill(&mut self, _pos: FuncCursor, _table_index: u32, _dst: Value, _val: Value, _len: Value) -> Result<(), WasmError> {
         unimplemented!()
     }
 
@@ -99,6 +115,18 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     }
 
     fn translate_elem_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> Result<(), WasmError> {
+        unimplemented!()
+    }
+
+    fn translate_ref_func(&mut self, _pos: FuncCursor, _func_index: u32) -> Result<Value, WasmError> {
+        unimplemented!()
+    }
+
+    fn translate_custom_global_get(&mut self, _pos: FuncCursor, _global_index: GlobalIndex) -> Result<Value, WasmError> {
+        unimplemented!()
+    }
+
+    fn translate_custom_global_set(&mut self, _pos: FuncCursor, _global_index: GlobalIndex, _val: Value) -> Result<(), WasmError> {
         unimplemented!()
     }
 }

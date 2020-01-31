@@ -2,6 +2,8 @@ use cranelift_codegen::ir::Signature;
 use cranelift_codegen::isa;
 use cranelift_wasm::{FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex, WasmError, TargetEnvironment, ModuleEnvironment, WasmResult, ModuleTranslationState};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use alloc::vec::Vec;
+use alloc::boxed::Box;
 
 // TODO: make things private again
 

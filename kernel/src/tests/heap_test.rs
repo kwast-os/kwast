@@ -5,7 +5,7 @@ use crate::arch::x86_64::paging::PAGE_SIZE;
 
 fn init() {
     unsafe {
-        crate::mm::init(VirtAddr::new(0x200_000));
+        crate::mm::init(VirtAddr::new(16 * 0x200_000));
     }
 }
 

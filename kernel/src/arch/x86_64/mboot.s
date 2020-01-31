@@ -52,7 +52,9 @@ boot_pml3:
 .skip 0x1000
 boot_pml2:
 .skip 0x1000
-boot_pml1:
+boot_pml1_1:
+.skip 0x1000
+boot_pml1_2:
 .skip 0x1000
 
 .section .text
@@ -78,20 +80,20 @@ start:
     movl $(2 << (52 - 32)), boot_pml4 + 0 * 8 + 4 // Used entry count
     movl $(boot_pml2 + 0x3), boot_pml3 + 0 * 8
     movl $(1 << (52 - 32)), boot_pml3 + 0 * 8 + 4 // Used entry count
-    movl $(boot_pml1 + 0x3), boot_pml2 + 0 * 8
-    movl $(1 << (52 - 32)), boot_pml2 + 0 * 8 + 4 // Used entry count
-    movl $(510 << (52 - 32)), boot_pml1 + 0 * 8 + 4 // Used entry count
+    movl $(boot_pml1_1 + 0x3), boot_pml2 + 0 * 8
+    movl $(boot_pml1_2 + 0x3), boot_pml2 + 1 * 8
+    movl $(2 << (52 - 32)), boot_pml2 + 0 * 8 + 4 // Used entry count
+    movl $(511 << (52 - 32)), boot_pml1_1 + 0 * 8 + 4 // Used entry count
+    movl $(512 << (52 - 32)), boot_pml1_2 + 0 * 8 + 4 // Used entry count
 
     // Recursive map
     movl $(boot_pml4 + 0x3), boot_pml4 + 511 * 8
     movl $(1 << (63 - 32)), boot_pml4 + 511 * 8 + 4 // NX-bit
 
-    // Identity map the first 2MiB (except page 0)
-    // TODO: should map sections with correct executable & R/W flags, we could do this in asm by using linker variables
-    //       instead of doing it in the rust side, so we don't have to map twice
+    // Identity map the first 4MiB (except page 0)
     mov $0x2003, %esi
-    mov $(boot_pml1 + 8 * 2), %edi
-    mov $510, %ecx
+    mov $(boot_pml1_1 + 8 * 2), %edi // Continues to boot_pml1_2
+    mov $(511 + 512), %ecx
 1:
     mov %esi, (%edi)
     add $0x1000, %esi

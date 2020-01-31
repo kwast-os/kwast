@@ -23,6 +23,7 @@ mod macros;
 mod arch;
 mod mm;
 mod util;
+mod wasm;
 #[cfg(feature = "integration-test")]
 mod tests;
 
@@ -44,6 +45,9 @@ pub fn kernel_main(reserved_end: VirtAddr) {
 
     // May only be called once.
     unsafe { mm::init(reserved_end); }
+
+    // Test
+    wasm::main::test();
 }
 
 #[lang = "eh_personality"]

@@ -25,22 +25,22 @@ impl<'m, 'data> TargetEnvironment for FuncEnv<'m, 'data> {
 }
 
 impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
-    fn make_global(&mut self, func: &mut Function, index: GlobalIndex) -> WasmResult<GlobalVariable> {
+    fn make_global(&mut self, _func: &mut Function, _index: GlobalIndex) -> WasmResult<GlobalVariable> {
         unimplemented!()
     }
 
-    fn make_heap(&mut self, func: &mut Function, index: MemoryIndex) -> WasmResult<Heap> {
+    fn make_heap(&mut self, _func: &mut Function, index: MemoryIndex) -> WasmResult<Heap> {
         let mem = self.module_env.get_mem(index);
         println!("{:?}", mem);
 
         unimplemented!()
     }
 
-    fn make_table(&mut self, func: &mut Function, index: TableIndex) -> WasmResult<Table> {
+    fn make_table(&mut self, _func: &mut Function, _index: TableIndex) -> WasmResult<Table> {
         unimplemented!()
     }
 
-    fn make_indirect_sig(&mut self, func: &mut Function, index: SignatureIndex) -> WasmResult<SigRef> {
+    fn make_indirect_sig(&mut self, _func: &mut Function, _index: SignatureIndex) -> WasmResult<SigRef> {
         unimplemented!()
     }
 
@@ -57,11 +57,11 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         }))
     }
 
-    fn translate_call_indirect(&mut self, pos: FuncCursor, table_index: TableIndex, table: Table, sig_index: SignatureIndex, sig_ref: SigRef, callee: Value, call_args: &[Value]) -> Result<Inst, WasmError> {
+    fn translate_call_indirect(&mut self, _pos: FuncCursor, _table_index: TableIndex, _table: Table, _sig_index: SignatureIndex, _sig_ref: SigRef, _callee: Value, _call_args: &[Value]) -> Result<Inst, WasmError> {
         unimplemented!()
     }
 
-    fn translate_memory_grow(&mut self, pos: FuncCursor, index: MemoryIndex, heap: Heap, val: Value) -> Result<Value, WasmError> {
+    fn translate_memory_grow(&mut self, _pos: FuncCursor, _index: MemoryIndex, _heap: Heap, _val: Value) -> Result<Value, WasmError> {
         unimplemented!()
     }
 
@@ -70,35 +70,35 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         unimplemented!()
     }
 
-    fn translate_memory_copy(&mut self, pos: FuncCursor, index: MemoryIndex, heap: Heap, dst: Value, src: Value, len: Value) -> Result<(), WasmError> {
+    fn translate_memory_copy(&mut self, _pos: FuncCursor, _index: MemoryIndex, _heap: Heap, _dst: Value, _src: Value, _len: Value) -> Result<(), WasmError> {
         unimplemented!()
     }
 
-    fn translate_memory_fill(&mut self, pos: FuncCursor, index: MemoryIndex, heap: Heap, dst: Value, val: Value, len: Value) -> Result<(), WasmError> {
+    fn translate_memory_fill(&mut self, _pos: FuncCursor, _index: MemoryIndex, _heap: Heap, _dst: Value, _val: Value, _len: Value) -> Result<(), WasmError> {
         unimplemented!()
     }
 
-    fn translate_memory_init(&mut self, pos: FuncCursor, index: MemoryIndex, heap: Heap, seg_index: u32, dst: Value, src: Value, len: Value) -> Result<(), WasmError> {
+    fn translate_memory_init(&mut self, _pos: FuncCursor, _index: MemoryIndex, _heap: Heap, _seg_index: u32, _dst: Value, _src: Value, _len: Value) -> Result<(), WasmError> {
         unimplemented!()
     }
 
-    fn translate_data_drop(&mut self, pos: FuncCursor, seg_index: u32) -> Result<(), WasmError> {
+    fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> Result<(), WasmError> {
         unimplemented!()
     }
 
-    fn translate_table_size(&mut self, pos: FuncCursor, index: TableIndex, table: Table) -> Result<Value, WasmError> {
+    fn translate_table_size(&mut self, _pos: FuncCursor, _index: TableIndex, _table: Table) -> Result<Value, WasmError> {
         unimplemented!()
     }
 
-    fn translate_table_copy(&mut self, pos: FuncCursor, dst_table_index: TableIndex, dst_table: Table, src_table_index: TableIndex, src_table: Table, dst: Value, src: Value, len: Value) -> Result<(), WasmError> {
+    fn translate_table_copy(&mut self, _pos: FuncCursor, _dst_table_index: TableIndex, _dst_table: Table, _src_table_index: TableIndex, _src_table: Table, _dst: Value, _src: Value, _len: Value) -> Result<(), WasmError> {
         unimplemented!()
     }
 
-    fn translate_table_init(&mut self, pos: FuncCursor, seg_index: u32, table_index: TableIndex, table: Table, dst: Value, src: Value, len: Value) -> Result<(), WasmError> {
+    fn translate_table_init(&mut self, _pos: FuncCursor, _seg_index: u32, _table_index: TableIndex, _table: Table, _dst: Value, _src: Value, _len: Value) -> Result<(), WasmError> {
         unimplemented!()
     }
 
-    fn translate_elem_drop(&mut self, pos: FuncCursor, seg_index: u32) -> Result<(), WasmError> {
+    fn translate_elem_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> Result<(), WasmError> {
         unimplemented!()
     }
 }

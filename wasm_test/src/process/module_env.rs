@@ -58,22 +58,22 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
 
     fn declare_func_import(
         &mut self,
-        sig_index: SignatureIndex,
-        module: &'data str,
-        field: &'data str,
+        _sig_index: SignatureIndex,
+        _module: &'data str,
+        _field: &'data str,
     ) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str) -> WasmResult<()> {
+    fn declare_table_import(&mut self, _table: Table, _module: &'data str, _field: &'data str) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str) -> WasmResult<()> {
+    fn declare_memory_import(&mut self, _memory: Memory, _module: &'data str, _field: &'data str) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str) -> WasmResult<()> {
+    fn declare_global_import(&mut self, _global: Global, _module: &'data str, _field: &'data str) -> WasmResult<()> {
         unimplemented!()
     }
 
@@ -82,7 +82,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
-    fn declare_table(&mut self, table: Table) -> WasmResult<()> {
+    fn declare_table(&mut self, _table: Table) -> WasmResult<()> {
         unimplemented!()
     }
 
@@ -91,24 +91,24 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
-    fn declare_global(&mut self, global: Global) -> WasmResult<()> {
+    fn declare_global(&mut self, _global: Global) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+    fn declare_func_export(&mut self, _func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
         println!("declare func export: {}", name);
         Ok(())
     }
 
-    fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str) -> WasmResult<()> {
+    fn declare_table_export(&mut self, _table_index: TableIndex, _name: &'data str) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str) -> WasmResult<()> {
+    fn declare_memory_export(&mut self, _memory_index: MemoryIndex, _name: &'data str) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str) -> WasmResult<()> {
+    fn declare_global_export(&mut self, _global_index: GlobalIndex, _name: &'data str) -> WasmResult<()> {
         unimplemented!()
     }
 
@@ -119,19 +119,19 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
 
     fn declare_table_elements(
         &mut self,
-        table_index: TableIndex,
-        base: Option<GlobalIndex>,
-        offset: usize,
-        elements: Box<[FuncIndex]>,
+        _table_index: TableIndex,
+        _base: Option<GlobalIndex>,
+        _offset: usize,
+        _elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
         unimplemented!()
     }
 
     fn define_function_body(
         &mut self,
-        module_translation_state: &ModuleTranslationState,
+        _module_translation_state: &ModuleTranslationState,
         body_bytes: &'data [u8],
-        body_offset: usize,
+        _body_offset: usize, // TODO
     ) -> Result<(), WasmError> {
         // We could also compile now, but that means we need to keep the IR representation in memory
         // until we can use them. Storing the function bodies reference is cheaper now because the
@@ -142,10 +142,10 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
 
     fn declare_data_initialization(
         &mut self,
-        memory_index: MemoryIndex,
-        base: Option<GlobalIndex>,
-        offset: usize,
-        data: &'data [u8],
+        _memory_index: MemoryIndex,
+        _base: Option<GlobalIndex>,
+        _offset: usize,
+        _data: &'data [u8],
     ) -> WasmResult<()> {
         unimplemented!()
     }

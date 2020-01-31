@@ -10,10 +10,6 @@ Since WebAssembly was designed to be a safe language, we can run it **without** 
 You can read more about "[Why a microkernel?](#history-aka-why-a-microkernel)" below.
 Check out the [goals / ideas](#goals) section.
 
-### Status
-Currently there are two folders: `kernel` and `wasm_test`. The `wasm_test` folder contains a normal rust project, meant for my experimenting with [Cranelift](https://github.com/CraneStation/cranelift). Eventually, the work in `wasm_test` will be merged into the kernel itself.
-
-
 ## Getting Started
 
 These instructions help you get started with building the source and getting it to run.
@@ -70,13 +66,15 @@ Interested in contributing to the project? Check the issues for TODO items.
 
 ## Built With
 
-* [Cranelift](https://github.com/CraneStation/cranelift) - Code generator used to parse & run WebAssembly
+* [Cranelift](https://github.com/bytecodealliance/cranelift) - Code generator used to parse & run WebAssembly
+
+Kwast uses a fork of cranelift to let it work in a no_std environment.
 
 ## History (aka why a microkernel?)
 
 Because we run a safe language as "userspace", we don't need all those hardware protections that would otherwise slow down a microkernel. I always found the *design* and *flexibility* of a microkernel very interesting, but was bothered by the performance impact and how hard it is to integrate it with (for example) POSIX and make it performant. Another idea is that, since we compile the wasm at application start, we could do some very platform-specific optimisations.
 
-I originally started with a C++ microkernel, but found the **performance overhead** of doing things securely annoying. Then I stumbled across about [Cranelift](https://github.com/CraneStation/cranelift) and got the idea of bringing it into my kernel. However, since my kernel was C++, it was hard to do. This is why I decided to switch to Rust.
+I originally started with a C++ microkernel, but found the **performance overhead** of doing things securely annoying. Then I stumbled across about [Cranelift](https://github.com/bytecodealliance/cranelift) and got the idea of bringing it into my kernel. However, since my kernel was C++, it was hard to do. This is why I decided to switch to Rust.
 
 ## Similar projects
 * [Nebulet](https://github.com/nebulet/nebulet) - A microkernel that implements a WebAssembly "usermode" that runs in Ring 0

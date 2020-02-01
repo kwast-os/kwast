@@ -66,8 +66,7 @@ Interested in contributing to the project? Check the issues for TODO items.
 
 ## Built With
 
-* [Cranelift](https://github.com/bytecodealliance/cranelift) - Code generator used to parse & run WebAssembly
-Kwast uses a fork of Cranelift to let it work in a no_std environment.
+* [Cranelift](https://github.com/bytecodealliance/cranelift) - Code generator used to parse & run WebAssembly. Kwast uses a fork of Cranelift to let it work in a no_std environment.
 
 * To integrate Cranelift, [wasmtime](https://github.com/bytecodealliance/wasmtime/) has been used as a reference implementation, which is licensed under the [Apache License 2.0](https://github.com/bytecodealliance/wasmtime/blob/master/LICENSE).
 

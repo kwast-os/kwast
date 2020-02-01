@@ -1,3 +1,5 @@
+//! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
+
 use cranelift_codegen::ir::Signature;
 use cranelift_codegen::isa;
 use cranelift_wasm::{FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex, WasmError, TargetEnvironment, ModuleEnvironment, WasmResult, ModuleTranslationState};

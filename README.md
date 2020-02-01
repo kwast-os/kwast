@@ -67,14 +67,15 @@ Interested in contributing to the project? Check the issues for TODO items.
 ## Built With
 
 * [Cranelift](https://github.com/bytecodealliance/cranelift) - Code generator used to parse & run WebAssembly
+Kwast uses a fork of Cranelift to let it work in a no_std environment.
 
-Kwast uses a fork of cranelift to let it work in a no_std environment.
+* To integrate Cranelift, [wasmtime](https://github.com/bytecodealliance/wasmtime/) has been used as a reference implementation, which is licensed under the [Apache License 2.0](https://github.com/bytecodealliance/wasmtime/blob/master/LICENSE).
 
 ## History (aka why a microkernel?)
 
 Because we run a safe language as "userspace", we don't need all those hardware protections that would otherwise slow down a microkernel. I always found the *design* and *flexibility* of a microkernel very interesting, but was bothered by the performance impact and how hard it is to integrate it with (for example) POSIX and make it performant. Another idea is that, since we compile the wasm at application start, we could do some very platform-specific optimisations.
 
-I originally started with a C++ microkernel, but found the **performance overhead** of doing things securely annoying. Then I stumbled across about [Cranelift](https://github.com/bytecodealliance/cranelift) and got the idea of bringing it into my kernel. However, since my kernel was C++, it was hard to do. This is why I decided to switch to Rust.
+I originally started with a C++ microkernel, but found the performance overhead of doing things securely annoying. Then I stumbled across about [Cranelift](https://github.com/bytecodealliance/cranelift) and got the idea of bringing it into my kernel. However, since my kernel was C++, it was hard to do. This is why I decided to switch to Rust.
 
 ## Similar projects
 * [Nebulet](https://github.com/nebulet/nebulet) - A microkernel that implements a WebAssembly "usermode" that runs in Ring 0

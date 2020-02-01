@@ -1,3 +1,5 @@
+//! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
+
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{ExternalName, ExtFuncData, FuncRef, Function, Heap, Inst, SigRef, Value, Table};
 use cranelift_wasm::{FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex, WasmError, FuncEnvironment, TargetEnvironment, WasmResult};

@@ -396,6 +396,8 @@ impl<'t> SpaceManager<'t> {
         let tree = unsafe { &mut *(tree_location.as_usize() as *mut Tree) };
         tree.init();
 
+        println!("tree at {:?}", tree_location);
+
         Self {
             tree,
             alloc_area_start: (tree_location + size_of::<Tree>()).align_up(),
@@ -543,13 +545,13 @@ impl Heap {
         } else {
             self.caches.type_to_cache(alloc_type).alloc(&mut self.space_manager)
         };
-        debug_assert!(ptr as usize > self.space_manager.alloc_area_start.as_usize());
+        debug_assert!(ptr as usize >= self.space_manager.alloc_area_start.as_usize());
         ptr
     }
 
     /// Deallocate.
     pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
-        debug_assert!(ptr as usize > self.space_manager.alloc_area_start.as_usize());
+        debug_assert!(ptr as usize >= self.space_manager.alloc_area_start.as_usize());
         let alloc_type = HeapCaches::layout_to_type(layout);
         if alloc_type == AllocType::BIG {
             self.space_manager.dealloc_big(Self::size_to_order(layout.size()), ptr)

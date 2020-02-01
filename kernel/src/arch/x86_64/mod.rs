@@ -50,21 +50,19 @@ pub extern "C" fn entry(mboot_addr: usize) {
             }
 
             println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
-/*
+
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping.map_range_physical(
                 start,
                 PhysAddr::new(start.as_usize()),
                 (x.end_address() - start.as_u64()) as usize, // No need for page alignment of size
                 paging_flags,
-            ).unwrap();*/
+            ).unwrap();
         }
     }
 
-    let reserved_end = VirtAddr::new(reserved_end).align_up();
-
     #[cfg(not(feature = "integration-test"))]
-        crate::kernel_main(reserved_end);
+        crate::kernel_main(VirtAddr::new(reserved_end).align_up());
     #[cfg(feature = "integration-test")]
         {
             crate::tests::test_main();

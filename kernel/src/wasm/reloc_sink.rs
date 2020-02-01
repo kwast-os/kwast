@@ -46,7 +46,7 @@ impl binemit::RelocSink for RelocSink {
 
     fn reloc_external(&mut self, code_offset: u32, reloc: Reloc, name: &ExternalName, addend: i64) {
         let reloc_type = if let ExternalName::User { namespace, index } = *name {
-            // TODO: namespace
+            debug_assert_eq!(namespace, 0);
             RelocationTarget::UserFunction(FuncIndex::from_u32(index))
         } else if let ExternalName::LibCall(libcall) = *name {
             RelocationTarget::LibCall(libcall)

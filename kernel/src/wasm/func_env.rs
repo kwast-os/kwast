@@ -1,22 +1,36 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
 use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir::{ExternalName, ExtFuncData, FuncRef, Function, Heap, Inst, SigRef, Value, Table};
+use cranelift_codegen::ir::{types, ExternalName, ExtFuncData, FuncRef, Function, Heap, Inst, SigRef, Value, Table, GlobalValueData, GlobalValue, HeapData, HeapStyle, ArgumentPurpose};
 use cranelift_wasm::{FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex, WasmError, FuncEnvironment, TargetEnvironment, WasmResult};
-
+use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use crate::wasm::module_env::ModuleEnv;
-
-// TODO: private?
+use cranelift_codegen::ir::immediates::Offset32;
+use alloc::vec::Vec;
 
 /// Used to handle transformations on functions.
 pub struct FuncEnv<'m, 'data> {
     module_env: &'m ModuleEnv<'data>,
+    vmctx: Option<GlobalValue>,
+    heap_base: Option<GlobalValue>,
 }
 
 impl<'m, 'data> FuncEnv<'m, 'data> {
     pub fn new(module_environment: &'m ModuleEnv<'data>) -> Self {
-        Self { module_env: module_environment }
+        Self {
+            module_env: module_environment,
+            vmctx: None,
+            heap_base: None,
+        }
+    }
+
+    fn vmctx(&mut self, func: &mut Function) -> GlobalValue {
+        self.vmctx.unwrap_or_else(|| {
+            let vmctx = func.create_global_value(GlobalValueData::VMContext);
+            self.vmctx = Some(vmctx);
+            vmctx
+        })
     }
 }
 
@@ -31,11 +45,30 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         unimplemented!()
     }
 
-    fn make_heap(&mut self, _func: &mut Function, index: MemoryIndex) -> WasmResult<Heap> {
-        let mem = self.module_env.get_mem(index);
-        println!("{:?}", mem);
+    fn make_heap(&mut self, func: &mut Function, index: MemoryIndex) -> WasmResult<Heap> {
+        assert_eq!(index.as_u32(), 0);
 
-        unimplemented!()
+        let heap_base = self.heap_base.unwrap_or_else(|| {
+            let vmctx = self.vmctx(func);
+            let heap_base = func.create_global_value(GlobalValueData::Load {
+                base: vmctx,
+                offset: Offset32::new(0), // TODO: no magic
+                global_type: self.pointer_type(),
+                readonly: true,
+            });
+            self.heap_base = Some(heap_base);
+            heap_base
+        });
+
+        Ok(func.create_heap(HeapData {
+            base: heap_base,
+            min_size: (4 * 1024 * 1024 * 1024).into(),
+            offset_guard_size: 0.into(),
+            style: HeapStyle::Static {
+                bound: (4 * 1024 * 1024 * 1024).into(),
+            },
+            index_type: types::I32,
+        }))
     }
 
     fn make_table(&mut self, _func: &mut Function, _index: TableIndex) -> Result<Table, WasmError> {
@@ -61,6 +94,22 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
     fn translate_call_indirect(&mut self, _pos: FuncCursor, _table_index: TableIndex, _table: Table, _sig_index: SignatureIndex, _sig_ref: SigRef, _callee: Value, _call_args: &[Value]) -> Result<Inst, WasmError> {
         unimplemented!()
+    }
+
+    fn translate_call(
+        &mut self,
+        mut pos: FuncCursor,
+        _callee_index: FuncIndex,
+        callee: FuncRef,
+        call_args: &[Value],
+    ) -> WasmResult<Inst> {
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+
+        let mut call_args_with_vmctx = Vec::with_capacity(call_args.len() + 1);
+        call_args_with_vmctx.extend_from_slice(call_args);
+        call_args_with_vmctx.push(vmctx);
+
+        Ok(pos.ins().call(callee, &call_args_with_vmctx))
     }
 
     fn translate_memory_grow(&mut self, _pos: FuncCursor, _index: MemoryIndex, _heap: Heap, _val: Value) -> Result<Value, WasmError> {

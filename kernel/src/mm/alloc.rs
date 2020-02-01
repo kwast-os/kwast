@@ -31,6 +31,20 @@ struct HeapCaches {
     cache8192: Cache,
 }
 
+#[derive(Debug, PartialEq)]
+enum AllocType {
+    C32,
+    C64,
+    C128,
+    C256,
+    C512,
+    C1024,
+    C2048,
+    C4096,
+    C8192,
+    BIG
+}
+
 /// The heap.
 struct Heap {
     /// Management for expansion and shrinking.
@@ -443,65 +457,50 @@ impl<'t> SpaceManager<'t> {
     }
 }
 
-#[derive(Debug, PartialEq)]
-enum CacheType {
-    C32,
-    C64,
-    C128,
-    C256,
-    C512,
-    C1024,
-    C2048,
-    C4096,
-    C8192,
-}
-
 impl HeapCaches {
     /// Converts a layout to a cache.
-    fn layout_to_cache(&mut self, layout: Layout) -> &mut Cache {
-        match Self::layout_to_cache_type(layout) {
-            CacheType::C32 => &mut self.cache32,
-            CacheType::C64 => &mut self.cache64,
-            CacheType::C128 => &mut self.cache128,
-            CacheType::C256 => &mut self.cache256,
-            CacheType::C512 => &mut self.cache512,
-            CacheType::C1024 => &mut self.cache1024,
-            CacheType::C2048 => &mut self.cache2048,
-            CacheType::C4096 => &mut self.cache4096,
-            CacheType::C8192 => &mut self.cache8192,
+    fn type_to_cache(&mut self, alloc_type: AllocType) -> &mut Cache {
+        match alloc_type {
+            AllocType::C32 => &mut self.cache32,
+            AllocType::C64 => &mut self.cache64,
+            AllocType::C128 => &mut self.cache128,
+            AllocType::C256 => &mut self.cache256,
+            AllocType::C512 => &mut self.cache512,
+            AllocType::C1024 => &mut self.cache1024,
+            AllocType::C2048 => &mut self.cache2048,
+            AllocType::C4096 => &mut self.cache4096,
+            AllocType::C8192 => &mut self.cache8192,
+            _ => unreachable!()
         }
     }
 
-    /// Converts the layout to a cache type.
-    fn layout_to_cache_type(layout: Layout) -> CacheType {
+    /// Converts the layout to a type.
+    fn layout_to_type(layout: Layout) -> AllocType {
         if layout.size() <= 32 && layout.align() <= 32 {
-            CacheType::C32
+            AllocType::C32
         } else if layout.size() <= 64 && layout.align() <= 64 {
-            CacheType::C64
+            AllocType::C64
         } else if layout.size() <= 128 && layout.align() <= 128 {
-            CacheType::C128
+            AllocType::C128
         } else if layout.size() <= 256 && layout.align() <= 256 {
-            CacheType::C256
+            AllocType::C256
         } else if layout.size() <= 512 && layout.align() <= 512 {
-            CacheType::C512
+            AllocType::C512
         } else if layout.size() <= 1024 && layout.align() <= 1024 {
-            CacheType::C1024
+            AllocType::C1024
         } else if layout.size() <= 2048 && layout.align() <= 2048 {
-            CacheType::C2048
+            AllocType::C2048
         } else if layout.size() <= 4096 && layout.align() <= 4096 {
-            CacheType::C4096
+            AllocType::C4096
+        } else if layout.size() <= 8192 && layout.align() <= 8192 {
+            AllocType::C8192
         } else {
-            debug_assert!(layout.size() <= 8192 && layout.align() <= 8192);
-            CacheType::C8192
+            AllocType::BIG
         }
     }
 }
 
 impl Heap {
-    /// Threshold for big allocations.
-    /// Sizes above this will use the big allocator.
-    const BIG_THRESHOLD: usize = 8192;
-
     /// Creates a new heap.
     pub fn new(tree_location: VirtAddr) -> Self {
         Heap {
@@ -538,19 +537,24 @@ impl Heap {
 
     /// Allocate.
     pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
-        if layout.size() > Self::BIG_THRESHOLD {
+        let alloc_type = HeapCaches::layout_to_type(layout);
+        let ptr = if alloc_type == AllocType::BIG {
             self.space_manager.alloc_big(Self::size_to_order(layout.size()))
         } else {
-            self.caches.layout_to_cache(layout).alloc(&mut self.space_manager)
-        }
+            self.caches.type_to_cache(alloc_type).alloc(&mut self.space_manager)
+        };
+        debug_assert!(ptr as usize > self.space_manager.alloc_area_start.as_usize());
+        ptr
     }
 
     /// Deallocate.
     pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
-        if layout.size() > Self::BIG_THRESHOLD {
+        debug_assert!(ptr as usize > self.space_manager.alloc_area_start.as_usize());
+        let alloc_type = HeapCaches::layout_to_type(layout);
+        if alloc_type == AllocType::BIG {
             self.space_manager.dealloc_big(Self::size_to_order(layout.size()), ptr)
         } else {
-            self.caches.layout_to_cache(layout).dealloc(&mut self.space_manager, ptr)
+            self.caches.type_to_cache(alloc_type).dealloc(&mut self.space_manager, ptr)
         }
     }
 }
@@ -567,7 +571,7 @@ unsafe impl GlobalAlloc for LockedHeap {
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         // Check if we need to reallocate. If the layouts map to the same cache, we don't.
         let new_layout = Layout::from_size_align_unchecked(new_size, layout.align());
-        if HeapCaches::layout_to_cache_type(layout) == HeapCaches::layout_to_cache_type(new_layout) {
+        if HeapCaches::layout_to_type(layout) == HeapCaches::layout_to_type(new_layout) {
             ptr
         } else {
             // This is the default implementation of realloc provided by the alloc library.

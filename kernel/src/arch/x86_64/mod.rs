@@ -39,7 +39,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
         let mut mapping = ActiveMapping::get();
         let sections = mboot_struct.elf_sections_tag().expect("no elf sections tag");
         for x in sections.sections() {
-            if x.flags().is_empty() {
+            if x.flags().is_empty() || x.flags() == ElfSectionFlags::WRITABLE | ElfSectionFlags::ALLOCATED {
                 continue;
             }
 
@@ -49,15 +49,15 @@ pub extern "C" fn entry(mboot_addr: usize) {
                 paging_flags |= EntryFlags::WRITABLE | EntryFlags::NX;
             }
 
-            //println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
-
+            println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
+/*
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping.map_range_physical(
                 start,
                 PhysAddr::new(start.as_usize()),
                 (x.end_address() - start.as_u64()) as usize, // No need for page alignment of size
                 paging_flags,
-            ).unwrap();
+            ).unwrap();*/
         }
     }
 

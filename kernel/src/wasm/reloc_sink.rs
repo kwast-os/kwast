@@ -5,11 +5,9 @@ use cranelift_codegen::ir::{ExternalName, JumpTable, LibCall};
 use alloc::vec::Vec;
 use cranelift_wasm::FuncIndex;
 
-// TODO: make private?
-
-/// Relocation type.
+/// Relocation target.
 #[derive(Debug)]
-enum RelocationType {
+pub enum RelocationTarget {
     /// Relocation is for a user-defined function.
     UserFunction(FuncIndex),
     /// Relocation is for a lib-defined function.
@@ -20,17 +18,17 @@ enum RelocationType {
 
 /// A relocation entry for the function.
 #[derive(Debug)]
-struct Relocation {
-    code_offset: u32,
-    reloc: Reloc,
-    reloc_type: RelocationType,
-    addend: i64,
+pub struct Relocation {
+    pub code_offset: u32,
+    pub reloc: Reloc,
+    pub target: RelocationTarget,
+    pub addend: i64,
 }
 
 /// Relocation sink, stores relocations for code.
 #[derive(Debug)]
 pub struct RelocSink {
-    relocations: Vec<Relocation>,
+    pub relocations: Vec<Relocation>,
 }
 
 impl RelocSink {
@@ -47,10 +45,11 @@ impl binemit::RelocSink for RelocSink {
     }
 
     fn reloc_external(&mut self, code_offset: u32, reloc: Reloc, name: &ExternalName, addend: i64) {
-        let reloc_type = if let ExternalName::User { index, .. } = *name {
-            RelocationType::UserFunction(FuncIndex::from_u32(index))
+        let reloc_type = if let ExternalName::User { namespace, index } = *name {
+            // TODO: namespace
+            RelocationTarget::UserFunction(FuncIndex::from_u32(index))
         } else if let ExternalName::LibCall(libcall) = *name {
-            RelocationType::LibCall(libcall)
+            RelocationTarget::LibCall(libcall)
         } else {
             panic!("unknown relocation type")
         };
@@ -58,7 +57,7 @@ impl binemit::RelocSink for RelocSink {
         self.relocations.push(Relocation {
             code_offset,
             reloc,
-            reloc_type,
+            target: reloc_type,
             addend,
         });
     }
@@ -71,7 +70,7 @@ impl binemit::RelocSink for RelocSink {
         self.relocations.push(Relocation {
             code_offset,
             reloc,
-            reloc_type: RelocationType::JumpTable(jt),
+            target: RelocationTarget::JumpTable(jt),
             addend: 0,
         });
     }

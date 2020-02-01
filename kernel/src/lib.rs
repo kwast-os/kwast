@@ -47,7 +47,7 @@ pub fn kernel_main(reserved_end: VirtAddr) {
     unsafe { mm::init(reserved_end); }
 
     // Test
-    wasm::main::test();
+    wasm::main::test().unwrap();
 }
 
 #[lang = "eh_personality"]

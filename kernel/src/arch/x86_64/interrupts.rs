@@ -231,11 +231,11 @@ extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
 }
 
 extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError) {
-    let addr: VirtAddr;
+    let addr: u64;
     unsafe {
         asm!("movq %cr2, $0" : "=r"(addr));
     }
-    panic!("Page fault: {:#?}, {:?}, CR2: {:?}", frame, err, addr);
+    panic!("Page fault: {:#?}, {:?}, CR2: {:?}", frame, err, VirtAddr::new(addr as usize));
 }
 
 extern "x86-interrupt" fn exc_fp(frame: &mut ISRStackFrame) {

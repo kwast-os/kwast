@@ -189,7 +189,6 @@ impl ActiveMapping {
         invalidate(vaddr.as_u64());
 
         p1.decrease_used_count();
-        println!("{}", p1.used_count());
         if p1.used_count() == 0 {
             let vaddr = VirtAddr::new(p1 as *mut _ as usize);
             self.unmap_single_internal(vaddr, true);

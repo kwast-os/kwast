@@ -7,6 +7,11 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 
+pub struct FunctionBody<'data> {
+    pub body: &'data [u8],
+    pub offset: usize,
+}
+
 pub struct ModuleEnv<'data> {
     /// Passed target configuration.
     cfg: isa::TargetFrontendConfig,
@@ -17,7 +22,7 @@ pub struct ModuleEnv<'data> {
     /// Function types.
     func_types: Vec<SignatureIndex>,
     /// Function Wasm body contents.
-    pub func_bodies: Vec<&'data [u8]>,
+    pub func_bodies: Vec<FunctionBody<'data>>,
     /// Memories.
     memories: Vec<Memory>,
 }
@@ -138,9 +143,12 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         &mut self,
         _module_translation_state: &ModuleTranslationState,
         body_bytes: &'data [u8],
-        _body_offset: usize, // TODO
+        body_offset: usize,
     ) -> Result<(), WasmError> {
-        self.func_bodies.push(body_bytes);
+        self.func_bodies.push(FunctionBody {
+            body: body_bytes,
+            offset: body_offset,
+        });
         Ok(())
     }
 

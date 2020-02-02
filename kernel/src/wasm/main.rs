@@ -7,7 +7,7 @@ use cranelift_wasm::translate_module;
 use cranelift_native;
 
 use alloc::vec::Vec;
-use crate::wasm::module_env::ModuleEnv;
+use crate::wasm::module_env::{ModuleEnv, FunctionBody};
 use crate::wasm::func_env::FuncEnv;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryMapper, MappingError};
@@ -19,7 +19,7 @@ use cranelift_codegen::binemit::{NullTrapSink, NullStackmapSink, Reloc};
 use core::intrinsics::transmute;
 use bitflags::_core::ptr::write_unaligned;
 
-// TODO: in some areas, a bump allocator may be used to quickly allocate some vectors.
+// TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
 
 #[derive(Debug)]
 pub enum Error {
@@ -52,7 +52,7 @@ pub fn test() -> Result<(), Error> {// TODO: make better
         .map_err(Error::MemoryError)?;
 
     // TODO: change flags method & expose that also to the boot
-    // TODO: ! make sure to protect rodata
+    // TODO: ! make sure to protect rodata ?
 
     // Emit code
     let capacity = compile_result.contexts.len();
@@ -106,8 +106,6 @@ pub fn test() -> Result<(), Error> {// TODO: make better
                     unsafe {
                         write_unaligned(reloc_addr as *mut u32, delta as u32);
                     }
-
-                    println!("{}, {}, {}", target_off, delta as isize, relocation.addend);
                 }
                 Reloc::Abs8 => {
                     let delta = target_off.wrapping_add(relocation.addend as usize);
@@ -138,7 +136,7 @@ pub fn test() -> Result<(), Error> {// TODO: make better
     let ptr = addr as *const ();
     let code: extern "C" fn(i32, i32, &VMContext) -> () = unsafe { transmute(ptr) };
 
-    println!("execution returned this result: {:?}", code(4, 5, &vmctx)); // write fibonacci(5) to 0x500+4
+    println!("execution returned this result: {:?}", code(4, 10, &vmctx)); // write fibonacci(10) to 0x500+4
     println!("{}", unsafe { *((vmctx.heap_base + 4) as *const i32) });
 
     Ok(())
@@ -177,15 +175,16 @@ fn compile() -> Result<CompileResult, Error> {
         let mut ctx = Context::new();
         ctx.func.signature = env.get_sig(FuncIndex::from_u32(idx as u32));
 
+        let FunctionBody { body, offset } = env.func_bodies[idx];
+
         let mut func_trans = FuncTranslator::new();
         func_trans.translate(
             &translation,
-            &env.func_bodies[idx],
-            0,
+            body,
+            offset,
             &mut ctx.func,
             &mut FuncEnv::new(&env),
-        )
-            .map_err(Error::WasmError)?;
+        ).map_err(Error::WasmError)?;
 
         let info = ctx.compile(&*isa).map_err(Error::CodegenError)?;
         //println!("code_size: {}, rodata_size: {}, total_size: {}", info.code_size, info.rodata_size, info.total_size);

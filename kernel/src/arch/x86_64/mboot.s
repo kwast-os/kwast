@@ -164,5 +164,5 @@ gdt_descriptor:
 .quad gdt
 
 .section .bss, "aw", @nobits
-.skip 32768*4
+.skip 32768
 stack_top:

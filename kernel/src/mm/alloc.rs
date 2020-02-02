@@ -424,7 +424,7 @@ impl<'t> SpaceManager<'t> {
         self.tree.dealloc(offset);
 
         let size = PAGE_SIZE << order;
-        ActiveMapping::get().unmap_range(VirtAddr::new(ptr as usize), size);
+        ActiveMapping::get().free_and_unmap_range(VirtAddr::new(ptr as usize), size);
     }
 
     /// Creates a free slab of the requested order.

@@ -121,7 +121,6 @@ pub fn test() -> Result<(), Error> {// TODO: make better
         }
     }
 
-    // TODO: test
     for x in 0..compile_result.total_size {
         unsafe {
             let ptr = (addr + x) as *mut u8;
@@ -130,9 +129,7 @@ pub fn test() -> Result<(), Error> {// TODO: make better
     }
 
     println!();
-    println!("this is {:#x}", test as *const () as usize);
     println!("now going to execute code");
-
 
     let vmctx = VMContext {
         heap_base: addr + 0x500, // TODO

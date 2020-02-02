@@ -4,8 +4,9 @@ use bitflags::bitflags;
 use lazy_static::lazy_static;
 
 use crate::arch::x86_64::address::VirtAddr;
-use crate::arch::x86_64::paging::PageFaultError;
+use crate::arch::x86_64::paging::{PageFaultError, ActiveMapping};
 use crate::arch::x86_64::port::write_port8;
+use crate::mm::mapper::MemoryMapper;
 
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
@@ -231,11 +232,12 @@ extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
 }
 
 extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError) {
-    let addr: u64;
+    let addr: VirtAddr;
     unsafe {
         asm!("movq %cr2, $0" : "=r"(addr));
     }
-    panic!("Page fault: {:#?}, {:?}, CR2: {:?}", frame, err, VirtAddr::new(addr as usize));
+    let phys = ActiveMapping::get().translate(addr);
+    panic!("Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}", frame, err, addr, phys);
 }
 
 extern "x86-interrupt" fn exc_fp(frame: &mut ISRStackFrame) {

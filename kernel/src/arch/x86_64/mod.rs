@@ -32,7 +32,6 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let mboot_struct = unsafe { multiboot2::load(mboot_addr) };
     let mboot_end = mboot_struct.end_address();
     let reserved_end = max(kernel_end, mboot_end);
-    mm::pmm::get().init(&mboot_struct, reserved_end);
 
     // Map sections correctly
     {
@@ -46,10 +45,14 @@ pub extern "C" fn entry(mboot_addr: usize) {
             let mut paging_flags: EntryFlags = EntryFlags::PRESENT;
 
             if x.flags().contains(ElfSectionFlags::WRITABLE) {
-                paging_flags |= EntryFlags::WRITABLE | EntryFlags::NX;
+                paging_flags |= EntryFlags::WRITABLE;
             }
 
-            println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
+            if !x.flags().contains(ElfSectionFlags::EXECUTABLE) {
+                paging_flags |= EntryFlags::NX;
+            }
+
+            //println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
 
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping.map_range_physical(
@@ -60,6 +63,8 @@ pub extern "C" fn entry(mboot_addr: usize) {
             ).unwrap();
         }
     }
+
+    mm::pmm::get().init(&mboot_struct, reserved_end);
 
     #[cfg(not(feature = "integration-test"))]
         crate::kernel_main(VirtAddr::new(reserved_end).align_up());

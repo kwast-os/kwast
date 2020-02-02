@@ -10,6 +10,11 @@ impl FrameAllocator {
         // Will be the last entry of the PML2 (PML2 exists)
         const P2_IDX: usize = 511;
         let tmp_2m_map_addr = VirtAddr::new(P2_IDX * 0x200_000);
+
+        fn current_to_prev_entry_addr(current: usize) -> *mut usize {
+            ((P2_IDX * 0x200_000) | (current & 0x1ff_fff)) as *mut _
+        }
+
         // Mapping flags
         let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
 
@@ -25,14 +30,14 @@ impl FrameAllocator {
         for x in tag.memory_areas() {
             // There is actually no guarantee about the sanitization of the data.
             // While it is rare that the addresses won't be page aligned, there's apparently been
-            // cases before, where it wasn't page aligned.
+            // cases before where it wasn't page aligned.
             let mut start = PhysAddr::new(x.start_address() as usize).align_up();
             let end = PhysAddr::new(x.end_address() as usize).align_down();
 
             // Adjust for reserved area
             if start < reserved_end {
                 start = reserved_end;
-                if start > end {
+                if start >= end {
                     continue;
                 }
             }
@@ -46,7 +51,7 @@ impl FrameAllocator {
             unsafe { prev_entry_addr.write(current); }
 
             e.set(PhysAddr::new(current & !0x1ff_fff), map_flags);
-            prev_entry_addr = tmp_2m_map_addr.as_usize() as *mut _;
+            prev_entry_addr = current_to_prev_entry_addr(current);
 
             while current < end {
                 unsafe { prev_entry_addr.write(current); }
@@ -56,7 +61,7 @@ impl FrameAllocator {
                     e.set(PhysAddr::new(current & !0x1ff_fff), map_flags);
                 }
 
-                prev_entry_addr = (tmp_2m_map_addr.as_usize() + (current & 0x1ff_fff)) as *mut _;
+                prev_entry_addr = current_to_prev_entry_addr(current);
                 current += 0x1000;
                 //count += 1;
             }

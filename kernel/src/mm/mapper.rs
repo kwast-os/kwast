@@ -12,7 +12,7 @@ pub trait MemoryMapper {
     /// Gets a single physical page and maps it to a given virtual address.
     fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult;
 
-    /// Unmaps a single page and frees the corresponding physical page.
+    /// Unmaps a single page and frees the corresponding physical frame.
     fn free_and_unmap_single(&mut self, vaddr: VirtAddr);
 
     /// Maps a single page.
@@ -29,6 +29,9 @@ pub trait MemoryMapper {
 
     /// Unmaps a range.
     fn unmap_range(&mut self, vaddr: VirtAddr, size: usize);
+
+    /// Unmaps a range and frees the corresponding physical frames.
+    fn free_and_unmap_range(&mut self, vaddr: VirtAddr, size: usize);
 }
 
 /// Map result.

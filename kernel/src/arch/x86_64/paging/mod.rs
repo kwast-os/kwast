@@ -141,7 +141,7 @@ impl MemoryMapper for ActiveMapping {
         for offset in (0..size).step_by(PAGE_SIZE) {
             let res = self.get_and_map_single(vaddr, flags);
             if unlikely!(res.is_err()) {
-                self.unmap_range(start_vaddr, offset);
+                self.free_and_unmap_range(start_vaddr, offset);
                 return res;
             }
 
@@ -153,7 +153,14 @@ impl MemoryMapper for ActiveMapping {
 
     fn unmap_range(&mut self, mut vaddr: VirtAddr, size: usize) {
         debug_assert!(vaddr.is_page_aligned());
+        for _ in (0..size).step_by(PAGE_SIZE) {
+            self.unmap_single(vaddr);
+            vaddr += PAGE_SIZE;
+        }
+    }
 
+    fn free_and_unmap_range(&mut self, mut vaddr: VirtAddr, size: usize) {
+        debug_assert!(vaddr.is_page_aligned());
         for _ in (0..size).step_by(PAGE_SIZE) {
             self.free_and_unmap_single(vaddr);
             vaddr += PAGE_SIZE;
@@ -182,6 +189,7 @@ impl ActiveMapping {
         invalidate(vaddr.as_u64());
 
         p1.decrease_used_count();
+        println!("{}", p1.used_count());
         if p1.used_count() == 0 {
             let vaddr = VirtAddr::new(p1 as *mut _ as usize);
             self.unmap_single_internal(vaddr, true);

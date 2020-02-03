@@ -113,7 +113,6 @@ impl Tree {
             let left_index = self.left_index(index);
             let right_index = self.right_index(index);
 
-            // Tree will be correct from this point on.
             self.nodes[index] = if self.nodes[left_index] == self.nodes[right_index] {
                 size
             } else {

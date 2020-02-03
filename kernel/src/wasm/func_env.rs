@@ -8,6 +8,7 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use crate::wasm::module_env::ModuleEnv;
 use cranelift_codegen::ir::immediates::Offset32;
 use alloc::vec::Vec;
+use crate::wasm::vmctx::{HEAP_VMCTX_OFF, HEAP_SIZE};
 
 /// Used to handle transformations on functions.
 pub struct FuncEnv<'m, 'data> {
@@ -52,7 +53,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             let vmctx = self.vmctx(func);
             let heap_base = func.create_global_value(GlobalValueData::Load {
                 base: vmctx,
-                offset: Offset32::new(0), // TODO: no magic
+                offset: Offset32::new(HEAP_VMCTX_OFF),
                 global_type: self.pointer_type(),
                 readonly: true,
             });
@@ -62,10 +63,10 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
         Ok(func.create_heap(HeapData {
             base: heap_base,
-            min_size: (4 * 1024 * 1024 * 1024).into(),
+            min_size: HEAP_SIZE.into(),
             offset_guard_size: 0.into(),
             style: HeapStyle::Static {
-                bound: (4 * 1024 * 1024 * 1024).into(),
+                bound: HEAP_SIZE.into(),
             },
             index_type: types::I32,
         }))

@@ -99,6 +99,9 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
     }
 
     fn declare_memory(&mut self, memory: Memory) -> WasmResult<()> {
+        // TODO: Shared memories and more than one memory not supported right now.
+        assert_eq!(memory.shared, false);
+        assert_eq!(self.memories.len(), 0);
         self.memories.push(memory);
         Ok(())
     }

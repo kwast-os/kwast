@@ -18,6 +18,7 @@ use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
 use cranelift_codegen::binemit::{NullTrapSink, NullStackmapSink, Reloc};
 use core::intrinsics::transmute;
 use bitflags::_core::ptr::write_unaligned;
+use crate::wasm::vmctx::VMContext;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
 
@@ -35,11 +36,6 @@ struct CompileResult {
     isa: Box<dyn TargetIsa>,
     contexts: Vec<Context>,
     total_size: usize,
-}
-
-#[derive(Debug)]
-struct VMContext {
-    heap_base: usize,
 }
 
 pub fn test() -> Result<(), Error> {// TODO: make better

@@ -67,16 +67,16 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -91,8 +91,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -100,18 +100,18 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 dependencies = [
  "cranelift-codegen",
  "hashbrown",
@@ -122,8 +122,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -132,8 +132,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.56.0"
-source = "git+https://github.com/nielsdos/cranelift#d0374ce3b24baa95a7f9a8cf8f340d5caaa727e2"
+version = "0.57.0"
+source = "git+https://github.com/nielsdos/cranelift#ccf7c8107fabfe27874e3be630d7e2cf9cb98055"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",

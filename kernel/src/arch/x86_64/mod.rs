@@ -66,13 +66,8 @@ pub extern "C" fn entry(mboot_addr: usize) {
 
     mm::pmm::get().init(&mboot_struct, reserved_end);
 
-    #[cfg(not(feature = "integration-test"))]
-        crate::kernel_main(VirtAddr::new(reserved_end).align_up());
-    #[cfg(feature = "integration-test")]
-        {
-            crate::tests::test_main();
-            unsafe { qemu::qemu_exit(0); }
-        }
+    let reserved_end = VirtAddr::new(reserved_end).align_up();
+    crate::kernel_run(reserved_end);
 }
 
 /// Halt instruction. Waits for interrupt.

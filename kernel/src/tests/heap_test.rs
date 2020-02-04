@@ -3,24 +3,15 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use crate::arch::x86_64::paging::PAGE_SIZE;
 
-fn init() {
-    unsafe {
-        crate::mm::init(VirtAddr::new(16 * 0x200_000));
-    }
-}
-
 /// Test one allocation.
 #[cfg(feature = "test-heap-one-alloc")]
 pub fn test_main() {
-    init();
     Box::new(42);
 }
 
 /// Test big allocation and freeing.
 #[cfg(feature = "test-heap-big-alloc")]
 pub fn test_main() {
-    init();
-
     let mut vec1: Vec<i8> = Vec::new();
     vec1.reserve(8193);
     let mut vec2: Vec<i8> = Vec::new();
@@ -46,8 +37,6 @@ pub fn test_main() {
 /// Test heap by inspecting the pointers.
 #[cfg(feature = "test-heap-realloc")]
 pub fn test_main() {
-    init();
-
     let n = 1000;
     let mut vec = Vec::new();
     for i in 0..n {
@@ -60,8 +49,6 @@ pub fn test_main() {
 /// Test heap by inspecting the pointers.
 #[cfg(feature = "test-heap-pointers")]
 pub fn test_main() {
-    init();
-
     let mut a: Vec<i8> = Vec::new();
     a.reserve(12);
     let mut b: Vec<i8> = Vec::new();

@@ -396,8 +396,6 @@ impl<'t> SpaceManager<'t> {
         let tree = unsafe { &mut *(tree_location.as_usize() as *mut Tree) };
         tree.init();
 
-        println!("tree at {:?}", tree_location);
-
         Self {
             tree,
             alloc_area_start: (tree_location + size_of::<Tree>()).align_up(),

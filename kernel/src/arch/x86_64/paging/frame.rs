@@ -100,7 +100,7 @@ impl FrameAllocator {
                 let vaddr = VirtAddr::new(0x1000);
                 mapping.map_single(vaddr, top, EntryFlags::PRESENT).unwrap();
                 vaddr
-            });
+            }).unwrap();
         }
 
         println!();

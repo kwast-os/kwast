@@ -10,7 +10,6 @@ use core::panic::PanicInfo;
 
 use arch::interrupts;
 use crate::arch::address::VirtAddr;
-use crate::arch::qemu;
 
 #[macro_use]
 mod macros;
@@ -42,6 +41,7 @@ pub fn kernel_run(reserved_end: VirtAddr) {
         kernel_main();
     #[cfg(feature = "integration-test")]
         {
+            use crate::arch::qemu;
             kernel_test_main();
             unsafe { qemu::qemu_exit(0); }
         }

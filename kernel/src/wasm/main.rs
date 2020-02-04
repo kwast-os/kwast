@@ -4,7 +4,6 @@ use cranelift_codegen::{Context, CodegenError};
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_wasm::{FuncTranslator, WasmError, FuncIndex};
 use cranelift_wasm::translate_module;
-use cranelift_native;
 
 use alloc::vec::Vec;
 use crate::wasm::module_env::{ModuleEnv, FunctionBody};

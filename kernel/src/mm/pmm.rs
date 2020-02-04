@@ -42,6 +42,7 @@ impl FrameAllocator {
     }
 
     /// Pops the top and moves the current top pointer. This function is used internally for memory management by paging.
+    #[inline]
     pub fn pop_top<F>(&mut self, f: F)
         where F: FnOnce(PhysAddr) -> VirtAddr {
         // Read and set the next top address.
@@ -51,6 +52,7 @@ impl FrameAllocator {
 
     /// Similar to `pop_top`.
     /// This pushes a new top on the stack and links it to the previous top.
+    #[inline]
     pub fn push_top(&mut self, vaddr: VirtAddr, paddr: PhysAddr) {
         let ptr = vaddr.as_usize() as *mut usize;
         unsafe { ptr.write(self.top.as_usize()); }
@@ -74,7 +76,6 @@ impl PhysMemManager {
         self.allocator.lock().init(mboot_struct, PhysAddr::new(reserved_end));
     }
 
-    #[inline]
     pub fn pop_top<F>(&self, f: F) -> MappingResult
         where F: FnOnce(PhysAddr) -> VirtAddr {
         let mut allocator = self.allocator.lock();
@@ -87,7 +88,6 @@ impl PhysMemManager {
         Ok(())
     }
 
-    #[inline]
     pub fn push_top(&self, vaddr: VirtAddr, paddr: PhysAddr) {
         self.allocator.lock().push_top(vaddr, paddr)
     }

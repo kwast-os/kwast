@@ -18,6 +18,8 @@ use cranelift_codegen::binemit::{NullTrapSink, NullStackmapSink, Reloc};
 use core::intrinsics::transmute;
 use bitflags::_core::ptr::write_unaligned;
 use crate::wasm::vmctx::VMContext;
+use crate::mm::interval_tree::AVLIntervalTree;
+use crate::arch::x86_64::paging::PAGE_SIZE;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
 
@@ -29,6 +31,8 @@ pub enum Error {
     CodegenError(CodegenError),
     /// Memory error.
     MemoryError(MappingError),
+    /// Addresses exhausted error.
+    AddressesExhausted,
 }
 
 struct CompileResult {
@@ -40,8 +44,13 @@ struct CompileResult {
 pub fn test() -> Result<(), Error> {// TODO: make better
     let compile_result = compile()?;
 
+    // TODO: do this for real, this is only for testing now. (and split in heap & code)
+    let mut tree = AVLIntervalTree::new();
+    tree.insert(0, 100);
+    let offset = tree.find_len(1).ok_or(Error::AddressesExhausted)? as usize;
+    let addr = 256 * 1024 * 104 + offset * PAGE_SIZE;
+
     // TODO
-    let addr = 256 * 1024 * 1024;
     ActiveMapping::get()
         .map_range(VirtAddr::new(addr), compile_result.total_size, EntryFlags::PRESENT | EntryFlags::WRITABLE)
         .map_err(Error::MemoryError)?;
@@ -92,6 +101,7 @@ pub fn test() -> Result<(), Error> {// TODO: make better
             };
 
             // Relocate!
+            println!("{:?}", relocation);
             match relocation.reloc {
                 Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                     let delta = target_off
@@ -114,15 +124,15 @@ pub fn test() -> Result<(), Error> {// TODO: make better
         }
     }
 
-    for x in 0..compile_result.total_size {
+    /*for x in 0..compile_result.total_size {
         unsafe {
             let ptr = (addr + x) as *mut u8;
             print!("{:#x}, ", *ptr);
         }
-    }
+    }*/
 
     println!();
-    println!("now going to execute code");
+    println!("now going to execute code"); // TODO: should happen in a process
 
     let vmctx = VMContext {
         heap_base: addr + 0x500, // TODO
@@ -130,9 +140,8 @@ pub fn test() -> Result<(), Error> {// TODO: make better
 
     let ptr = addr as *const ();
     let code: extern "C" fn(i32, i32, &VMContext) -> () = unsafe { transmute(ptr) };
-
-    println!("execution returned this result: {:?}", code(4, 10, &vmctx)); // write fibonacci(10) to 0x500+4
-    println!("{}", unsafe { *((vmctx.heap_base + 4) as *const i32) });
+    code(4, 10, &vmctx); // write fibonacci(10) to 0x500+4
+    println!("execution stopped, reading: {}", unsafe { *((vmctx.heap_base + 4) as *const i32) });
 
     Ok(())
 }

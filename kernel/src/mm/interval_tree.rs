@@ -109,7 +109,7 @@ impl Node {
 }
 
 #[derive(Debug)]
-struct AVLIntervalTree {
+pub struct AVLIntervalTree {
     root: TreeNode,
 }
 

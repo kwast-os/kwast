@@ -15,9 +15,9 @@ test-heap-one-alloc = []
 test-heap-big-alloc = []
 test-heap-realloc = []
 test-heap-pointers = []
-test-process-heap-assigner-tests = []
-test-process-heap-assigner = ["test-process-heap-assigner-tests"]
-test-process-heap-assigner-fragments = ["test-process-heap-assigner-tests"]
+test-interval-tree-tests = []
+test-interval-tree = ["test-interval-tree-tests"]
+test-interval-tree-fragments = ["test-interval-tree-tests"]
 
 [profile.dev]
 opt-level = 1

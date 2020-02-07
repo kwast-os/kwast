@@ -21,7 +21,7 @@ These instructions help you get started with building the source and getting it 
 * make
 * grub-mkrescue (you might also need to install xorriso)
 * qemu-system-x86_64
-* cargo/rust
+* Rust and Cargo
 
 ### Setting up a toolchain
 

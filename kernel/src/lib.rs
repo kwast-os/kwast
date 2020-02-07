@@ -71,20 +71,20 @@ fn kernel_main() {
         let mut stack1 = Stack::new(VirtAddr::new(0x400_000));
         let mut stack2 = Stack::new(VirtAddr::new(0x400_000 - 0x1000));
 
-        stack1.prepare(VirtAddr::new(tasking_test_A as usize));
-        stack2.prepare(VirtAddr::new(tasking_test_B as usize));
+        stack1.prepare(VirtAddr::new(tasking_test_a as usize));
+        stack2.prepare(VirtAddr::new(tasking_test_b as usize));
 
         switch_to(stack1.as_virt_addr()); // TODO: ugly
     }
 }
 
-fn tasking_test_A() -> ! {
+fn tasking_test_a() -> ! {
     loop {
         println!("A");
     }
 }
 
-fn tasking_test_B() -> ! {
+fn tasking_test_b() -> ! {
     loop {
         println!("B");
     }

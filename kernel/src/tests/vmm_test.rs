@@ -22,7 +22,7 @@ pub fn test_main() {
     mapping.free_and_unmap_single(va2);
 
     // Should not PF
-    let ptr = va1.as_mut();
+    let ptr: *mut i32 = va1.as_mut();
     unsafe {
         ptr.write(42);
     }

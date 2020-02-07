@@ -3,7 +3,7 @@ use crate::arch::address::VirtAddr;
 pub mod pmm;
 pub mod mapper;
 pub mod buddy;
-pub mod interval_tree;
+pub mod avl_interval_tree;
 mod alloc;
 
 /// Inits memory allocator. May only be called once.

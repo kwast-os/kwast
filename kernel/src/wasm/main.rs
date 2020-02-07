@@ -18,7 +18,7 @@ use cranelift_codegen::binemit::{NullTrapSink, NullStackmapSink, Reloc};
 use core::intrinsics::transmute;
 use bitflags::_core::ptr::write_unaligned;
 use crate::wasm::vmctx::VMContext;
-use crate::mm::interval_tree::AVLIntervalTree;
+use crate::mm::avl_interval_tree::AVLIntervalTree;
 use crate::arch::x86_64::paging::PAGE_SIZE;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.

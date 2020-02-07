@@ -55,6 +55,7 @@ impl Node {
         self.update_max_len();
     }
 
+    /// Left rotation. Returns the new root.
     fn rotate_left(mut root: Box<Node>) -> Box<Node> {
         let mut new_root = unsafe { root.right.take().unchecked_unwrap() };
         root.right = new_root.left.take();
@@ -64,6 +65,7 @@ impl Node {
         new_root
     }
 
+    /// Right rotation. Returns the new root.
     fn rotate_right(mut root: Box<Node>) -> Box<Node> {
         let mut new_root = unsafe { root.left.take().unchecked_unwrap() };
         root.left = new_root.right.take();
@@ -73,6 +75,7 @@ impl Node {
         new_root
     }
 
+    /// Fixes the AVL rotations. Returns the new root.
     fn fixup(mut root: Box<Node>) -> Box<Node> {
         // Calculate the balance factor and check if we need rebalancing.
         let balance_factor = root.balance_factor();

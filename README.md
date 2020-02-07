@@ -28,6 +28,7 @@ These instructions help you get started with building the source and getting it 
 You can setup your toolchain using the following steps:
 ```bash
 # You'll need to get the rust nightly and install cargo-xbuild:
+rustup override set nightly
 rustup component add rust-src
 cargo install cargo-xbuild
 

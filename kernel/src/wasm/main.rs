@@ -58,7 +58,7 @@ pub fn test() -> Result<(), Error> {
             compile_result.total_size,
             EntryFlags::PRESENT | EntryFlags::WRITABLE,
         )
-        .map_err(Error::MemoryError)?;
+        .map_err(Error::MemoryError)?; // TODO: return thing to tree if failed to map
 
     // TODO: change flags method & expose that also to the boot
     // TODO: ! make sure to protect rodata ?

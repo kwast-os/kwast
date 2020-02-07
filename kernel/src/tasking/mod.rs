@@ -5,8 +5,6 @@ pub struct Stack {
     location: VirtAddr,
 }
 
-pub trait 
-
 impl Stack {
     /// Creates a new stack on a given location.
     pub unsafe fn new(location: VirtAddr) -> Self {

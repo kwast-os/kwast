@@ -10,7 +10,7 @@ Since WebAssembly was designed to be a safe language, we can run it without havi
 This enables low-cost context switches, low-cost syscalls, and a microkernel design without a big performance hit.
 Another interesting thing is that it means the software is cross-platform and that the compiler could enable platform-specific optimisations.
 
-For notes on Spectre, Meltdown and other related issues, see #10.
+For notes on Spectre, Meltdown and other related issues, see [#10](https://github.com/nielsdos/kwast/issues/10).
 
 ## Getting Started
 

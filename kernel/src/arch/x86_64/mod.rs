@@ -3,8 +3,8 @@ use core::cmp::max;
 use crate::arch::address::VirtAddr;
 use crate::arch::x86_64::address::PhysAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
-use crate::mm;
 use crate::mm::mapper::MemoryMapper;
+use crate::mm::pmm::with_pmm;
 use multiboot2::ElfSectionFlags;
 
 #[macro_use]
@@ -71,7 +71,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
         }
     }
 
-    mm::pmm::get().init(&mboot_struct, reserved_end);
+    with_pmm(|pmm| pmm.init(&mboot_struct, PhysAddr::new(reserved_end)));
 
     let reserved_end = VirtAddr::new(reserved_end).align_up();
     crate::kernel_run(reserved_end);

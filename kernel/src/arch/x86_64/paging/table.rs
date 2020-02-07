@@ -1,10 +1,10 @@
 use core::marker::PhantomData;
 
 use crate::arch::x86_64::address::VirtAddr;
-use crate::mm;
 
 use super::entry::*;
 use super::MappingError;
+use crate::mm::pmm::with_pmm;
 
 // We use the clever solution for static type safety as described by [Philipp Oppermann's blog](https://os.phil-opp.com/)
 
@@ -133,11 +133,13 @@ where
         if !flags.contains(EntryFlags::PRESENT) {
             // We could call the page mapping functions here, but it would be slower than
             // manipulating the pmm ourselves.
-            mm::pmm::get().pop_top(|top| {
-                // We don't need to invalidate because it wasn't present.
-                self.entries[index].set(top, EntryFlags::PRESENT | EntryFlags::WRITABLE);
+            with_pmm(|pmm| {
+                pmm.pop_top(|top| {
+                    // We don't need to invalidate because it wasn't present.
+                    self.entries[index].set(top, EntryFlags::PRESENT | EntryFlags::WRITABLE);
 
-                VirtAddr::new(addr)
+                    VirtAddr::new(addr)
+                })
             })?;
 
             self.increase_used_count();

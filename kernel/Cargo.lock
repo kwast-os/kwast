@@ -173,6 +173,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-native",
  "cranelift-wasm",
+ "hashbrown",
  "lazy_static",
  "multiboot2",
  "spin",

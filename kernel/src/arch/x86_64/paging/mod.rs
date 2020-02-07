@@ -1,13 +1,12 @@
 use bitflags::bitflags;
 
-use crate::mm::pmm;
-
 use super::address::{PhysAddr, VirtAddr};
 
 use self::entry::Entry;
 pub use self::entry::EntryFlags;
 use self::table::{Level4, Table};
 use crate::mm::mapper::{MappingError, MappingResult, MemoryMapper};
+use crate::mm::pmm::with_pmm;
 
 mod entry;
 mod frame;
@@ -96,9 +95,11 @@ impl MemoryMapper for ActiveMapping {
     fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
         let mut e = self.get_4k_entry(vaddr)?;
 
-        pmm::get().pop_top(move |top| {
-            e.set(top, flags);
-            vaddr
+        with_pmm(|pmm| {
+            pmm.pop_top(move |top| {
+                e.set(top, flags);
+                vaddr
+            })
         })
     }
 
@@ -196,7 +197,7 @@ impl ActiveMapping {
         debug_assert!(e.flags().contains(EntryFlags::PRESENT));
 
         if frame {
-            pmm::get().push_top(vaddr, e.phys_addr_unchecked());
+            with_pmm(|pmm| pmm.push_top(vaddr, e.phys_addr_unchecked()));
         }
 
         e.clear();

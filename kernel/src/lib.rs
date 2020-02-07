@@ -16,8 +16,6 @@ extern crate alloc;
 use core::panic::PanicInfo;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::tasking::switch_to;
-use crate::tasking::Stack;
 use arch::interrupts;
 
 #[macro_use]
@@ -67,7 +65,7 @@ fn kernel_main() {
     wasm::main::test().unwrap();
 
     // DEBUG
-    unsafe {
+    /*unsafe {
         let mut stack1 = Stack::new(VirtAddr::new(0x400_000));
         let mut stack2 = Stack::new(VirtAddr::new(0x400_000 - 0x1000));
 
@@ -75,7 +73,7 @@ fn kernel_main() {
         stack2.prepare(VirtAddr::new(tasking_test_b as usize));
 
         switch_to(stack1.as_virt_addr()); // TODO: ugly
-    }
+    }*/
 }
 
 fn tasking_test_a() -> ! {

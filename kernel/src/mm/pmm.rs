@@ -19,13 +19,14 @@ use crate::mm::mapper::{MappingError, MappingResult};
 ///
 /// It is likely that, for an allocation, the data will be accessed anyway after the mapping.
 /// For a free, it is likely that the data was already accessed.
+/// So that means there is likely no extra TLB miss or cache miss.
 pub struct FrameAllocator {
     pub top: PhysAddr,
 }
 
 impl FrameAllocator {
     /// Initializes the allocator.
-    fn init(&mut self, mboot_struct: &BootInformation, reserved_end: PhysAddr) {
+    pub fn init(&mut self, mboot_struct: &BootInformation, reserved_end: PhysAddr) {
         let reserved_end = reserved_end.align_up();
 
         self.apply_mmap(
@@ -44,7 +45,6 @@ impl FrameAllocator {
     }
 
     /// Pops the top and moves the current top pointer. This function is used internally for memory management by paging.
-    #[inline]
     pub fn pop_top<F>(&mut self, f: F) -> MappingResult
     where
         F: FnOnce(PhysAddr) -> VirtAddr,
@@ -61,7 +61,6 @@ impl FrameAllocator {
 
     /// Similar to `pop_top`.
     /// This pushes a new top on the stack and links it to the previous top.
-    #[inline]
     pub fn push_top(&mut self, vaddr: VirtAddr, paddr: PhysAddr) {
         let ptr: *mut usize = vaddr.as_mut();
         unsafe {
@@ -71,37 +70,12 @@ impl FrameAllocator {
     }
 }
 
-/// The default frame manager instance.
-#[repr(transparent)]
-pub struct PhysMemManager {
-    allocator: Mutex<FrameAllocator>,
-}
+static PMM: Mutex<FrameAllocator> = Mutex::new(FrameAllocator::empty());
 
-static PMM: PhysMemManager = PhysMemManager {
-    allocator: Mutex::new(FrameAllocator::empty()),
-};
-
-impl PhysMemManager {
-    /// Inits the physical frame allocator.
-    pub fn init(&self, mboot_struct: &BootInformation, reserved_end: usize) {
-        self.allocator
-            .lock()
-            .init(mboot_struct, PhysAddr::new(reserved_end));
-    }
-
-    pub fn pop_top<F>(&self, f: F) -> MappingResult
-    where
-        F: FnOnce(PhysAddr) -> VirtAddr,
-    {
-        self.allocator.lock().pop_top(f)
-    }
-
-    pub fn push_top(&self, vaddr: VirtAddr, paddr: PhysAddr) {
-        self.allocator.lock().push_top(vaddr, paddr)
-    }
-}
-
-/// Gets the PMM.
-pub fn get() -> &'static PhysMemManager {
-    &PMM
+/// Execute something using the PMM.
+pub fn with_pmm<F, T>(f: F) -> T
+where
+    F: FnOnce(&mut FrameAllocator) -> T,
+{
+    f(&mut PMM.lock())
 }

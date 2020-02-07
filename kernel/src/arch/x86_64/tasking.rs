@@ -1,5 +1,5 @@
 use crate::arch::address::VirtAddr;
-use crate::tasking::Stack;
+use crate::tasking::thread::Stack;
 
 impl Stack {
     /// Prepares the stack to execute at `entry`.

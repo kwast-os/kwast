@@ -13,6 +13,7 @@ pub mod address;
 pub mod interrupts;
 pub mod paging;
 pub mod port;
+pub mod tasking;
 pub mod vga_text;
 
 // For tests

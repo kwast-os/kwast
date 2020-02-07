@@ -16,12 +16,14 @@ For notes on Spectre, Meltdown and other related issues, see [#10](https://githu
 
 These instructions help you get started with building the source and getting it to run.
 
-### Setting up a toolchain
+### Requirements
 
 * make
 * grub-mkrescue (you might also need to install xorriso)
 * qemu-system-x86_64
 * cargo/rust
+
+### Setting up a toolchain
 
 You can setup your toolchain using the following steps:
 ```bash

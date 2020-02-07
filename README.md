@@ -1,14 +1,16 @@
 <p align="center">
 <img alt="Kwast" src="https://github.com/nielsdos/kwast/raw/master/docs/small_logo.png">
-</p>
 
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Build Status](https://travis-ci.org/nielsdos/kwast.svg?branch=master)](https://travis-ci.org/nielsdos/kwast)
+</p>
 
-**Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture.
+**Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture for flexibility.
 
-Since WebAssembly was designed to be a safe language, we can run it **without** having to use *hardware usermode* and *multiple address spaces*. This enables higher performance and opens more possibilities to implement a microkernel.
-You can read more about "[Why a microkernel?](#history-aka-why-a-microkernel)" below.
-Check out the [goals / ideas](#goals) section.
+Since WebAssembly was designed to be a safe language, we can run it without having to use hardware usermode and multiple address spaces.
+This enables low-cost context switches, low-cost syscalls, and a microkernel design without a big performance hit.
+Another interesting thing is that it means the software is cross-platform and that the compiler could enable platform-specific optimisations.
+
+For notes on Spectre, Meltdown and other related issues, see #10.
 
 ## Getting Started
 
@@ -50,12 +52,12 @@ make iso BUILD=release # (or run)
 ```
 
 ### Contributing
-Interested in contributing to the project? Check the issues for TODO items.
+Interested in contributing to the project? Check the issues.
 
 ## Goals
 
 ### Short-term goals
-* Getting some simple wasm running
+* Multitasking
 * Simple PS/2 server & similar small servers
 * SMP
 
@@ -69,12 +71,6 @@ Interested in contributing to the project? Check the issues for TODO items.
 * [Cranelift](https://github.com/bytecodealliance/cranelift) - Code generator used to parse & run WebAssembly. Kwast uses a fork of Cranelift to let it work in a no_std environment.
 
 * To integrate Cranelift, [wasmtime](https://github.com/bytecodealliance/wasmtime/) has been used as a reference implementation, which is licensed under the [Apache License 2.0](https://github.com/bytecodealliance/wasmtime/blob/master/LICENSE).
-
-## History (aka why a microkernel?)
-
-Because we run a safe language as "userspace", we don't need all those hardware protections that would otherwise slow down a microkernel. I always found the *design* and *flexibility* of a microkernel very interesting, but was bothered by the performance impact and how hard it is to integrate it with (for example) POSIX and make it performant. Another idea is that, since we compile the wasm at application start, we could do some very platform-specific optimisations.
-
-I originally started with a C++ microkernel, but found the performance overhead of doing things securely annoying. Then I stumbled across about [Cranelift](https://github.com/bytecodealliance/cranelift) and got the idea of bringing it into my kernel. However, since my kernel was C++, it was hard to do. This is why I decided to switch to Rust.
 
 ## Similar projects
 * [Nebulet](https://github.com/nebulet/nebulet) - A microkernel that implements a WebAssembly "usermode" that runs in Ring 0

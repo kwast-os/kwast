@@ -11,6 +11,7 @@ This enables low-cost context switches, low-cost syscalls, and a microkernel des
 Another interesting thing is that it means the software is cross-platform and that the compiler could enable platform-specific optimisations.
 
 For notes on Spectre, Meltdown and other related issues, see [#10](https://github.com/nielsdos/kwast/issues/10).
+An additional idea is to allow to use optional hardware protection domains in the future if requested.
 
 ## Getting Started
 

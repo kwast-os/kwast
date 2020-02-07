@@ -1,4 +1,4 @@
-use crate::arch::address::{VirtAddr, PhysAddr};
+use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::EntryFlags;
 
 /// Trait for memory mapper: maps physical addresses to a virtual addresses.
@@ -22,7 +22,13 @@ pub trait MemoryMapper {
     fn unmap_single(&mut self, vaddr: VirtAddr);
 
     /// Maps a range of pages to a range of physical frames.
-    fn map_range_physical(&mut self, vaddr: VirtAddr, paddr: PhysAddr, size: usize, flags: EntryFlags) -> MappingResult;
+    fn map_range_physical(
+        &mut self,
+        vaddr: VirtAddr,
+        paddr: PhysAddr,
+        size: usize,
+        flags: EntryFlags,
+    ) -> MappingResult;
 
     /// Maps a range.
     fn map_range(&mut self, vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MappingResult;
@@ -41,5 +47,5 @@ pub type MappingResult = Result<(), MappingError>;
 #[derive(Debug)]
 pub enum MappingError {
     /// Out of memory.
-    OOM
+    OOM,
 }

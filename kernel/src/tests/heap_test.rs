@@ -1,7 +1,7 @@
 use crate::arch::address::VirtAddr;
+use crate::arch::x86_64::paging::PAGE_SIZE;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use crate::arch::x86_64::paging::PAGE_SIZE;
 
 /// Test one allocation.
 #[cfg(feature = "test-heap-one-alloc")]

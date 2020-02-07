@@ -2,7 +2,7 @@ use multiboot2::BootInformation;
 use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::mm::mapper::{MappingResult, MappingError};
+use crate::mm::mapper::{MappingError, MappingResult};
 
 /// The default frame allocator.
 ///
@@ -29,7 +29,9 @@ impl FrameAllocator {
         let reserved_end = reserved_end.align_up();
 
         self.apply_mmap(
-            mboot_struct.memory_map_tag().expect("Memory map is required"),
+            mboot_struct
+                .memory_map_tag()
+                .expect("Memory map is required"),
             reserved_end,
         );
     }
@@ -44,7 +46,9 @@ impl FrameAllocator {
     /// Pops the top and moves the current top pointer. This function is used internally for memory management by paging.
     #[inline]
     pub fn pop_top<F>(&mut self, f: F) -> MappingResult
-        where F: FnOnce(PhysAddr) -> VirtAddr {
+    where
+        F: FnOnce(PhysAddr) -> VirtAddr,
+    {
         if unlikely!(self.top.is_null()) {
             return Err(MappingError::OOM);
         }
@@ -60,7 +64,9 @@ impl FrameAllocator {
     #[inline]
     pub fn push_top(&mut self, vaddr: VirtAddr, paddr: PhysAddr) {
         let ptr: *mut usize = vaddr.as_mut();
-        unsafe { ptr.write(self.top.as_usize()); }
+        unsafe {
+            ptr.write(self.top.as_usize());
+        }
         self.top = paddr;
     }
 }
@@ -72,17 +78,21 @@ pub struct PhysMemManager {
 }
 
 static PMM: PhysMemManager = PhysMemManager {
-    allocator: Mutex::new(FrameAllocator::empty())
+    allocator: Mutex::new(FrameAllocator::empty()),
 };
 
 impl PhysMemManager {
     /// Inits the physical frame allocator.
     pub fn init(&self, mboot_struct: &BootInformation, reserved_end: usize) {
-        self.allocator.lock().init(mboot_struct, PhysAddr::new(reserved_end));
+        self.allocator
+            .lock()
+            .init(mboot_struct, PhysAddr::new(reserved_end));
     }
 
     pub fn pop_top<F>(&self, f: F) -> MappingResult
-        where F: FnOnce(PhysAddr) -> VirtAddr {
+    where
+        F: FnOnce(PhysAddr) -> VirtAddr,
+    {
         self.allocator.lock().pop_top(f)
     }
 

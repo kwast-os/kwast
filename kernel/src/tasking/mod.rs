@@ -8,9 +8,7 @@ pub struct Stack {
 impl Stack {
     /// Creates a new stack on a given location.
     pub unsafe fn new(location: VirtAddr) -> Self {
-        Self {
-            location,
-        }
+        Self { location }
     }
 
     /// As a virtual address.

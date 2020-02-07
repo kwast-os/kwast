@@ -1,15 +1,21 @@
-use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::arch::address::VirtAddr;
-use core::mem::size_of;
-use crate::mm::mapper::MemoryMapper;
+use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::buddy::{Tree, MAX_LEVEL};
+use crate::mm::mapper::MemoryMapper;
+use core::mem::size_of;
 
 /// Buddy test.
 #[cfg(feature = "test-buddy")]
 pub fn test_main() {
     let mut mapping = ActiveMapping::get();
     let addr: usize = 0xFFF00000;
-    mapping.map_range(VirtAddr::new(addr), size_of::<Tree>(), EntryFlags::PRESENT | EntryFlags::WRITABLE).unwrap();
+    mapping
+        .map_range(
+            VirtAddr::new(addr),
+            size_of::<Tree>(),
+            EntryFlags::PRESENT | EntryFlags::WRITABLE,
+        )
+        .unwrap();
     let tree = unsafe { &mut *(addr as *mut Tree) };
     tree.init();
 

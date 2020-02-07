@@ -4,7 +4,7 @@ use bitflags::bitflags;
 use lazy_static::lazy_static;
 
 use crate::arch::x86_64::address::VirtAddr;
-use crate::arch::x86_64::paging::{PageFaultError, ActiveMapping};
+use crate::arch::x86_64::paging::{ActiveMapping, PageFaultError};
 use crate::arch::x86_64::port::write_port8;
 use crate::mm::mapper::MemoryMapper;
 
@@ -237,7 +237,10 @@ extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError)
         asm!("movq %cr2, $0" : "=r"(addr));
     }
     let phys = ActiveMapping::get().translate(addr);
-    panic!("Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}", frame, err, addr, phys);
+    panic!(
+        "Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}",
+        frame, err, addr, phys
+    );
 }
 
 extern "x86-interrupt" fn exc_fp(frame: &mut ISRStackFrame) {

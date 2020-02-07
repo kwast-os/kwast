@@ -1,25 +1,25 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
-use cranelift_codegen::{Context, CodegenError};
 use cranelift_codegen::settings::{self, Configurable};
-use cranelift_wasm::{FuncTranslator, WasmError, FuncIndex};
+use cranelift_codegen::{CodegenError, Context};
 use cranelift_wasm::translate_module;
+use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
-use alloc::vec::Vec;
-use crate::wasm::module_env::{ModuleEnv, FunctionBody};
-use crate::wasm::func_env::FuncEnv;
-use crate::arch::paging::{ActiveMapping, EntryFlags};
-use crate::mm::mapper::{MemoryMapper, MappingError};
 use crate::arch::address::VirtAddr;
-use cranelift_codegen::isa::TargetIsa;
-use alloc::boxed::Box;
-use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
-use cranelift_codegen::binemit::{NullTrapSink, NullStackmapSink, Reloc};
-use core::intrinsics::transmute;
-use bitflags::_core::ptr::write_unaligned;
-use crate::wasm::vmctx::VMContext;
-use crate::mm::avl_interval_tree::AVLIntervalTree;
+use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::arch::x86_64::paging::PAGE_SIZE;
+use crate::mm::avl_interval_tree::AVLIntervalTree;
+use crate::mm::mapper::{MappingError, MemoryMapper};
+use crate::wasm::func_env::FuncEnv;
+use crate::wasm::module_env::{FunctionBody, ModuleEnv};
+use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
+use crate::wasm::vmctx::VMContext;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use bitflags::_core::ptr::write_unaligned;
+use core::intrinsics::transmute;
+use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
+use cranelift_codegen::isa::TargetIsa;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
 
@@ -41,7 +41,8 @@ struct CompileResult {
     total_size: usize,
 }
 
-pub fn test() -> Result<(), Error> {// TODO: make better
+pub fn test() -> Result<(), Error> {
+    // TODO: make better
     let compile_result = compile()?;
 
     // TODO: do this for real, this is only for testing now. (and split in heap & code)
@@ -52,7 +53,11 @@ pub fn test() -> Result<(), Error> {// TODO: make better
 
     // TODO
     ActiveMapping::get()
-        .map_range(VirtAddr::new(addr), compile_result.total_size, EntryFlags::PRESENT | EntryFlags::WRITABLE)
+        .map_range(
+            VirtAddr::new(addr),
+            compile_result.total_size,
+            EntryFlags::PRESENT | EntryFlags::WRITABLE,
+        )
         .map_err(Error::MemoryError)?;
 
     // TODO: change flags method & expose that also to the boot
@@ -93,7 +98,8 @@ pub fn test() -> Result<(), Error> {// TODO: make better
 
             // Determine target address.
             let target_off = match relocation.target {
-                RelocationTarget::UserFunction(target_idx) => { // TODO: must be defined, not imported?
+                RelocationTarget::UserFunction(target_idx) => {
+                    // TODO: must be defined, not imported?
                     func_offsets[target_idx.as_u32() as usize]
                 }
                 RelocationTarget::LibCall(_libcall) => unimplemented!(),
@@ -119,7 +125,7 @@ pub fn test() -> Result<(), Error> {// TODO: make better
                         write_unaligned(reloc_addr as *mut u64, delta as u64);
                     }
                 }
-                _ => unimplemented!()
+                _ => unimplemented!(),
             }
         }
     }
@@ -141,22 +147,24 @@ pub fn test() -> Result<(), Error> {// TODO: make better
     let ptr = addr as *const ();
     let code: extern "C" fn(i32, i32, &VMContext) -> () = unsafe { transmute(ptr) };
     code(4, 10, &vmctx); // write fibonacci(10) to 0x500+4
-    println!("execution stopped, reading: {}", unsafe { *((vmctx.heap_base + 4) as *const i32) });
+    println!("execution stopped, reading: {}", unsafe {
+        *((vmctx.heap_base + 4) as *const i32)
+    });
 
     Ok(())
 }
 
 fn compile() -> Result<CompileResult, Error> {
     // Hardcoded test
-    let buffer = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0b, 0x02, 0x60,
-        0x02, 0x7f, 0x7f, 0x00, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x03, 0x03, 0x02,
-        0x00, 0x01, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x17, 0x01, 0x13, 0x72,
-        0x65, 0x63, 0x75, 0x72, 0x73, 0x69, 0x76, 0x65, 0x5f, 0x66, 0x69, 0x62,
-        0x6f, 0x6e, 0x61, 0x63, 0x63, 0x69, 0x00, 0x01, 0x0a, 0x2a, 0x02, 0x0b,
-        0x00, 0x20, 0x00, 0x20, 0x01, 0x10, 0x01, 0x36, 0x02, 0x00, 0x0b, 0x1c,
-        0x00, 0x20, 0x00, 0x41, 0x02, 0x49, 0x04, 0x7f, 0x41, 0x01, 0x05, 0x20,
-        0x00, 0x41, 0x01, 0x6b, 0x10, 0x01, 0x20, 0x00, 0x41, 0x02, 0x6b, 0x10,
-        0x01, 0x6a, 0x0b, 0x0b];
+    let buffer = [
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0b, 0x02, 0x60, 0x02, 0x7f, 0x7f,
+        0x00, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x03, 0x03, 0x02, 0x00, 0x01, 0x05, 0x03, 0x01, 0x00,
+        0x01, 0x07, 0x17, 0x01, 0x13, 0x72, 0x65, 0x63, 0x75, 0x72, 0x73, 0x69, 0x76, 0x65, 0x5f,
+        0x66, 0x69, 0x62, 0x6f, 0x6e, 0x61, 0x63, 0x63, 0x69, 0x00, 0x01, 0x0a, 0x2a, 0x02, 0x0b,
+        0x00, 0x20, 0x00, 0x20, 0x01, 0x10, 0x01, 0x36, 0x02, 0x00, 0x0b, 0x1c, 0x00, 0x20, 0x00,
+        0x41, 0x02, 0x49, 0x04, 0x7f, 0x41, 0x01, 0x05, 0x20, 0x00, 0x41, 0x01, 0x6b, 0x10, 0x01,
+        0x20, 0x00, 0x41, 0x02, 0x6b, 0x10, 0x01, 0x6a, 0x0b, 0x0b,
+    ];
 
     let isa_builder = cranelift_native::builder().unwrap();
     let mut flag_builder = settings::builder();
@@ -169,8 +177,7 @@ fn compile() -> Result<CompileResult, Error> {
 
     // Module
     let mut env = ModuleEnv::new(isa.frontend_config());
-    let translation = translate_module(&buffer, &mut env)
-        .map_err(Error::WasmError)?;
+    let translation = translate_module(&buffer, &mut env).map_err(Error::WasmError)?;
 
     // Compile the functions and store their contexts.
     let mut contexts: Vec<Context> = Vec::with_capacity(env.func_bodies.len());
@@ -182,13 +189,15 @@ fn compile() -> Result<CompileResult, Error> {
         let FunctionBody { body, offset } = env.func_bodies[idx];
 
         let mut func_trans = FuncTranslator::new();
-        func_trans.translate(
-            &translation,
-            body,
-            offset,
-            &mut ctx.func,
-            &mut FuncEnv::new(&env),
-        ).map_err(Error::WasmError)?;
+        func_trans
+            .translate(
+                &translation,
+                body,
+                offset,
+                &mut ctx.func,
+                &mut FuncEnv::new(&env),
+            )
+            .map_err(Error::WasmError)?;
 
         let info = ctx.compile(&*isa).map_err(Error::CodegenError)?;
         //println!("code_size: {}, rodata_size: {}, total_size: {}", info.code_size, info.rodata_size, info.total_size);

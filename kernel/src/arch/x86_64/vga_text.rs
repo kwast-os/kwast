@@ -32,10 +32,7 @@ static WRITER: Mutex<Writer> = Mutex::new(Writer {
 impl ScreenChar {
     /// Creates a new screen character.
     fn new(char: u8) -> Self {
-        ScreenChar {
-            char,
-            color: 0x07,
-        }
+        ScreenChar { char, color: 0x07 }
     }
 }
 

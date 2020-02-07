@@ -1,6 +1,6 @@
 use multiboot2::MemoryMapTag;
 
-use super::{ActiveMapping, EntryFlags, invalidate, PAGE_SIZE, PhysAddr, VirtAddr};
+use super::{invalidate, ActiveMapping, EntryFlags, PhysAddr, VirtAddr, PAGE_SIZE};
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::FrameAllocator;
 
@@ -16,7 +16,8 @@ impl FrameAllocator {
         }
 
         // Mapping flags
-        let map_flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
+        let map_flags =
+            EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
 
         let mut mapping = ActiveMapping::get();
         let mut e = mapping.get_2m_entry(tmp_2m_map_addr).unwrap();
@@ -48,13 +49,17 @@ impl FrameAllocator {
             // Initial write for this area is a little bit special because we still
             // need to write to the previous mapping. Otherwise the stack wouldn't be linked.
             // Can't fail.
-            unsafe { prev_entry_addr.write(current); }
+            unsafe {
+                prev_entry_addr.write(current);
+            }
 
             e.set(PhysAddr::new(current & !0x1ff_fff), map_flags);
             prev_entry_addr = current_to_prev_entry_addr(current);
 
             while current < end {
-                unsafe { prev_entry_addr.write(current); }
+                unsafe {
+                    prev_entry_addr.write(current);
+                }
 
                 // When we reach a new 2 MiB part, map that to our temporary mapping.
                 if current & 0x1ff_fff == 0 {
@@ -68,15 +73,20 @@ impl FrameAllocator {
         }
 
         // End
-        unsafe { prev_entry_addr.write(0); }
+        unsafe {
+            prev_entry_addr.write(0);
+        }
         self.top = PhysAddr::new(top);
 
         // Unmap
         {
             // Somewhat ugly, but better than complicating other code probably (for now)...
-            let p2 = mapping.p4
-                .next_table_mut(0).unwrap()
-                .next_table_mut(0).unwrap();
+            let p2 = mapping
+                .p4
+                .next_table_mut(0)
+                .unwrap()
+                .next_table_mut(0)
+                .unwrap();
 
             p2.entries[P2_IDX].clear();
             p2.decrease_used_count();
@@ -100,7 +110,8 @@ impl FrameAllocator {
                 let vaddr = VirtAddr::new(0x1000);
                 mapping.map_single(vaddr, top, EntryFlags::PRESENT).unwrap();
                 vaddr
-            }).unwrap();
+            })
+            .unwrap();
         }
 
         println!();

@@ -1,13 +1,13 @@
-use core::alloc::{GlobalAlloc, Layout};
-use core::ptr::{null_mut, NonNull};
-use core::mem::size_of;
-use core::cmp;
-use spin::Mutex;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::util::unchecked::UncheckedUnwrap;
+use core::alloc::{GlobalAlloc, Layout};
+use core::cmp;
+use core::mem::size_of;
+use core::ptr::{null_mut, NonNull};
+use spin::Mutex;
 
 struct SpaceManager<'t> {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -42,7 +42,7 @@ enum AllocType {
     C2048,
     C4096,
     C8192,
-    BIG
+    BIG,
 }
 
 /// The heap.
@@ -179,7 +179,9 @@ impl Slab {
         let allocated_offset = ptr as usize - self.self_ptr() as usize;
         debug_assert!(ptr as usize % 4 == 0);
         let allocated_offset_ptr = ptr as *mut u32;
-        unsafe { *allocated_offset_ptr = self.next_offset; }
+        unsafe {
+            *allocated_offset_ptr = self.next_offset;
+        }
         self.next_offset = allocated_offset as u32;
         self.free_count += 1;
     }
@@ -194,7 +196,14 @@ impl Slab {
 
 impl Cache {
     /// Creates a new cache.
-    fn new(obj_size: u32, alignment: u32, max_color: u16, start_offset: u32, slots_count: u32, slab_order: u8) -> Self {
+    fn new(
+        obj_size: u32,
+        alignment: u32,
+        max_color: u16,
+        start_offset: u32,
+        slots_count: u32,
+        slab_order: u8,
+    ) -> Self {
         Self {
             partial: SlabLink(None),
             free: SlabLink(None),
@@ -245,7 +254,14 @@ impl Cache {
         let max_color = (best_wastage / alignment) * alignment;
         //println!("best_wastage: {}, max_color: {}", best_wastage, max_color);
 
-        Cache::new(obj_size as u32, alignment as u32, max_color as u16, slab_rounded_up as u32, slots_count as u32, order as u8)
+        Cache::new(
+            obj_size as u32,
+            alignment as u32,
+            max_color as u16,
+            slab_rounded_up as u32,
+            slots_count as u32,
+            order as u8,
+        )
     }
 
     /// Cleans up free slab(s).
@@ -282,7 +298,12 @@ impl Cache {
         }
 
         // Create a new slab to allocate from. This will become a partial slab.
-        if let Some(slab) = space_manager.create_free_slab(self.slab_order as usize, start_offset, self.slots_count, self.obj_size) {
+        if let Some(slab) = space_manager.create_free_slab(
+            self.slab_order as usize,
+            start_offset,
+            self.slots_count,
+            self.obj_size,
+        ) {
             let result = slab.alloc();
 
             // There were no partial or free slabs, otherwise we would've allocated from there.
@@ -389,7 +410,8 @@ impl<'t> SpaceManager<'t> {
         // Map space for the tree
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
         let mut mapping = ActiveMapping::get();
-        mapping.map_range(tree_location, size_of::<Tree>(), flags)
+        mapping
+            .map_range(tree_location, size_of::<Tree>(), flags)
             .expect("cannot map range for tree");
 
         // Create the tree
@@ -426,8 +448,13 @@ impl<'t> SpaceManager<'t> {
     }
 
     /// Creates a free slab of the requested order.
-    fn create_free_slab<'s>(&mut self, order: usize, start_offset: u32, slots_count: u32, obj_size: u32)
-                            -> Option<&'s mut Slab> {
+    fn create_free_slab<'s>(
+        &mut self,
+        order: usize,
+        start_offset: u32,
+        slots_count: u32,
+        obj_size: u32,
+    ) -> Option<&'s mut Slab> {
         let offset = self.tree.alloc(order)?;
         let ptr = self.offset_to_ptr_and_map(order, offset);
 
@@ -448,7 +475,9 @@ impl<'t> SpaceManager<'t> {
 
     /// Allocate big chunk.
     fn alloc_big(&mut self, order: usize) -> *mut u8 {
-        self.tree.alloc(order).map_or(null_mut(), |offset| self.offset_to_ptr_and_map(order, offset))
+        self.tree.alloc(order).map_or(null_mut(), |offset| {
+            self.offset_to_ptr_and_map(order, offset)
+        })
     }
 
     /// Deallocate big chunk.
@@ -470,7 +499,7 @@ impl HeapCaches {
             AllocType::C2048 => &mut self.cache2048,
             AllocType::C4096 => &mut self.cache4096,
             AllocType::C8192 => &mut self.cache8192,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -539,9 +568,12 @@ impl Heap {
     pub fn alloc(&mut self, layout: Layout) -> *mut u8 {
         let alloc_type = HeapCaches::layout_to_type(layout);
         let ptr = if alloc_type == AllocType::BIG {
-            self.space_manager.alloc_big(Self::size_to_order(layout.size()))
+            self.space_manager
+                .alloc_big(Self::size_to_order(layout.size()))
         } else {
-            self.caches.type_to_cache(alloc_type).alloc(&mut self.space_manager)
+            self.caches
+                .type_to_cache(alloc_type)
+                .alloc(&mut self.space_manager)
         };
         debug_assert!(ptr as usize >= self.space_manager.alloc_area_start.as_usize());
         ptr
@@ -552,9 +584,12 @@ impl Heap {
         debug_assert!(ptr as usize >= self.space_manager.alloc_area_start.as_usize());
         let alloc_type = HeapCaches::layout_to_type(layout);
         if alloc_type == AllocType::BIG {
-            self.space_manager.dealloc_big(Self::size_to_order(layout.size()), ptr)
+            self.space_manager
+                .dealloc_big(Self::size_to_order(layout.size()), ptr)
         } else {
-            self.caches.type_to_cache(alloc_type).dealloc(&mut self.space_manager, ptr)
+            self.caches
+                .type_to_cache(alloc_type)
+                .dealloc(&mut self.space_manager, ptr)
         }
     }
 }
@@ -565,7 +600,11 @@ unsafe impl GlobalAlloc for LockedHeap {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.inner.lock().as_mut().unchecked_unwrap().dealloc(ptr, layout)
+        self.inner
+            .lock()
+            .as_mut()
+            .unchecked_unwrap()
+            .dealloc(ptr, layout)
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
@@ -592,7 +631,9 @@ fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
 }
 
 #[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap { inner: Mutex::new(None) };
+static ALLOCATOR: LockedHeap = LockedHeap {
+    inner: Mutex::new(None),
+};
 
 /// Inits allocation.
 pub fn init(reserved_end: VirtAddr) {

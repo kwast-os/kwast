@@ -1,19 +1,19 @@
 use core::cmp::max;
 
-use crate::mm;
 use crate::arch::address::VirtAddr;
-use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
-use crate::mm::mapper::MemoryMapper;
 use crate::arch::x86_64::address::PhysAddr;
+use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
+use crate::mm;
+use crate::mm::mapper::MemoryMapper;
 use multiboot2::ElfSectionFlags;
 
 #[macro_use]
 pub mod macros;
-pub mod vga_text;
 pub mod address;
 pub mod interrupts;
 pub mod paging;
 pub mod port;
+pub mod vga_text;
 
 // For tests
 pub mod qemu;
@@ -36,9 +36,13 @@ pub extern "C" fn entry(mboot_addr: usize) {
     // Map sections correctly
     {
         let mut mapping = ActiveMapping::get();
-        let sections = mboot_struct.elf_sections_tag().expect("no elf sections tag");
+        let sections = mboot_struct
+            .elf_sections_tag()
+            .expect("no elf sections tag");
         for x in sections.sections() {
-            if x.flags().is_empty() || x.flags() == ElfSectionFlags::WRITABLE | ElfSectionFlags::ALLOCATED {
+            if x.flags().is_empty()
+                || x.flags() == ElfSectionFlags::WRITABLE | ElfSectionFlags::ALLOCATED
+            {
                 continue;
             }
 
@@ -55,12 +59,14 @@ pub extern "C" fn entry(mboot_addr: usize) {
             //println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
 
             let start = VirtAddr::new(x.start_address() as usize).align_down();
-            mapping.map_range_physical(
-                start,
-                PhysAddr::new(start.as_usize()),
-                (x.end_address() - start.as_u64()) as usize, // No need for page alignment of size
-                paging_flags,
-            ).unwrap();
+            mapping
+                .map_range_physical(
+                    start,
+                    PhysAddr::new(start.as_usize()),
+                    (x.end_address() - start.as_u64()) as usize, // No need for page alignment of size
+                    paging_flags,
+                )
+                .unwrap();
         }
     }
 

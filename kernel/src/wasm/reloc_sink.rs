@@ -1,8 +1,8 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
+use alloc::vec::Vec;
 use cranelift_codegen::binemit::{self, Reloc};
 use cranelift_codegen::ir::{ExternalName, JumpTable, LibCall};
-use alloc::vec::Vec;
 use cranelift_wasm::FuncIndex;
 
 /// Relocation target.

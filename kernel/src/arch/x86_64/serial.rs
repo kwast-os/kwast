@@ -29,9 +29,7 @@ impl SerialPort {
         write_port8(port + 4, 0x0b);
         write_port8(port + 1, 0x01);
 
-        Self {
-            port
-        }
+        Self { port }
     }
 
     /// Sends a byte.

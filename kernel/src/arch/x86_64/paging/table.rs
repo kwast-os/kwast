@@ -49,7 +49,10 @@ pub struct Table<L: Level> {
     _phantom: PhantomData<L>,
 }
 
-impl<L> Table<L> where L: Level {
+impl<L> Table<L>
+where
+    L: Level,
+{
     /// Clears the table entries. (internal use only)
     fn clear(&mut self) {
         for e in self.entries.iter_mut() {
@@ -79,7 +82,10 @@ impl<L> Table<L> where L: Level {
     }
 }
 
-impl<L> Table<L> where L: HierarchicalLevel {
+impl<L> Table<L>
+where
+    L: HierarchicalLevel,
+{
     /// Gets the next table address (unchecked). (internal use only).
     fn next_table_address_unchecked(&self, index: usize) -> usize {
         let addr = self as *const _ as usize;
@@ -102,16 +108,21 @@ impl<L> Table<L> where L: HierarchicalLevel {
 
     /// Gets the next table level.
     pub fn next_table(&self, index: usize) -> Option<&Table<L::NextLevel>> {
-        self.next_table_address(index).map(|x| unsafe { &*(x as *const _) })
+        self.next_table_address(index)
+            .map(|x| unsafe { &*(x as *const _) })
     }
 
     /// Gets the next table level (mutable).
     pub fn next_table_mut(&self, index: usize) -> Option<&mut Table<L::NextLevel>> {
-        self.next_table_address(index).map(|x| unsafe { &mut *(x as *mut _) })
+        self.next_table_address(index)
+            .map(|x| unsafe { &mut *(x as *mut _) })
     }
 
     /// Gets the next table (mutable), creates it if it doesn't exist yet.
-    pub fn next_table_may_create(&mut self, index: usize) -> Result<&mut Table<L::NextLevel>, MappingError> {
+    pub fn next_table_may_create(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Table<L::NextLevel>, MappingError> {
         let flags = self.entries[index].flags();
         debug_assert!(!flags.contains(EntryFlags::HUGE_PAGE));
 
@@ -124,10 +135,7 @@ impl<L> Table<L> where L: HierarchicalLevel {
             // manipulating the pmm ourselves.
             mm::pmm::get().pop_top(|top| {
                 // We don't need to invalidate because it wasn't present.
-                self.entries[index].set(
-                    top,
-                    EntryFlags::PRESENT | EntryFlags::WRITABLE,
-                );
+                self.entries[index].set(top, EntryFlags::PRESENT | EntryFlags::WRITABLE);
 
                 VirtAddr::new(addr)
             })?;

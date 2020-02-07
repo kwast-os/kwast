@@ -1,11 +1,14 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
-use cranelift_codegen::ir::{Signature, AbiParam, ArgumentPurpose};
-use cranelift_codegen::isa;
-use cranelift_wasm::{FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex, WasmError, TargetEnvironment, ModuleEnvironment, WasmResult, ModuleTranslationState};
-use cranelift_codegen::isa::TargetFrontendConfig;
-use alloc::vec::Vec;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
+use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Signature};
+use cranelift_codegen::isa;
+use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_wasm::{
+    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleEnvironment, ModuleTranslationState,
+    SignatureIndex, Table, TableIndex, TargetEnvironment, WasmError, WasmResult,
+};
 
 pub struct FunctionBody<'data> {
     pub body: &'data [u8],
@@ -58,7 +61,10 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
     }
 
     fn declare_signature(&mut self, mut sig: Signature) -> WasmResult<()> {
-        sig.params.push(AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext));
+        sig.params.push(AbiParam::special(
+            self.pointer_type(),
+            ArgumentPurpose::VMContext,
+        ));
         self.signatures.push(sig);
         Ok(())
     }
@@ -72,15 +78,30 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         unimplemented!()
     }
 
-    fn declare_table_import(&mut self, _table: Table, _module: &'data str, _field: &'data str) -> WasmResult<()> {
+    fn declare_table_import(
+        &mut self,
+        _table: Table,
+        _module: &'data str,
+        _field: &'data str,
+    ) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_memory_import(&mut self, _memory: Memory, _module: &'data str, _field: &'data str) -> WasmResult<()> {
+    fn declare_memory_import(
+        &mut self,
+        _memory: Memory,
+        _module: &'data str,
+        _field: &'data str,
+    ) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_global_import(&mut self, _global: Global, _module: &'data str, _field: &'data str) -> WasmResult<()> {
+    fn declare_global_import(
+        &mut self,
+        _global: Global,
+        _module: &'data str,
+        _field: &'data str,
+    ) -> WasmResult<()> {
         unimplemented!()
     }
 
@@ -115,15 +136,27 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
-    fn declare_table_export(&mut self, _table_index: TableIndex, _name: &'data str) -> WasmResult<()> {
+    fn declare_table_export(
+        &mut self,
+        _table_index: TableIndex,
+        _name: &'data str,
+    ) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_memory_export(&mut self, _memory_index: MemoryIndex, _name: &'data str) -> WasmResult<()> {
+    fn declare_memory_export(
+        &mut self,
+        _memory_index: MemoryIndex,
+        _name: &'data str,
+    ) -> WasmResult<()> {
         unimplemented!()
     }
 
-    fn declare_global_export(&mut self, _global_index: GlobalIndex, _name: &'data str) -> WasmResult<()> {
+    fn declare_global_export(
+        &mut self,
+        _global_index: GlobalIndex,
+        _name: &'data str,
+    ) -> WasmResult<()> {
         unimplemented!()
     }
 

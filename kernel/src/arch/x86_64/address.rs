@@ -98,10 +98,13 @@ impl VirtAddr {
     /// Creates a canonical form, virtual address.
     #[inline]
     pub fn new(addr: usize) -> Self {
-        debug_assert!({
-                          let x = addr.get_bits(47..64);
-                          x == 0 || x == 0x1ffff
-                      }, "Virtual address is not in canonical form");
+        debug_assert!(
+            {
+                let x = addr.get_bits(47..64);
+                x == 0 || x == 0x1ffff
+            },
+            "Virtual address is not in canonical form"
+        );
         Self(addr)
     }
 

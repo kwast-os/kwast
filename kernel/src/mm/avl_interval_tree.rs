@@ -1,7 +1,7 @@
-use core::cmp::Ordering;
-use core::cmp;
-use alloc::boxed::Box;
 use crate::util::unchecked::UncheckedUnwrap;
+use alloc::boxed::Box;
+use core::cmp;
+use core::cmp::Ordering;
 
 type TreeNode = Option<Box<Node>>;
 
@@ -42,10 +42,7 @@ impl Node {
     fn update_max_len(&mut self) {
         self.max_len = cmp::max(
             self.interval_len,
-            cmp::max(
-                Self::max_len(&self.left),
-                Self::max_len(&self.right),
-            ),
+            cmp::max(Self::max_len(&self.left), Self::max_len(&self.right)),
         );
     }
 
@@ -119,9 +116,7 @@ pub struct AVLIntervalTree {
 impl AVLIntervalTree {
     /// Constructs an empty AVL interval tree.
     pub fn new() -> Self {
-        Self {
-            root: None,
-        }
+        Self { root: None }
     }
 
     /// Insert helper. Returns new root.
@@ -139,7 +134,8 @@ impl AVLIntervalTree {
                 if interval_start < root.interval_start {
                     root.left = Self::insert_helper(root.left.take(), interval_start, interval_len);
                 } else {
-                    root.right = Self::insert_helper(root.right.take(), interval_start, interval_len);
+                    root.right =
+                        Self::insert_helper(root.right.take(), interval_start, interval_len);
                 }
 
                 Some(Node::fixup(root))
@@ -212,7 +208,7 @@ impl AVLIntervalTree {
         let choices = [
             (Choice::Me, root.interval_len),
             (Choice::Left, left),
-            (Choice::Right, right)
+            (Choice::Right, right),
         ];
 
         let res = choices
@@ -226,13 +222,19 @@ impl AVLIntervalTree {
         match res.0 {
             // See safety of `res`.
             Choice::Left => {
-                let (left, result) = Self::find_len_helper(unsafe { root.left.take().unchecked_unwrap() }, wanted_len);
+                let (left, result) = Self::find_len_helper(
+                    unsafe { root.left.take().unchecked_unwrap() },
+                    wanted_len,
+                );
                 root.left = left;
                 root.update_max_len();
                 (Some(root), result)
             }
             Choice::Right => {
-                let (right, result) = Self::find_len_helper(unsafe { root.right.take().unchecked_unwrap() }, wanted_len);
+                let (right, result) = Self::find_len_helper(
+                    unsafe { root.right.take().unchecked_unwrap() },
+                    wanted_len,
+                );
                 root.right = right;
                 root.update_max_len();
                 (Some(root), result)
@@ -280,7 +282,7 @@ impl AVLIntervalTree {
                 root.left = left;
                 (Some(Node::fixup(root)), min)
             }
-            None => (root.right.take(), root)
+            None => (root.right.take(), root),
         }
     }
 
@@ -342,111 +344,132 @@ pub fn test_main() {
     let mut tree = AVLIntervalTree::new();
     tree.insert(0, 100);
     assert_eq!(tree.find_len(20), Some(80));
-    assert_eq!(tree.root, Some(Box::new(Node {
-        interval_start: 0,
-        interval_len: 80,
-        left: None,
-        right: None,
-        max_len: 80,
-        height: 1,
-    })));
-    tree.return_interval(90, 10);
-    assert_eq!(tree.root, Some(Box::new(Node {
-        interval_start: 0,
-        interval_len: 80,
-        left: None,
-        right: Some(Box::new(Node {
-            interval_start: 90,
-            interval_len: 10,
+    assert_eq!(
+        tree.root,
+        Some(Box::new(Node {
+            interval_start: 0,
+            interval_len: 80,
             left: None,
             right: None,
-            max_len: 10,
+            max_len: 80,
             height: 1,
-        })),
-        max_len: 80,
-        height: 2,
-    })));
+        }))
+    );
+    tree.return_interval(90, 10);
+    assert_eq!(
+        tree.root,
+        Some(Box::new(Node {
+            interval_start: 0,
+            interval_len: 80,
+            left: None,
+            right: Some(Box::new(Node {
+                interval_start: 90,
+                interval_len: 10,
+                left: None,
+                right: None,
+                max_len: 10,
+                height: 1,
+            })),
+            max_len: 80,
+            height: 2,
+        }))
+    );
     assert_eq!(tree.find_len(5), Some(95));
     tree.return_interval(95, 5);
-    assert_eq!(tree.root, Some(Box::new(Node {
-        interval_start: 0,
-        interval_len: 80,
-        left: None,
-        right: Some(Box::new(Node {
-            interval_start: 90,
-            interval_len: 10,
+    assert_eq!(
+        tree.root,
+        Some(Box::new(Node {
+            interval_start: 0,
+            interval_len: 80,
             left: None,
-            right: None,
-            max_len: 10,
-            height: 1,
-        })),
-        max_len: 80,
-        height: 2,
-    })));
+            right: Some(Box::new(Node {
+                interval_start: 90,
+                interval_len: 10,
+                left: None,
+                right: None,
+                max_len: 10,
+                height: 1,
+            })),
+            max_len: 80,
+            height: 2,
+        }))
+    );
     tree.return_interval(85, 4);
-    assert_eq!(tree.root, Some(Box::new(Node {
-        interval_start: 85,
-        interval_len: 4,
-        left: Some(Box::new(Node {
-            interval_start: 0,
-            interval_len: 80,
-            left: None,
-            right: None,
+    assert_eq!(
+        tree.root,
+        Some(Box::new(Node {
+            interval_start: 85,
+            interval_len: 4,
+            left: Some(Box::new(Node {
+                interval_start: 0,
+                interval_len: 80,
+                left: None,
+                right: None,
+                max_len: 80,
+                height: 1,
+            })),
+            right: Some(Box::new(Node {
+                interval_start: 90,
+                interval_len: 10,
+                left: None,
+                right: None,
+                max_len: 10,
+                height: 1,
+            })),
             max_len: 80,
-            height: 1,
-        })),
-        right: Some(Box::new(Node {
-            interval_start: 90,
-            interval_len: 10,
-            left: None,
-            right: None,
-            max_len: 10,
-            height: 1,
-        })),
-        max_len: 80,
-        height: 2,
-    })));
+            height: 2,
+        }))
+    );
     tree.return_interval(89, 1);
-    assert_eq!(tree.root, Some(Box::new(Node {
-        interval_start: 85,
-        interval_len: 15,
-        left: Some(Box::new(Node {
-            interval_start: 0,
-            interval_len: 80,
-            left: None,
+    assert_eq!(
+        tree.root,
+        Some(Box::new(Node {
+            interval_start: 85,
+            interval_len: 15,
+            left: Some(Box::new(Node {
+                interval_start: 0,
+                interval_len: 80,
+                left: None,
+                right: None,
+                max_len: 80,
+                height: 1,
+            })),
             right: None,
             max_len: 80,
-            height: 1,
-        })),
-        right: None,
-        max_len: 80,
-        height: 2,
-    })));
+            height: 2,
+        }))
+    );
     tree.return_interval(80, 4);
-    assert_eq!(tree.root, Some(Box::new(Node {
-        interval_start: 85,
-        interval_len: 15,
-        left: Some(Box::new(Node {
-            interval_start: 0,
-            interval_len: 84,
-            left: None,
+    assert_eq!(
+        tree.root,
+        Some(Box::new(Node {
+            interval_start: 85,
+            interval_len: 15,
+            left: Some(Box::new(Node {
+                interval_start: 0,
+                interval_len: 84,
+                left: None,
+                right: None,
+                max_len: 84,
+                height: 1,
+            })),
             right: None,
             max_len: 84,
-            height: 1,
-        })),
-        right: None,
-        max_len: 84,
-        height: 2,
-    })));
+            height: 2,
+        }))
+    );
     tree.return_interval(84, 1);
-    assert_eq!(tree.root, Some(Box::new(Node {
-        interval_start: 0,
-        interval_len: 100,
-        left: None,
-        right: None,
-        max_len: 100,
-        height: 1,
-    })));
+    assert_eq!(
+        tree.root,
+        Some(Box::new(Node {
+            interval_start: 0,
+            interval_len: 100,
+            left: None,
+            right: None,
+            max_len: 100,
+            height: 1,
+        }))
+    );
     tree.remove(0);
     assert_eq!(tree.root, None);
 }

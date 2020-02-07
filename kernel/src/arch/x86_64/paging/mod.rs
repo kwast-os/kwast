@@ -7,11 +7,11 @@ use super::address::{PhysAddr, VirtAddr};
 use self::entry::Entry;
 pub use self::entry::EntryFlags;
 use self::table::{Level4, Table};
-use crate::mm::mapper::{MemoryMapper, MappingResult, MappingError};
+use crate::mm::mapper::{MappingError, MappingResult, MemoryMapper};
 
 mod entry;
-mod table;
 mod frame;
+mod table;
 
 /// The page size on this arch.
 pub const PAGE_SIZE: usize = 0x1000;
@@ -47,7 +47,9 @@ pub struct EntryModifier<'a> {
 /// Invalidates page.
 #[inline]
 fn invalidate(addr: u64) {
-    unsafe { asm!("invlpg ($0)" :: "r" (addr) : "memory"); }
+    unsafe {
+        asm!("invlpg ($0)" :: "r" (addr) : "memory");
+    }
 }
 
 impl<'a> EntryModifier<'a> {
@@ -68,12 +70,15 @@ impl MemoryMapper for ActiveMapping {
     fn get() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self {
-            p4: unsafe { &mut *p4_ptr }
+            p4: unsafe { &mut *p4_ptr },
         }
     }
 
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
-        let p2 = self.p4.next_table(addr.p4_index())?.next_table(addr.p3_index())?;
+        let p2 = self
+            .p4
+            .next_table(addr.p4_index())?
+            .next_table(addr.p3_index())?;
 
         let p2_entry = &p2.entries[addr.p2_index()];
         if !p2_entry.flags().contains(EntryFlags::PRESENT) {
@@ -113,7 +118,13 @@ impl MemoryMapper for ActiveMapping {
         self.unmap_single_internal(vaddr, false)
     }
 
-    fn map_range_physical(&mut self, mut vaddr: VirtAddr, mut paddr: PhysAddr, size: usize, flags: EntryFlags) -> MappingResult {
+    fn map_range_physical(
+        &mut self,
+        mut vaddr: VirtAddr,
+        mut paddr: PhysAddr,
+        size: usize,
+        flags: EntryFlags,
+    ) -> MappingResult {
         debug_assert!(vaddr.is_page_aligned());
         debug_assert!(paddr.is_page_aligned());
 
@@ -174,7 +185,10 @@ impl ActiveMapping {
     fn unmap_single_internal(&mut self, vaddr: VirtAddr, frame: bool) {
         debug_assert!(vaddr.is_page_aligned());
 
-        let p3 = self.p4.next_table_mut(vaddr.p4_index()).expect("p3 not mapped");
+        let p3 = self
+            .p4
+            .next_table_mut(vaddr.p4_index())
+            .expect("p3 not mapped");
         let p2 = p3.next_table_mut(vaddr.p3_index()).expect("p2 not mapped");
         let p1 = p2.next_table_mut(vaddr.p2_index()).expect("p1 not mapped");
 
@@ -199,7 +213,8 @@ impl ActiveMapping {
     pub fn get_2m_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert!(vaddr.is_page_aligned());
 
-        let p2 = self.p4
+        let p2 = self
+            .p4
             .next_table_may_create(vaddr.p4_index())?
             .next_table_may_create(vaddr.p3_index())?;
 
@@ -216,7 +231,8 @@ impl ActiveMapping {
     /// Maps a 2MiB page.
     pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
         debug_assert!(paddr.is_2m_aligned());
-        self.get_2m_entry(vaddr)?.set(paddr, flags | EntryFlags::HUGE_PAGE);
+        self.get_2m_entry(vaddr)?
+            .set(paddr, flags | EntryFlags::HUGE_PAGE);
         Ok(())
     }
 
@@ -224,7 +240,8 @@ impl ActiveMapping {
     pub fn get_4k_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
         debug_assert!(vaddr.is_page_aligned());
 
-        let p1 = self.p4
+        let p1 = self
+            .p4
             .next_table_may_create(vaddr.p4_index())?
             .next_table_may_create(vaddr.p3_index())?
             .next_table_may_create(vaddr.p2_index())?;

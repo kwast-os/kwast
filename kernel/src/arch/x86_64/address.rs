@@ -4,7 +4,7 @@ use core::ops::Add;
 use bit_field::BitField;
 
 use crate::arch::x86_64::paging::PAGE_SIZE;
-use bitflags::_core::ops::AddAssign;
+use bitflags::_core::ops::{AddAssign, Sub, SubAssign};
 
 /// A 64-bit physical address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -117,6 +117,18 @@ impl VirtAddr {
         self.0 as u64
     }
 
+    /// Converts the virtual address to a mutable pointer.
+    #[inline]
+    pub fn as_mut<T>(self) -> *mut T {
+        self.0 as *mut T
+    }
+
+    /// Converts the virtual address to a const pointer.
+    #[inline]
+    pub fn as_const<T>(self) -> *const T {
+        self.0 as *const T
+    }
+
     /// Checks if the address is page aligned.
     pub fn is_page_aligned(self) -> bool {
         self.0 & (PAGE_SIZE - 1) == 0
@@ -172,8 +184,22 @@ impl Add<usize> for VirtAddr {
     }
 }
 
+impl Sub<usize> for VirtAddr {
+    type Output = Self;
+
+    fn sub(self, rhs: usize) -> Self::Output {
+        VirtAddr::new(self.0 - rhs)
+    }
+}
+
 impl AddAssign<usize> for VirtAddr {
     fn add_assign(&mut self, rhs: usize) {
         self.0 += rhs;
+    }
+}
+
+impl SubAssign<usize> for VirtAddr {
+    fn sub_assign(&mut self, rhs: usize) {
+        self.0 -= rhs;
     }
 }

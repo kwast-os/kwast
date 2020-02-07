@@ -393,7 +393,7 @@ impl<'t> SpaceManager<'t> {
             .expect("cannot map range for tree");
 
         // Create the tree
-        let tree = unsafe { &mut *(tree_location.as_usize() as *mut Tree) };
+        let tree = unsafe { &mut *(tree_location.as_mut::<Tree>()) };
         tree.init();
 
         Self {
@@ -412,7 +412,7 @@ impl<'t> SpaceManager<'t> {
             self.tree.dealloc(offset);
             null_mut()
         } else {
-            addr.as_usize() as *mut u8
+            addr.as_mut()
         }
     }
 

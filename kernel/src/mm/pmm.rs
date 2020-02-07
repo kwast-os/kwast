@@ -50,7 +50,7 @@ impl FrameAllocator {
         }
 
         // Read and set the next top address.
-        let ptr = f(self.top).as_usize() as *const usize;
+        let ptr = f(self.top).as_const();
         self.top = PhysAddr::new(unsafe { *ptr });
         Ok(())
     }
@@ -59,7 +59,7 @@ impl FrameAllocator {
     /// This pushes a new top on the stack and links it to the previous top.
     #[inline]
     pub fn push_top(&mut self, vaddr: VirtAddr, paddr: PhysAddr) {
-        let ptr = vaddr.as_usize() as *mut usize;
+        let ptr: *mut usize = vaddr.as_mut();
         unsafe { ptr.write(self.top.as_usize()); }
         self.top = paddr;
     }

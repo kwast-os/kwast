@@ -10,6 +10,8 @@ use core::panic::PanicInfo;
 
 use arch::interrupts;
 use crate::arch::address::VirtAddr;
+use crate::tasking::Stack;
+use crate::arch::tasking::switch_to;
 
 #[macro_use]
 mod macros;
@@ -18,6 +20,7 @@ mod arch;
 mod mm;
 mod util;
 mod wasm;
+mod tasking;
 #[cfg(feature = "integration-test")]
 mod tests;
 
@@ -51,6 +54,29 @@ pub fn kernel_run(reserved_end: VirtAddr) {
 #[cfg(not(feature = "integration-test"))]
 fn kernel_main() {
     wasm::main::test().unwrap();
+
+    // DEBUG
+    unsafe {
+        let mut stack1 = Stack::new(VirtAddr::new(0x400_000));
+        let mut stack2 = Stack::new(VirtAddr::new(0x400_000 - 0x1000));
+
+        stack1.prepare(VirtAddr::new(tasking_test_A as usize));
+        stack2.prepare(VirtAddr::new(tasking_test_B as usize));
+
+        switch_to(stack1.as_virt_addr()); // TODO: ugly
+    }
+}
+
+fn tasking_test_A() -> ! {
+    loop {
+        println!("A");
+    }
+}
+
+fn tasking_test_B() -> ! {
+    loop {
+        println!("B");
+    }
 }
 
 /// Kernel test main, called after arch init is done.

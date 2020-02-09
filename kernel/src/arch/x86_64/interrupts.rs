@@ -158,18 +158,15 @@ pub fn init() {
     write_port8(0xA1, 0x01);
     write_port8(0x21, 0xff);
     write_port8(0xA1, 0xff);
-
-    enable_ints();
 }
 
-pub fn enable_ints() {
+pub fn enable() {
     unsafe {
         asm!("sti" :::: "volatile");
     }
 }
 
-#[allow(dead_code)]
-pub fn disable_ints() {
+pub fn disable() {
     unsafe {
         asm!("cli" :::: "volatile");
     }

@@ -20,6 +20,7 @@ use arch::interrupts;
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler::with_scheduler;
 use crate::tasking::thread::Thread;
+use crate::tasking::thread::ThreadId;
 
 #[macro_use]
 mod macros;
@@ -37,7 +38,7 @@ mod wasm;
 fn panic(info: &PanicInfo) -> ! {
     // TODO: notify other processors/cores
     println!("{:#?}", info);
-    interrupts::disable_ints();
+    interrupts::disable();
     loop {
         arch::halt();
     }
@@ -48,8 +49,9 @@ pub fn kernel_run(reserved_end: VirtAddr) {
     // May only be called once.
     unsafe {
         mm::init(reserved_end);
-        tasking::scheduler::init(); // TODO: only enable interrupts after this to avoid issues
+        tasking::scheduler::init();
     }
+    interrupts::enable();
 
     #[cfg(not(feature = "integration-test"))]
     kernel_main();
@@ -68,19 +70,11 @@ pub fn kernel_run(reserved_end: VirtAddr) {
 fn kernel_main() {
     wasm::main::test().unwrap();
 
-    let test_thread = Thread::create(VirtAddr::new(tasking_test_a as usize));
+    let test_thread = Thread::create(VirtAddr::new(tasking_test_a as usize)).unwrap();
 
-    with_scheduler(|scheduler| {});
-    // DEBUG
-    /*unsafe {
-        let mut stack1 = Stack::new(VirtAddr::new(0x400_000));
-        let mut stack2 = Stack::new(VirtAddr::new(0x400_000 - 0x1000));
-
-        stack1.prepare(VirtAddr::new(tasking_test_a as usize));
-        stack2.prepare(VirtAddr::new(tasking_test_b as usize));
-
-        switch_to(stack1.as_virt_addr()); // TODO: ugly
-    }*/
+    with_scheduler(|scheduler| {
+        scheduler.add_thread(ThreadId::new(), test_thread);
+    });
 }
 
 fn tasking_test_a() -> ! {

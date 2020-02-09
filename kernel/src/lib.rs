@@ -65,7 +65,7 @@ pub fn kernel_run(reserved_end: VirtAddr) {
     }
 }
 
-/// Kernel main, called after arch init is done.
+/// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
 fn kernel_main() {
     wasm::main::test().unwrap();

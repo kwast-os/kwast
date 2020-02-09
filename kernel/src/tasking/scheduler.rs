@@ -47,7 +47,7 @@ impl Scheduler {
         }
     }
 
-    /// Gets the next thread state
+    /// Sets the scheduler up for switching to the next thread and gets the next thread stack address.
     pub fn next_thread_state(&mut self, old_stack: VirtAddr) -> VirtAddr {
         self.threads
             .get_mut(&self.current_thread_id)
@@ -63,14 +63,13 @@ impl Scheduler {
     }
 }
 
-extern "C" {
-    /// Switch to the next thread.
-    fn _switch_to_next();
-}
-
 /// Switches to the next thread.
 #[inline]
 pub fn switch_to_next() {
+    extern "C" {
+        fn _switch_to_next();
+    }
+
     unsafe {
         _switch_to_next();
     }

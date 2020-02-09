@@ -1,9 +1,11 @@
-use crate::arch::x86_64::address::VirtAddr;
-use crate::tasking::thread::{Stack, Thread, ThreadId};
-use crate::util::unchecked::UncheckedUnwrap;
 use alloc::collections::VecDeque;
+
 use hashbrown::HashMap;
 use spin::Mutex;
+
+use crate::arch::x86_64::address::VirtAddr;
+use crate::tasking::thread::{Thread, ThreadId};
+use crate::util::unchecked::UncheckedUnwrap;
 
 pub struct Scheduler {
     threads: HashMap<ThreadId, Thread>,

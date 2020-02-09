@@ -1,10 +1,11 @@
 //! Allocator used to split a domain into virtual memory areas.
 
+use spin::Mutex;
+
 use crate::arch::address::VirtAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::avl_interval_tree::AVLIntervalTree;
-use crate::mm::mapper::{MappingError, MappingResult, MemoryMapper};
-use spin::Mutex;
+use crate::mm::mapper::{MappingError, MemoryMapper};
 
 pub struct VMAAllocator {
     tree: AVLIntervalTree,
@@ -32,14 +33,18 @@ impl VMAAllocator {
     }
 
     /// Allocates a region and maps it.
-    pub fn alloc_region_and_map(&mut self, len: usize, flags: EntryFlags) -> MappingResult {
+    pub fn alloc_region_and_map(
+        &mut self,
+        len: usize,
+        flags: EntryFlags,
+    ) -> Result<VirtAddr, MappingError> {
         let addr = self.alloc_region(len).ok_or(MappingError::NoMoreVMA)?;
         let mut mapping = ActiveMapping::get();
-        if let e @ Err(_) = mapping.map_range(addr, len, flags) {
+        if let Err(e) = mapping.map_range(addr, len, flags) {
             self.free_region(addr, len);
-            e
+            Err(e)
         } else {
-            Ok(())
+            Ok(addr)
         }
     }
 

@@ -1,12 +1,15 @@
+use core::mem::size_of;
+
 use crate::arch::address::VirtAddr;
-use crate::arch::x86_64::paging::PAGE_SIZE;
+use crate::arch::paging::{EntryFlags, PAGE_SIZE};
 use crate::mm::mapper::MappingError;
 use crate::mm::vma_allocator::with_vma_allocator;
-use core::mem::size_of;
 
 /// The stack of a thread.
 pub struct Stack {
-    location: VirtAddr,
+    allocated_location: VirtAddr,
+    current_location: VirtAddr,
+    size: usize,
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -44,11 +47,9 @@ impl Thread {
     }
 }
 
-impl Drop for Thread {
+impl Drop for Stack {
     fn drop(&mut self) {
-        println!("drop thread");
-        // TODO: free_region_and_unmap
-        unimplemented!()
+        with_vma_allocator(|vma| vma.free_region_and_unmap(self.allocated_location, self.size));
     }
 }
 
@@ -56,21 +57,26 @@ impl Drop for Thread {
 impl Stack {
     /// Creates a stack.
     pub fn create(size: usize) -> Result<Stack, MappingError> {
-        let flags = EntryFlags::PRESENT | EntryFlags::WRITE | EntryFlags::NX;
-        let location = with_vma_allocator(|vma| vma.alloc_region_and_map(size, flags))?;
-        Ok(Stack { location })
+        let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+        let allocated_location = with_vma_allocator(|vma| vma.alloc_region_and_map(size, flags))?;
+        let current_location = allocated_location + size;
+        Ok(Stack {
+            allocated_location,
+            current_location,
+            size,
+        })
     }
 
     /// As a virtual address.
     #[inline]
     pub fn as_virt_addr(&self) -> VirtAddr {
-        self.location
+        self.current_location
     } // TODO: remove me?
 
     /// Pushes a value on the stack.
     pub unsafe fn push<T>(&mut self, value: T) {
-        self.location -= size_of::<T>();
-        let ptr = self.location.as_mut();
+        self.current_location -= size_of::<T>();
+        let ptr = self.current_location.as_mut();
         *ptr = value;
     }
 }

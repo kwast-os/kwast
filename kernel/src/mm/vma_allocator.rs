@@ -42,6 +42,13 @@ impl VMAAllocator {
             Ok(())
         }
     }
+
+    /// Frees a region and unmap it.
+    pub fn free_region_and_unmap(&mut self, addr: VirtAddr, len: usize) {
+        self.free_region(addr, len);
+        let mut mapping = ActiveMapping::get();
+        mapping.free_and_unmap_range(addr, len);
+    }
 }
 
 static VMA_ALLOCATOR: Mutex<VMAAllocator> = Mutex::new(VMAAllocator::new());

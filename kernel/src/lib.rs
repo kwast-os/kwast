@@ -17,6 +17,7 @@ use core::panic::PanicInfo;
 
 use crate::arch::address::VirtAddr;
 use arch::interrupts;
+use crate::tasking::scheduler::with_scheduler;
 
 #[macro_use]
 mod macros;
@@ -65,6 +66,10 @@ pub fn kernel_run(reserved_end: VirtAddr) {
 fn kernel_main() {
     wasm::main::test().unwrap();
 
+
+    with_scheduler(|scheduler| {
+
+    });
     // DEBUG
     /*unsafe {
         let mut stack1 = Stack::new(VirtAddr::new(0x400_000));

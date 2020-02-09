@@ -1,4 +1,7 @@
 use crate::arch::address::VirtAddr;
+use crate::arch::x86_64::paging::PAGE_SIZE;
+use crate::mm::mapper::MappingError;
+use crate::mm::vma_allocator::with_vma_allocator;
 use core::mem::size_of;
 
 /// The stack of a thread.
@@ -27,13 +30,35 @@ pub struct Thread {
     stack: Stack,
 }
 
-impl Thread {}
+impl Thread {
+    /// Creates a thread.
+    pub fn create(entry: VirtAddr) -> Result<Thread, MappingError> {
+        // TODO
+        let stack_size = 8 * PAGE_SIZE;
+        let mut stack = Stack::create(stack_size)?;
+        // Safe because enough size on the stack.
+        unsafe {
+            stack.prepare(entry);
+        }
+        Ok(Thread { stack })
+    }
+}
+
+impl Drop for Thread {
+    fn drop(&mut self) {
+        println!("drop thread");
+        // TODO: free_region_and_unmap
+        unimplemented!()
+    }
+}
 
 // TODO: bounds
 impl Stack {
-    /// Creates a new stack on a given location.
-    pub unsafe fn new(location: VirtAddr) -> Self {
-        Self { location }
+    /// Creates a stack.
+    pub fn create(size: usize) -> Result<Stack, MappingError> {
+        let flags = EntryFlags::PRESENT | EntryFlags::WRITE | EntryFlags::NX;
+        let location = with_vma_allocator(|vma| vma.alloc_region_and_map(size, flags))?;
+        Ok(Stack { location })
     }
 
     /// As a virtual address.

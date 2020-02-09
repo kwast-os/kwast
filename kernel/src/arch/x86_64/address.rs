@@ -108,6 +108,16 @@ impl VirtAddr {
         Self(addr)
     }
 
+    /// Creates a new virtual address that points to null.
+    pub const fn null() -> Self {
+        Self(0)
+    }
+
+    /// Checks if the address is null.
+    pub fn is_null(self) -> bool {
+        self.0 == 0
+    }
+
     /// Converts the virtual address to a usize.
     #[inline]
     pub fn as_usize(self) -> usize {

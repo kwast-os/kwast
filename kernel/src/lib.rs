@@ -18,6 +18,7 @@ use core::panic::PanicInfo;
 use arch::interrupts;
 
 use crate::arch::address::VirtAddr;
+use crate::tasking::scheduler;
 use crate::tasking::scheduler::with_scheduler;
 use crate::tasking::thread::Thread;
 use crate::tasking::thread::ThreadId;
@@ -51,7 +52,6 @@ pub fn kernel_run(reserved_end: VirtAddr) {
         mm::init(reserved_end);
         tasking::scheduler::init();
     }
-    interrupts::enable();
 
     #[cfg(not(feature = "integration-test"))]
     kernel_main();
@@ -70,22 +70,33 @@ pub fn kernel_run(reserved_end: VirtAddr) {
 fn kernel_main() {
     wasm::main::test().unwrap();
 
-    let test_thread = Thread::create(VirtAddr::new(tasking_test_a as usize)).unwrap();
+    let test_thread_a = Thread::create(VirtAddr::new(tasking_test_a as usize)).unwrap();
+    let test_thread_b = Thread::create(VirtAddr::new(tasking_test_b as usize)).unwrap();
 
     with_scheduler(|scheduler| {
-        scheduler.add_thread(ThreadId::new(), test_thread);
+        scheduler.add_thread(ThreadId::new(), test_thread_a);
+        scheduler.add_thread(ThreadId::new(), test_thread_b);
     });
+
+    interrupts::enable();
+    loop {
+        scheduler::switch_to_next();
+        // TODO: enable me in the future
+        //arch::halt();
+    }
 }
 
 fn tasking_test_a() -> ! {
     loop {
-        println!("A");
+        print!("A");
+        scheduler::switch_to_next();
     }
 }
 
 fn tasking_test_b() -> ! {
     loop {
-        println!("B");
+        print!("B");
+        scheduler::switch_to_next();
     }
 }
 

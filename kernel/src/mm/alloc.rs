@@ -1,5 +1,6 @@
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
+use crate::mm::buddy;
 use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::util::unchecked::UncheckedUnwrap;
@@ -424,9 +425,21 @@ impl<'t> SpaceManager<'t> {
         }
     }
 
+    /// Maximum end address of the heap.
+    fn max_end(&self) -> VirtAddr {
+        // We currently only maintain one tree. This could be extended in the future for more.
+        self.offset_to_addr(buddy::MAX_OFFSET + 1)
+    }
+
+    /// Offset to address.
+    #[inline]
+    fn offset_to_addr(&self, offset: usize) -> VirtAddr {
+        self.alloc_area_start + offset * PAGE_SIZE
+    }
+
     /// Converts an offset to a pointer and map the area.
     fn offset_to_ptr_and_map(&mut self, order: usize, offset: usize) -> *mut u8 {
-        let addr = self.alloc_area_start + offset * PAGE_SIZE;
+        let addr = self.offset_to_addr(offset);
         let size = PAGE_SIZE << order;
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
@@ -531,7 +544,7 @@ impl HeapCaches {
 
 impl Heap {
     /// Creates a new heap.
-    pub fn new(tree_location: VirtAddr) -> Self {
+    fn new(tree_location: VirtAddr) -> Self {
         Heap {
             space_manager: SpaceManager::new(tree_location),
             caches: HeapCaches {
@@ -546,6 +559,11 @@ impl Heap {
                 cache8192: Cache::calculate_and_create(8192, 8192),
             },
         }
+    }
+
+    /// Maximum end address of the heap.
+    fn max_end(&self) -> VirtAddr {
+        self.space_manager.max_end()
     }
 
     /// Converts a size to an order.
@@ -635,8 +653,11 @@ static ALLOCATOR: LockedHeap = LockedHeap {
     inner: Mutex::new(None),
 };
 
-/// Inits allocation.
-pub fn init(reserved_end: VirtAddr) {
+/// Inits allocation. May only be called once.
+pub unsafe fn init(reserved_end: VirtAddr) -> VirtAddr {
     debug_assert!(ALLOCATOR.inner.lock().is_none());
-    *ALLOCATOR.inner.lock() = Some(Heap::new(reserved_end));
+    let heap = Heap::new(reserved_end);
+    let max_end = heap.max_end();
+    *ALLOCATOR.inner.lock() = Some(heap);
+    max_end
 }

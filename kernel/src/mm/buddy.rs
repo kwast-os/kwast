@@ -4,10 +4,13 @@ use core::cmp;
 pub const MAX_LEVEL: usize = 15;
 
 /// Amount of nodes.
-const NODE_COUNT: usize = (1 << MAX_LEVEL) - 1;
+pub const NODE_COUNT: usize = (1 << MAX_LEVEL) - 1;
 
-// Amount of bytes needed.
+/// Amount of bytes needed.
 const NODE_BYTES_NEEDED: usize = NODE_COUNT;
+
+/// Max offset.
+pub const MAX_OFFSET: usize = (1 << (MAX_LEVEL - 1)) - 1;
 
 /// The buddy tree.
 pub struct Tree {

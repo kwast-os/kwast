@@ -3,7 +3,7 @@ use crate::tasking::thread::Stack;
 
 impl Stack {
     /// Prepares the stack to execute at `entry`.
-    pub fn prepare(&mut self, entry: VirtAddr) {
+    pub unsafe fn prepare(&mut self, entry: VirtAddr) {
         let rflags: u64 = (1 << 9) | (1 << 1);
         self.push(entry.as_u64());
         self.push(rflags);

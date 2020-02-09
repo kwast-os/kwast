@@ -1,4 +1,5 @@
-use crate::tasking::thread::{Thread, ThreadId};
+use crate::arch::x86_64::address::VirtAddr;
+use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::collections::VecDeque;
 use hashbrown::HashMap;
@@ -17,6 +18,17 @@ impl Scheduler {
             runlist: VecDeque::new(),
         }
     }
+
+    /// Adds a thread.
+    pub fn add_thread(&mut self, id: ThreadId, thread: Thread) {
+        self.threads.insert(id, thread);
+        self.runlist.push_back(id);
+    }
+}
+
+extern "C" {
+    /// Switch to a new stack.
+    pub fn switch_to(new_stack: VirtAddr);
 }
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
@@ -29,8 +41,8 @@ where
     unsafe { f(SCHEDULER.lock().as_mut().unchecked_unwrap()) }
 }
 
-/// Inits scheduler.
-pub fn init() {
+/// Inits scheduler. May only be called once per core.
+pub unsafe fn init() {
     debug_assert!(SCHEDULER.lock().is_none());
     *SCHEDULER.lock() = Some(Scheduler::new());
 }

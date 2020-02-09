@@ -16,6 +16,7 @@ extern crate alloc;
 use core::panic::PanicInfo;
 
 use crate::arch::address::VirtAddr;
+use crate::mm::buddy::{Tree, MAX_OFFSET};
 use arch::interrupts;
 
 #[macro_use]
@@ -45,6 +46,7 @@ pub fn kernel_run(reserved_end: VirtAddr) {
     // May only be called once.
     unsafe {
         mm::init(reserved_end);
+        tasking::scheduler::init();
     }
 
     #[cfg(not(feature = "integration-test"))]

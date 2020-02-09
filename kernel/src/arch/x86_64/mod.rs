@@ -5,6 +5,7 @@ use crate::arch::x86_64::address::PhysAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
+use crate::mm::vma_allocator::with_vma_allocator;
 use multiboot2::ElfSectionFlags;
 
 #[macro_use]
@@ -75,6 +76,17 @@ pub extern "C" fn entry(mboot_addr: usize) {
 
     let reserved_end = VirtAddr::new(reserved_end).align_up();
     crate::kernel_run(reserved_end);
+}
+
+/// Inits the VMA regions. May only be called once per VMA allocator.
+pub unsafe fn init_vma_regions(start: VirtAddr) {
+    with_vma_allocator(|vma| {
+        vma.free_region(start, 0x8000_00000000 - start.as_usize());
+        vma.free_region(
+            VirtAddr::new(0xffff8000_00000000),
+            0x8000_00000000 - 512 * 1024 * 1024 * 1024,
+        );
+    });
 }
 
 /// Halt instruction. Waits for interrupt.

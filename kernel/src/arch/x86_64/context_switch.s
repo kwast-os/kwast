@@ -1,6 +1,7 @@
 // AMD64 ABI tells us that only rbx, rbp, r12 - r15 need to be preserved by the callee.
 // switch_to(new_stack)
 .global switch_to
+.type switch_to, @function
 switch_to:
     pushfq
     pushq %rbx

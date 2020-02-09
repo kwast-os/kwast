@@ -7,11 +7,11 @@ type TreeNode = Option<Box<Node>>;
 
 #[derive(Debug, Eq, PartialEq)]
 struct Node {
-    interval_start: u32,
-    interval_len: u32,
+    interval_start: usize,
+    interval_len: usize,
     left: TreeNode,
     right: TreeNode,
-    max_len: u32,
+    max_len: usize,
     height: u8,
 }
 
@@ -22,7 +22,7 @@ impl Node {
     }
 
     /// Safe max_len getter.
-    fn max_len(n: &TreeNode) -> u32 {
+    fn max_len(n: &TreeNode) -> usize {
         n.as_ref().map_or(0, |n| n.max_len)
     }
 
@@ -115,12 +115,12 @@ pub struct AVLIntervalTree {
 
 impl AVLIntervalTree {
     /// Constructs an empty AVL interval tree.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { root: None }
     }
 
     /// Insert helper. Returns new root.
-    fn insert_helper(root: TreeNode, interval_start: u32, interval_len: u32) -> TreeNode {
+    fn insert_helper(root: TreeNode, interval_start: usize, interval_len: usize) -> TreeNode {
         match root {
             None => Some(Box::new(Node {
                 interval_start,
@@ -144,12 +144,16 @@ impl AVLIntervalTree {
     }
 
     /// Inserts a new interval in the tree.
-    pub fn insert(&mut self, interval_start: u32, interval_len: u32) {
+    pub fn insert(&mut self, interval_start: usize, interval_len: usize) {
         self.root = Self::insert_helper(self.root.take(), interval_start, interval_len);
     }
 
     /// Helper to extend interval in tree. Returns true on found and updates it, false otherwise.
-    fn extend_if_found_helper(root: &mut TreeNode, interval_end: u32, interval_len: u32) -> bool {
+    fn extend_if_found_helper(
+        root: &mut TreeNode,
+        interval_end: usize,
+        interval_len: usize,
+    ) -> bool {
         if let Some(root) = root {
             let node_interval_end = root.interval_start + root.interval_len;
             match interval_end.cmp(&node_interval_end) {
@@ -177,12 +181,12 @@ impl AVLIntervalTree {
     }
 
     /// Extend interval in tree if found. Returns true on found and updates it, false otherwise.
-    fn extend_if_found(&mut self, interval_end: u32, interval_len: u32) -> bool {
+    fn extend_if_found(&mut self, interval_end: usize, interval_len: usize) -> bool {
         Self::extend_if_found_helper(&mut self.root, interval_end, interval_len)
     }
 
     /// Returns a free interval to the tree.
-    pub fn return_interval(&mut self, interval_start: u32, mut interval_len: u32) {
+    pub fn return_interval(&mut self, interval_start: usize, mut interval_len: usize) {
         // Merge at front of other interval if possible.
         interval_len += self.remove(interval_start + interval_len).unwrap_or(0);
 
@@ -194,7 +198,7 @@ impl AVLIntervalTree {
     }
 
     /// Recursive find length helper, returns new root and the start offset of the fit.
-    fn find_len_helper(mut root: Box<Node>, wanted_len: u32) -> (TreeNode, Option<u32>) {
+    fn find_len_helper(mut root: Box<Node>, wanted_len: usize) -> (TreeNode, Option<usize>) {
         let left = Node::max_len(&root.left);
         let right = Node::max_len(&root.right);
 
@@ -261,7 +265,7 @@ impl AVLIntervalTree {
     }
 
     /// Tries to find a good fit and returns the start offset of the fit if found.
-    pub fn find_len(&mut self, wanted_len: u32) -> Option<u32> {
+    pub fn find_len(&mut self, wanted_len: usize) -> Option<usize> {
         debug_assert!(wanted_len > 0);
 
         // We will find a gap if the max available gap is big enough.
@@ -287,7 +291,7 @@ impl AVLIntervalTree {
     }
 
     /// Recursive remove procedure, returns new root and removed length.
-    fn remove_helper(mut root: Box<Node>, interval_start: u32) -> (TreeNode, Option<u32>) {
+    fn remove_helper(mut root: Box<Node>, interval_start: usize) -> (TreeNode, Option<usize>) {
         match interval_start.cmp(&root.interval_start) {
             Ordering::Less => {
                 if let Some(left) = root.left.take() {
@@ -327,7 +331,7 @@ impl AVLIntervalTree {
     }
 
     /// Remove the interval starting with `interval_start`. Returns length if removed, false otherwise.
-    pub fn remove(&mut self, interval_start: u32) -> Option<u32> {
+    pub fn remove(&mut self, interval_start: usize) -> Option<usize> {
         if let Some(root) = self.root.take() {
             let (root, result) = Self::remove_helper(root, interval_start);
             self.root = root;

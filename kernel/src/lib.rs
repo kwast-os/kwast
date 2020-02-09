@@ -45,7 +45,7 @@ pub fn kernel_run(reserved_end: VirtAddr) {
     // May only be called once.
     unsafe {
         mm::init(reserved_end);
-        tasking::scheduler::init();
+        tasking::scheduler::init(); // TODO: only enable interrupts after this to avoid issues
     }
 
     #[cfg(not(feature = "integration-test"))]

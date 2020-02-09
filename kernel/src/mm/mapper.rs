@@ -46,6 +46,8 @@ pub type MappingResult = Result<(), MappingError>;
 /// Error during mapping request.
 #[derive(Debug)]
 pub enum MappingError {
-    /// Out of memory.
+    /// Out of physical memory.
     OOM,
+    /// Out of virtual memory (no more virtual memory areas).
+    NoMoreVMA,
 }

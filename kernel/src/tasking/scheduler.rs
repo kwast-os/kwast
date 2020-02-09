@@ -47,44 +47,39 @@ impl Scheduler {
         }
     }
 
-    /// Setup to switch to the next thread.
-    fn setup_for_next(&mut self) -> (VirtAddr, ThreadId) {
-        let next = self.next_thread();
-        let next_stack = self.threads.get(&next).unwrap().get_stack_address();
-        let old_thread_id = self.current_thread_id;
-        self.current_thread_id = next;
-        (next_stack, old_thread_id)
-    }
-
-    /// Saves the old thread state.
-    pub fn save_thread_state(&mut self, old_stack: VirtAddr, old_thread_id: ThreadId) {
+    /// Gets the next thread state
+    pub fn next_thread_state(&mut self, old_stack: VirtAddr) -> VirtAddr {
         self.threads
-            .get_mut(&old_thread_id)
+            .get_mut(&self.current_thread_id)
             .unwrap()
             .set_stack_address(old_stack);
-        if old_thread_id != self.idle_thread_id {
-            self.runlist.push_back(old_thread_id);
+        let next_id = self.next_thread();
+        let next_stack = self.threads.get(&next_id).unwrap().get_stack_address();
+        if self.current_thread_id != self.idle_thread_id {
+            self.runlist.push_back(self.current_thread_id);
         }
+        self.current_thread_id = next_id;
+        next_stack
     }
 }
 
 extern "C" {
-    /// Switch to a new stack.
-    pub fn switch_to(new_stack: VirtAddr, old_thread_id: ThreadId);
+    /// Switch to the next thread.
+    fn _switch_to_next();
 }
 
 /// Switches to the next thread.
+#[inline]
 pub fn switch_to_next() {
-    let (new_stack, old_id) = with_scheduler(|scheduler| scheduler.setup_for_next());
     unsafe {
-        switch_to(new_stack, old_id);
+        _switch_to_next();
     }
 }
 
-/// Saves the old thread state.
+/// Saves the old state and gets the next state.
 #[no_mangle]
-pub extern "C" fn save_thread_state(old_stack: VirtAddr, old_thread_id: ThreadId) {
-    with_scheduler(|scheduler| scheduler.save_thread_state(old_stack, old_thread_id));
+pub extern "C" fn next_thread_state(old_stack: VirtAddr) -> VirtAddr {
+    with_scheduler(|scheduler| scheduler.next_thread_state(old_stack))
 }
 
 static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);

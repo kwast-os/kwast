@@ -3,7 +3,6 @@
 use crate::arch::address::VirtAddr;
 use crate::arch::x86_64::paging::PAGE_SIZE;
 use crate::mm::avl_interval_tree::AVLIntervalTree;
-use crate::util::unchecked::UncheckedUnwrap;
 use spin::Mutex;
 
 pub struct VMAAllocator {
@@ -39,5 +38,5 @@ pub fn with_vma_allocator<F, T>(f: F) -> T
 where
     F: FnOnce(&mut VMAAllocator) -> T,
 {
-    unsafe { f(&mut VMA_ALLOCATOR.lock()) }
+    f(&mut VMA_ALLOCATOR.lock())
 }

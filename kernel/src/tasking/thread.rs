@@ -46,8 +46,6 @@ impl Stack {
     pub unsafe fn push<T>(&mut self, value: T) {
         self.location -= size_of::<T>();
         let ptr = self.location.as_mut();
-        unsafe {
-            *ptr = value;
-        }
+        *ptr = value;
     }
 }

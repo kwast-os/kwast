@@ -16,7 +16,6 @@ extern crate alloc;
 use core::panic::PanicInfo;
 
 use crate::arch::address::VirtAddr;
-use crate::mm::buddy::{Tree, MAX_OFFSET};
 use arch::interrupts;
 
 #[macro_use]

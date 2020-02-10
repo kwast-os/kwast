@@ -136,8 +136,15 @@ lazy_static! {
         idt.set_handler(30, exc_unknown as usize, exc_flags);
         idt.set_handler(31, exc_unknown as usize, exc_flags);
 
-        for i in 32..(32 + 16) {
-            idt.set_handler(i, irq as usize, exc_flags);
+        extern "C" {
+            fn irq0();
+        }
+
+        // Timer
+        idt.set_handler(32 + 0, irq0 as usize, exc_flags);
+
+        for i in 1..16 {
+            idt.set_handler(32 + i, irq as usize, exc_flags);
         }
 
         idt
@@ -156,8 +163,18 @@ pub fn init() {
     write_port8(0xA1, 0x02);
     write_port8(0x21, 0x01);
     write_port8(0xA1, 0x01);
-    write_port8(0x21, 0xff);
-    write_port8(0xA1, 0xff);
+    write_port8(0x21, 0x00);
+    write_port8(0xA1, 0x00);
+}
+
+pub fn setup_timer() {
+    // TODO: replace this with the APIC timer
+    // Write to command port: channel 0, access mode lo&hi, mode 3, binary
+    write_port8(0x43, 0b00110110);
+    let hz = 100;
+    let divisor: i32 = 1193182 / hz;
+    write_port8(0x40, (divisor & 0xFF) as u8);
+    write_port8(0x40, (divisor >> 8) as u8);
 }
 
 pub fn enable() {
@@ -262,5 +279,5 @@ extern "x86-interrupt" fn exc_virtualization(frame: &mut ISRStackFrame) {
 
 extern "x86-interrupt" fn irq(_frame: &mut ISRStackFrame) {
     println!("IRQ: {:#?}", _frame);
-    // write_port8(0x20, 0x20);
+    // Real EOI to (maybe both) PIC
 }

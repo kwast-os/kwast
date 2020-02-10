@@ -10,7 +10,7 @@ use crate::util::unchecked::UncheckedUnwrap;
 #[derive(Debug)]
 #[repr(u64)]
 pub enum SwitchReason {
-    RegularSwitch,
+    RegularSwitch = 0,
     Exit,
 }
 
@@ -64,6 +64,7 @@ impl Scheduler {
     ) -> VirtAddr {
         if let Some(garbage) = self.garbage {
             self.threads.remove(&garbage);
+            self.garbage = None;
         }
 
         match switch_reason {

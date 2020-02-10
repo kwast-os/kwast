@@ -61,6 +61,7 @@ impl Thread {
 impl Drop for Stack {
     fn drop(&mut self) {
         debug_assert!(!self.allocated_location.is_null());
+        //println!("destroying stack {:?}", self.allocated_location);
         with_vma_allocator(|vma| vma.free_region_and_unmap(self.allocated_location, self.size));
         self.allocated_location = VirtAddr::null();
     }

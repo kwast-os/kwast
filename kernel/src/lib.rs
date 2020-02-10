@@ -80,10 +80,10 @@ fn kernel_main() {
     });
 
     interrupts::enable();
+    interrupts::setup_timer();
     loop {
         scheduler::switch_to_next(SwitchReason::RegularSwitch);
-        // TODO: enable me in the future
-        //arch::halt();
+        arch::halt();
     }
 }
 
@@ -91,9 +91,9 @@ fn tasking_test_a() -> ! {
     let mut i = 0;
     loop {
         print!("A");
-        scheduler::switch_to_next(SwitchReason::RegularSwitch);
+        arch::halt();
         i += 1;
-        if i > 1000 {
+        if i > 20 {
             scheduler::switch_to_next(SwitchReason::Exit);
         }
     }
@@ -102,7 +102,7 @@ fn tasking_test_a() -> ! {
 fn tasking_test_b() -> ! {
     loop {
         print!("B");
-        scheduler::switch_to_next(SwitchReason::RegularSwitch);
+        arch::halt();
     }
 }
 

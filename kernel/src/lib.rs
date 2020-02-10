@@ -20,6 +20,7 @@ use arch::interrupts;
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::with_scheduler;
+use crate::tasking::scheduler::SwitchReason;
 use crate::tasking::thread::Thread;
 use crate::tasking::thread::ThreadId;
 
@@ -80,23 +81,28 @@ fn kernel_main() {
 
     interrupts::enable();
     loop {
-        scheduler::switch_to_next();
+        scheduler::switch_to_next(SwitchReason::RegularSwitch);
         // TODO: enable me in the future
         //arch::halt();
     }
 }
 
 fn tasking_test_a() -> ! {
+    let mut i = 0;
     loop {
         print!("A");
-        scheduler::switch_to_next();
+        scheduler::switch_to_next(SwitchReason::RegularSwitch);
+        i += 1;
+        if i > 1000 {
+            scheduler::switch_to_next(SwitchReason::Exit);
+        }
     }
 }
 
 fn tasking_test_b() -> ! {
     loop {
         print!("B");
-        scheduler::switch_to_next();
+        scheduler::switch_to_next(SwitchReason::RegularSwitch);
     }
 }
 

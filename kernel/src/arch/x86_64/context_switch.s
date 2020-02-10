@@ -1,5 +1,5 @@
 // AMD64 ABI tells us that only rbx, rbp, r12 - r15 need to be preserved by the callee.
-// _switch_to_next()
+// _switch_to_next(switch_reason)
 .global _switch_to_next
 .type _switch_to_next, @function
 _switch_to_next:
@@ -13,7 +13,8 @@ _switch_to_next:
 
     .extern next_thread_state
     .type next_thread_state, @function
-    mov %rsp, %rdi
+    mov %rsp, %rsi
+    // rdi already contains `switch_reason`
     call next_thread_state
     movq %rax, %rsp
 

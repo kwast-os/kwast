@@ -64,12 +64,12 @@ impl PhysAddr {
 
     /// Aligns a memory address down.
     pub fn align_down(self) -> Self {
-        PhysAddr(self.0 & !(PAGE_SIZE - 1))
+        PhysAddr(align_down(self.0))
     }
 
     /// Aligns a memory address up.
     pub fn align_up(self) -> Self {
-        self.align_down() + PAGE_SIZE
+        PhysAddr(align_up(self.0))
     }
 }
 
@@ -174,13 +174,23 @@ impl VirtAddr {
 
     /// Aligns a memory address down.
     pub fn align_down(self) -> Self {
-        VirtAddr(self.0 & !(PAGE_SIZE - 1))
+        VirtAddr(align_down(self.0))
     }
 
     /// Aligns a memory address up.
     pub fn align_up(self) -> Self {
-        VirtAddr(((self.0 - 1) & !(PAGE_SIZE - 1)) + PAGE_SIZE)
+        VirtAddr(align_up(self.0))
     }
+}
+
+/// Align the value down to page size multiple.
+pub fn align_down(value: usize) -> usize {
+    value & !(PAGE_SIZE - 1)
+}
+
+/// Align the value up to page size multiple.
+pub fn align_up(value: usize) -> usize {
+    (value + PAGE_SIZE - 1) & !(PAGE_SIZE - 1)
 }
 
 impl Debug for VirtAddr {

@@ -1,6 +1,7 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
 use crate::wasm::module_env::ModuleEnv;
+use crate::wasm::vmctx::HEAP_GUARD_SIZE;
 use crate::wasm::vmctx::{HEAP_SIZE, HEAP_VMCTX_OFF};
 use alloc::vec::Vec;
 use cranelift_codegen::cursor::FuncCursor;
@@ -74,7 +75,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         Ok(func.create_heap(HeapData {
             base: heap_base,
             min_size: HEAP_SIZE.into(),
-            offset_guard_size: 0.into(),
+            offset_guard_size: HEAP_GUARD_SIZE.into(),
             style: HeapStyle::Static {
                 bound: HEAP_SIZE.into(),
             },

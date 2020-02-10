@@ -5,11 +5,10 @@ use cranelift_codegen::{CodegenError, Context};
 use cranelift_wasm::translate_module;
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
-use crate::arch::address::VirtAddr;
-use crate::arch::paging::{ActiveMapping, EntryFlags};
-use crate::arch::x86_64::paging::PAGE_SIZE;
-use crate::mm::avl_interval_tree::AVLIntervalTree;
-use crate::mm::mapper::{MappingError, MemoryMapper};
+use crate::arch::address::{align_up, VirtAddr};
+use crate::arch::paging::EntryFlags;
+use crate::mm::mapper::MappingError;
+use crate::mm::vma_allocator::with_vma_allocator;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{FunctionBody, ModuleEnv};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
@@ -18,7 +17,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use bitflags::_core::ptr::write_unaligned;
 use core::intrinsics::transmute;
+use cranelift_codegen::binemit;
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
+use cranelift_codegen::ir::{SourceLoc, TrapCode};
 use cranelift_codegen::isa::TargetIsa;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
@@ -31,8 +32,6 @@ pub enum Error {
     CodegenError(CodegenError),
     /// Memory error.
     MemoryError(MappingError),
-    /// Addresses exhausted error.
-    AddressesExhausted,
 }
 
 struct CompileResult {
@@ -41,27 +40,26 @@ struct CompileResult {
     total_size: usize,
 }
 
+struct TrapSink {}
+
+impl binemit::TrapSink for TrapSink {
+    fn trap(&mut self, a: u32, b: SourceLoc, c: TrapCode) {
+        println!("{:?} {:?} {:?}", a, b, c);
+    }
+}
+
 pub fn test() -> Result<(), Error> {
     // TODO: make better
     let compile_result = compile()?;
 
-    // TODO: do this for real, this is only for testing now. (and split in heap & code)
-    let mut tree = AVLIntervalTree::new();
-    tree.insert(0, 100);
-    let offset = tree.find_len(1).ok_or(Error::AddressesExhausted)? as usize;
-    let addr = 256 * 1024 * 104 + offset * PAGE_SIZE;
-
     // TODO
-    ActiveMapping::get()
-        .map_range(
-            VirtAddr::new(addr),
-            compile_result.total_size,
-            EntryFlags::PRESENT | EntryFlags::WRITABLE,
-        )
-        .map_err(Error::MemoryError)?; // TODO: return thing to tree if failed to map
+    let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE; // | EntryFlags::NX;
+    let len = align_up(compile_result.total_size);
+    let code_address = with_vma_allocator(|vma| vma.alloc_region_and_map(len, flags))
+        .map_err(Error::MemoryError)?
+        .as_usize();
 
     // TODO: change flags method & expose that also to the boot
-    // TODO: ! make sure to protect rodata ?
 
     // Emit code
     let capacity = compile_result.contexts.len();
@@ -70,11 +68,11 @@ pub fn test() -> Result<(), Error> {
     let mut offset: usize = 0;
     for context in &compile_result.contexts {
         let mut reloc_sink = RelocSink::new();
-        let mut trap_sink = NullTrapSink {};
+        let mut trap_sink = TrapSink {}; // NullTrapSink {};
         let mut null_stackmap_sink = NullStackmapSink {};
 
         let info = unsafe {
-            let ptr = (addr + offset) as *mut u8;
+            let ptr = (code_address + offset) as *mut u8;
 
             context.emit_to_memory(
                 &*compile_result.isa,
@@ -94,7 +92,7 @@ pub fn test() -> Result<(), Error> {
     // Relocations
     for (idx, reloc_sink) in reloc_sinks.iter().enumerate() {
         for relocation in &reloc_sink.relocations {
-            let reloc_addr = addr + func_offsets[idx] + relocation.code_offset as usize;
+            let reloc_addr = code_address + func_offsets[idx] + relocation.code_offset as usize;
 
             // Determine target address.
             let target_off = match relocation.target {
@@ -107,7 +105,6 @@ pub fn test() -> Result<(), Error> {
             };
 
             // Relocate!
-            println!("{:?}", relocation);
             match relocation.reloc {
                 Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                     let delta = target_off
@@ -130,21 +127,22 @@ pub fn test() -> Result<(), Error> {
         }
     }
 
-    /*for x in 0..compile_result.total_size {
+    for x in 0..compile_result.total_size {
         unsafe {
-            let ptr = (addr + x) as *mut u8;
+            let ptr = (code_address + x) as *mut u8;
             print!("{:#x}, ", *ptr);
         }
-    }*/
+    }
 
     println!();
     println!("now going to execute code"); // TODO: should happen in a process
 
+    // TODO: allocate a real heap (with guard too)
     let vmctx = VMContext {
-        heap_base: addr + 0x500, // TODO
+        heap_base: code_address + 0x500, // TODO
     };
 
-    let ptr = addr as *const ();
+    let ptr = code_address as *const ();
     let code: extern "C" fn(i32, i32, &VMContext) -> () = unsafe { transmute(ptr) };
     code(4, 10, &vmctx); // write fibonacci(10) to 0x500+4
     println!("execution stopped, reading: {}", unsafe {
@@ -156,21 +154,32 @@ pub fn test() -> Result<(), Error> {
 
 fn compile() -> Result<CompileResult, Error> {
     // Hardcoded test
-    let buffer = [
-        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0b, 0x02, 0x60, 0x02, 0x7f, 0x7f,
+    /*let buffer = [
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x06, 0x01, 0x60,
+        0x01, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x0c, 0x01, 0x08,
+        0x6f, 0x76, 0x65, 0x72, 0x66, 0x6c, 0x6f, 0x77, 0x00, 0x00, 0x0a, 0x0b,
+        0x01, 0x09, 0x00, 0x20, 0x00, 0x10, 0x00, 0x20, 0x00, 0x6a, 0x0b
+    ];*/
+    /*let buffer = [
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00, 0x00, 0x03,
+        0x02, 0x01, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x08, 0x01, 0x04, 0x74, 0x65, 0x73,
+        0x74, 0x00, 0x00, 0x0a, 0x0f, 0x01, 0x0d, 0x00, 0x41, 0x7f, 0x41, 0xad, 0xbd, 0xb7, 0xf5,
+        0x7d, 0x36, 0x02, 0x00, 0x0b,
+    ];*/
+    let buffer = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0b, 0x02, 0x60, 0x02, 0x7f, 0x7f,
         0x00, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x03, 0x03, 0x02, 0x00, 0x01, 0x05, 0x03, 0x01, 0x00,
         0x01, 0x07, 0x17, 0x01, 0x13, 0x72, 0x65, 0x63, 0x75, 0x72, 0x73, 0x69, 0x76, 0x65, 0x5f,
         0x66, 0x69, 0x62, 0x6f, 0x6e, 0x61, 0x63, 0x63, 0x69, 0x00, 0x01, 0x0a, 0x2a, 0x02, 0x0b,
         0x00, 0x20, 0x00, 0x20, 0x01, 0x10, 0x01, 0x36, 0x02, 0x00, 0x0b, 0x1c, 0x00, 0x20, 0x00,
         0x41, 0x02, 0x49, 0x04, 0x7f, 0x41, 0x01, 0x05, 0x20, 0x00, 0x41, 0x01, 0x6b, 0x10, 0x01,
-        0x20, 0x00, 0x41, 0x02, 0x6b, 0x10, 0x01, 0x6a, 0x0b, 0x0b,
-    ];
+        0x20, 0x00, 0x41, 0x02, 0x6b, 0x10, 0x01, 0x6a, 0x0b, 0x0b];
 
     let isa_builder = cranelift_native::builder().unwrap();
     let mut flag_builder = settings::builder();
 
     // Flags
     flag_builder.set("opt_level", "speed_and_size").unwrap();
+    //flag_builder.set("enable_probestack", "true").unwrap();
 
     let flags = settings::Flags::new(flag_builder);
     let isa = isa_builder.finish(flags);

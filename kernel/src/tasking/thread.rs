@@ -1,15 +1,14 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{EntryFlags, PAGE_SIZE};
-use crate::mm::mapper::MappingError;
-use crate::mm::vma_allocator::with_vma_allocator;
+use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
+use crate::mm::mapper::{MemoryError, MemoryMapper};
+use crate::mm::vma_allocator::Vma;
 
 /// The stack of a thread.
 pub struct Stack {
-    allocated_location: VirtAddr,
+    _vma: Vma,
     current_location: VirtAddr,
-    size: usize,
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -31,7 +30,7 @@ pub struct Thread {
 
 impl Thread {
     /// Creates a thread.
-    pub fn create(entry: VirtAddr) -> Result<Thread, MappingError> {
+    pub fn create(entry: VirtAddr) -> Result<Thread, MemoryError> {
         // TODO
         let stack_size = 8 * PAGE_SIZE;
         let mut stack = Stack::create(stack_size)?;
@@ -58,31 +57,25 @@ impl Thread {
     }
 }
 
-impl Drop for Stack {
-    fn drop(&mut self) {
-        debug_assert!(!self.allocated_location.is_null());
-        //println!("destroying stack {:?}", self.allocated_location);
-        with_vma_allocator(|vma| vma.free_region_and_unmap(self.allocated_location, self.size));
-        self.allocated_location = VirtAddr::null();
-    }
-}
-
 // TODO: bounds
 impl Stack {
     /// Creates a stack.
-    pub fn create(size: usize) -> Result<Stack, MappingError> {
-        let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-        let location = with_vma_allocator(|vma| vma.alloc_region_and_map(size, flags))?;
-        // Safe because we allocated the resources.
-        Ok(unsafe { Stack::new(location, size) })
+    pub fn create(size: usize) -> Result<Stack, MemoryError> {
+        let vma = {
+            let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+            let vma = Vma::create(size)?;
+            ActiveMapping::get().map_range(vma.address(), size, flags)?;
+            vma
+        };
+        Ok(Stack::new(vma))
     }
 
     /// Creates a new stack from given parameters.
-    pub unsafe fn new(location: VirtAddr, size: usize) -> Self {
+    pub fn new(vma: Vma) -> Self {
+        let current_location = vma.address() + vma.size();
         Self {
-            allocated_location: location,
-            current_location: location + size,
-            size,
+            _vma: vma,
+            current_location,
         }
     }
 

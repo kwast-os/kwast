@@ -3,12 +3,57 @@
 use spin::Mutex;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
+use crate::arch::paging::PAGE_SIZE;
 use crate::mm::avl_interval_tree::AVLIntervalTree;
-use crate::mm::mapper::{MappingError, MemoryMapper};
+use crate::mm::mapper::MemoryError;
 
 pub struct VMAAllocator {
     tree: AVLIntervalTree,
+}
+
+/// Virtual memory area.
+#[derive(Debug)]
+pub struct Vma {
+    start: VirtAddr,
+    len: usize,
+}
+
+impl Vma {
+    /// Creates a new Vma of the requested size.
+    pub fn create(len: usize) -> Result<Self, MemoryError> {
+        with_vma_allocator(|allocator| {
+            let start = allocator.alloc_region(len).ok_or(MemoryError::NoMoreVMA)?;
+            Ok(Self { start, len })
+        })
+    }
+
+    /// Empty Vma.
+    pub const fn empty() -> Self {
+        Self {
+            start: VirtAddr::null(),
+            len: 0,
+        }
+    }
+
+    /// Gets the starting address.
+    #[inline]
+    pub fn address(&self) -> VirtAddr {
+        self.start
+    }
+
+    /// Gets the length.
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.len
+    }
+}
+
+impl Drop for Vma {
+    fn drop(&mut self) {
+        if likely!(!self.address().is_null()) {
+            with_vma_allocator(|allocator| allocator.insert_region(self.start, self.len));
+        }
+    }
 }
 
 impl VMAAllocator {
@@ -19,8 +64,8 @@ impl VMAAllocator {
         }
     }
 
-    /// Frees a region.
-    pub fn free_region(&mut self, addr: VirtAddr, len: usize) {
+    /// Inserts a region.
+    pub fn insert_region(&mut self, addr: VirtAddr, len: usize) {
         debug_assert!(addr.is_page_aligned());
         debug_assert!(len % PAGE_SIZE == 0);
         self.tree.return_interval(addr.as_usize(), len);
@@ -30,29 +75,6 @@ impl VMAAllocator {
     pub fn alloc_region(&mut self, len: usize) -> Option<VirtAddr> {
         debug_assert!(len % PAGE_SIZE == 0);
         self.tree.find_len(len).map(VirtAddr::new)
-    }
-
-    /// Allocates a region and maps it.
-    pub fn alloc_region_and_map(
-        &mut self,
-        len: usize,
-        flags: EntryFlags,
-    ) -> Result<VirtAddr, MappingError> {
-        let addr = self.alloc_region(len).ok_or(MappingError::NoMoreVMA)?;
-        let mut mapping = ActiveMapping::get();
-        if let Err(e) = mapping.map_range(addr, len, flags) {
-            self.free_region(addr, len);
-            Err(e)
-        } else {
-            Ok(addr)
-        }
-    }
-
-    /// Frees a region and unmap it.
-    pub fn free_region_and_unmap(&mut self, addr: VirtAddr, len: usize) {
-        self.free_region(addr, len);
-        let mut mapping = ActiveMapping::get();
-        mapping.free_and_unmap_range(addr, len);
     }
 }
 

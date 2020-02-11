@@ -1,3 +1,4 @@
+use crate::arch::address::VirtAddr;
 use crate::arch::paging::PAGE_SIZE;
 
 pub const HEAP_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
@@ -9,5 +10,5 @@ pub const HEAP_VMCTX_OFF: i32 = 0;
 
 #[derive(Debug)]
 pub struct VMContext {
-    pub(crate) heap_base: usize,
+    pub(crate) heap_base: VirtAddr,
 }

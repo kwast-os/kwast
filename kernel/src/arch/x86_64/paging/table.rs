@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use crate::arch::x86_64::address::VirtAddr;
 
 use super::entry::*;
-use super::MappingError;
+use super::MemoryError;
 use crate::mm::pmm::with_pmm;
 
 // We use the clever solution for static type safety as described by [Philipp Oppermann's blog](https://os.phil-opp.com/)
@@ -122,7 +122,7 @@ where
     pub fn next_table_may_create(
         &mut self,
         index: usize,
-    ) -> Result<&mut Table<L::NextLevel>, MappingError> {
+    ) -> Result<&mut Table<L::NextLevel>, MemoryError> {
         let flags = self.entries[index].flags();
         debug_assert!(!flags.contains(EntryFlags::HUGE_PAGE));
 

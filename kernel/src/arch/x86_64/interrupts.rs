@@ -170,9 +170,9 @@ pub fn init() {
 pub fn setup_timer() {
     // TODO: replace this with the APIC timer
     // Write to command port: channel 0, access mode lo&hi, mode 3, binary
-    write_port8(0x43, 0b00110110);
+    write_port8(0x43, 0b0011_0110);
     let hz = 100;
-    let divisor: i32 = 1193182 / hz;
+    let divisor: i32 = 1_193_182 / hz;
     write_port8(0x40, (divisor & 0xFF) as u8);
     write_port8(0x40, (divisor >> 8) as u8);
 }

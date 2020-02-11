@@ -5,7 +5,7 @@ use super::address::{PhysAddr, VirtAddr};
 use self::entry::Entry;
 pub use self::entry::EntryFlags;
 use self::table::{Level4, Table};
-use crate::mm::mapper::{MappingError, MappingResult, MemoryMapper};
+use crate::mm::mapper::{MappingResult, MemoryError, MemoryMapper};
 use crate::mm::pmm::with_pmm;
 
 mod entry;
@@ -52,16 +52,30 @@ fn invalidate(addr: u64) {
 }
 
 impl<'a> EntryModifier<'a> {
-    /// Sets the entry.
-    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
+    /// Helper.
+    #[inline]
+    fn with<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut Entry),
+    {
         let was_present = self.entry.flags().contains(EntryFlags::PRESENT);
 
-        self.entry.set(addr, flags);
+        f(self.entry);
 
         // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
         if was_present {
             invalidate(self.addr);
         }
+    }
+
+    /// Sets the entry.
+    pub fn set(&mut self, addr: PhysAddr, flags: EntryFlags) {
+        self.with(|entry| entry.set(addr, flags))
+    }
+
+    /// Sets the entry flags.
+    pub fn set_flags(&mut self, flags: EntryFlags) {
+        self.with(|entry| entry.set_flags(flags))
     }
 }
 
@@ -165,6 +179,7 @@ impl MemoryMapper for ActiveMapping {
 
     fn unmap_range(&mut self, mut vaddr: VirtAddr, size: usize) {
         debug_assert!(vaddr.is_page_aligned());
+
         for _ in (0..size).step_by(PAGE_SIZE) {
             self.unmap_single(vaddr);
             vaddr += PAGE_SIZE;
@@ -173,10 +188,27 @@ impl MemoryMapper for ActiveMapping {
 
     fn free_and_unmap_range(&mut self, mut vaddr: VirtAddr, size: usize) {
         debug_assert!(vaddr.is_page_aligned());
+
         for _ in (0..size).step_by(PAGE_SIZE) {
             self.free_and_unmap_single(vaddr);
             vaddr += PAGE_SIZE;
         }
+    }
+
+    fn change_flags_range(
+        &mut self,
+        mut vaddr: VirtAddr,
+        size: usize,
+        flags: EntryFlags,
+    ) -> MappingResult {
+        debug_assert!(vaddr.is_page_aligned());
+
+        for _ in (0..size).step_by(PAGE_SIZE) {
+            self.get_4k_entry(vaddr)?.set_flags(flags);
+            vaddr += PAGE_SIZE;
+        }
+
+        Ok(())
     }
 }
 
@@ -211,7 +243,7 @@ impl ActiveMapping {
     }
 
     /// Gets the entry modifier for a 2 MiB page. Sets the page as used.
-    pub fn get_2m_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
+    pub fn get_2m_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MemoryError> {
         debug_assert!(vaddr.is_page_aligned());
 
         let p2 = self
@@ -238,7 +270,7 @@ impl ActiveMapping {
     }
 
     /// Gets the entry modifier for a 4 KiB page. Sets the page as used.
-    pub fn get_4k_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MappingError> {
+    pub fn get_4k_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MemoryError> {
         debug_assert!(vaddr.is_page_aligned());
 
         let p1 = self

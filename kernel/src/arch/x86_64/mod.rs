@@ -62,9 +62,8 @@ pub extern "C" fn entry(mboot_addr: usize) {
 
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping
-                .map_range_physical(
+                .change_flags_range(
                     start,
-                    PhysAddr::new(start.as_usize()),
                     (x.end_address() - start.as_u64()) as usize, // No need for page alignment of size
                     paging_flags,
                 )
@@ -81,8 +80,8 @@ pub extern "C" fn entry(mboot_addr: usize) {
 /// Inits the VMA regions. May only be called once per VMA allocator.
 pub unsafe fn init_vma_regions(start: VirtAddr) {
     with_vma_allocator(|vma| {
-        vma.free_region(start, 0x8000_00000000 - start.as_usize());
-        vma.free_region(
+        vma.insert_region(start, 0x8000_00000000 - start.as_usize());
+        vma.insert_region(
             VirtAddr::new(0xffff8000_00000000),
             0x8000_00000000 - 512 * 1024 * 1024 * 1024,
         );

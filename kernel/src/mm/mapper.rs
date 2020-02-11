@@ -38,14 +38,22 @@ pub trait MemoryMapper {
 
     /// Unmaps a range and frees the corresponding physical frames.
     fn free_and_unmap_range(&mut self, vaddr: VirtAddr, size: usize);
+
+    /// Changes the flags in a range.
+    fn change_flags_range(
+        &mut self,
+        vaddr: VirtAddr,
+        size: usize,
+        flags: EntryFlags,
+    ) -> MappingResult;
 }
 
 /// Map result.
-pub type MappingResult = Result<(), MappingError>;
+pub type MappingResult = Result<(), MemoryError>;
 
 /// Error during mapping request.
 #[derive(Debug)]
-pub enum MappingError {
+pub enum MemoryError {
     /// Out of physical memory.
     OOM,
     /// Out of virtual memory (no more virtual memory areas).

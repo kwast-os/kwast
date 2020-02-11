@@ -4,6 +4,7 @@ use hashbrown::HashMap;
 use spin::Mutex;
 
 use crate::arch::address::VirtAddr;
+use crate::mm::vma_allocator::Vma;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 
@@ -26,7 +27,7 @@ impl Scheduler {
     /// New scheduler.
     fn new() -> Self {
         // This will be overwritten on the first context switch with valid data.
-        let idle_thread = unsafe { Thread::new(Stack::new(VirtAddr::null(), 0)) };
+        let idle_thread = unsafe { Thread::new(Stack::new(Vma::empty())) };
 
         let idle_thread_id = ThreadId::new();
         let mut threads = HashMap::new();

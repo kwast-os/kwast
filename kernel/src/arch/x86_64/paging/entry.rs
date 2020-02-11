@@ -9,7 +9,7 @@ bitflags! {
         const HUGE_PAGE = 1 << 7;
         /// No execute.
         const NX = 1 << 63;
-        // Cache types
+        // Cache types (see PAT in boot assembly)
         const CACHE_WB = 0;
         const CACHE_WT = 1 << 3;
         const UNCACHED = 1 << 4;

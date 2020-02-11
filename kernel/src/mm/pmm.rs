@@ -2,7 +2,7 @@ use multiboot2::BootInformation;
 use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::mm::mapper::{MappingError, MappingResult};
+use crate::mm::mapper::{MappingResult, MemoryError};
 
 /// The default frame allocator.
 ///
@@ -50,7 +50,7 @@ impl FrameAllocator {
         F: FnOnce(PhysAddr) -> VirtAddr,
     {
         if unlikely!(self.top.is_null()) {
-            return Err(MappingError::OOM);
+            return Err(MemoryError::OOM);
         }
 
         // Read and set the next top address.

@@ -126,7 +126,8 @@ start:
     mov $boot_pml4, %eax
     mov %eax, %cr3
     mov %cr0, %eax
-    orl $(1 << 31), %eax
+    // Enable: PG and WP bit
+    orl $(1 << 31 | 1 << 16), %eax
     mov %eax, %cr0
 
     // Switch to long mode

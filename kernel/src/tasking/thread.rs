@@ -64,6 +64,7 @@ impl Stack {
         let vma = {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
             let vma = Vma::create(size)?;
+            // TODO: leaks now
             ActiveMapping::get().map_range(vma.address(), size, flags)?;
             vma
         };

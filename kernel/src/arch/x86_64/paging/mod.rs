@@ -229,7 +229,18 @@ impl ActiveMapping {
         debug_assert!(e.flags().contains(EntryFlags::PRESENT));
 
         if frame {
-            with_pmm(|pmm| pmm.push_top(vaddr, e.phys_addr_unchecked()));
+            with_pmm(|pmm| {
+                // The pmm wants to write to the page, so if it is read-only, we need to make it writable.
+                let flags = e.flags();
+                if !flags.contains(EntryFlags::WRITABLE) {
+                    e.set_flags(flags | EntryFlags::WRITABLE);
+
+                    // Sadly, we have to invalidate here too...
+                    invalidate(vaddr.as_u64());
+                }
+
+                pmm.push_top(vaddr, e.phys_addr_unchecked())
+            });
         }
 
         e.clear();

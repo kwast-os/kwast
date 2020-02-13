@@ -6,9 +6,7 @@ use cranelift_wasm::translate_module;
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::align_up;
-use crate::arch::paging::ActiveMapping;
-use crate::arch::paging::EntryFlags;
-use crate::arch::x86_64::paging::PAGE_SIZE;
+use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::Vma;
 use crate::wasm::func_env::FuncEnv;

@@ -5,7 +5,8 @@
     core_intrinsics,
     ptr_internals,
     alloc_error_handler,
-    lang_items
+    lang_items,
+    atomic_mut_ptr
 )]
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]
@@ -29,6 +30,7 @@ mod macros;
 #[macro_use]
 mod arch;
 mod mm;
+mod sync;
 mod tasking;
 #[cfg(feature = "integration-test")]
 mod tests;

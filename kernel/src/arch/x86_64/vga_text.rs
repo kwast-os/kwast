@@ -1,7 +1,7 @@
 use core::fmt;
 use core::ptr::Unique;
 
-use spin::Mutex;
+use crate::sync::spinlock::Spinlock;
 use volatile::Volatile;
 
 const VGA_WIDTH: usize = 80;
@@ -24,7 +24,7 @@ struct Writer {
 }
 
 #[allow(dead_code)]
-static WRITER: Mutex<Writer> = Mutex::new(Writer {
+static WRITER: Spinlock<Writer> = Spinlock::new(Writer {
     x: 0,
     buffer: unsafe { Unique::new_unchecked(0xb8000 as *mut Buffer) },
 });

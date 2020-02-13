@@ -1,5 +1,5 @@
 use crate::arch::address::VirtAddr;
-use crate::arch::x86_64::paging::PAGE_SIZE;
+use crate::arch::paging::PAGE_SIZE;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 

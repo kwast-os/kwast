@@ -3,12 +3,12 @@ use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::buddy;
 use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
+use crate::sync::spinlock::Spinlock;
 use crate::util::unchecked::UncheckedUnwrap;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cmp;
 use core::mem::size_of;
 use core::ptr::{null_mut, NonNull};
-use spin::Mutex;
 
 struct SpaceManager<'t> {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -90,7 +90,7 @@ unsafe impl Send for SlabLink {}
 /// A wrapper around the heap to lock the inner heap.
 struct LockedHeap {
     /// Inner heap.
-    inner: Mutex<Option<Heap>>,
+    inner: Spinlock<Option<Heap>>,
 }
 
 /// A slab for a cache.
@@ -650,7 +650,7 @@ fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
 
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap {
-    inner: Mutex::new(None),
+    inner: Spinlock::new(None),
 };
 
 /// Inits allocation. May only be called once.

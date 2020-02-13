@@ -1,10 +1,10 @@
 use alloc::collections::VecDeque;
 
 use hashbrown::HashMap;
-use spin::Mutex;
 
 use crate::arch::address::VirtAddr;
 use crate::mm::vma_allocator::Vma;
+use crate::sync::spinlock::Spinlock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 
@@ -15,6 +15,14 @@ pub enum SwitchReason {
     Exit,
 }
 
+// TODO: RwLock
+/*pub struct SchedulerCommon {
+    threads: HashMap<ThreadId, Thread>,
+}*/
+
+// TODO: make this better, split the scheduler into a common part and a per-core part
+// TODO: runqueue needs a lock, the other stuff not
+// TODO: document the scheduler is per-core
 pub struct Scheduler {
     threads: HashMap<ThreadId, Thread>,
     runqueue: VecDeque<ThreadId>,
@@ -112,7 +120,7 @@ pub extern "C" fn next_thread_state(switch_reason: SwitchReason, old_stack: Virt
     with_scheduler(|scheduler| scheduler.next_thread_state(switch_reason, old_stack))
 }
 
-static SCHEDULER: Mutex<Option<Scheduler>> = Mutex::new(None);
+static SCHEDULER: Spinlock<Option<Scheduler>> = Spinlock::new(None);
 
 /// Execute something using the scheduler.
 pub fn with_scheduler<F, T>(f: F) -> T

@@ -5,7 +5,7 @@ pub use heap_test::*;
 pub use interval_tree_test::*;
 pub use vmm_test::*;
 
-use crate::arch::x86_64::qemu;
+use crate::arch::qemu;
 
 mod buddy_test;
 mod heap_test;

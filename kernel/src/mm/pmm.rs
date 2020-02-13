@@ -1,8 +1,8 @@
 use multiboot2::BootInformation;
-use spin::Mutex;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::mm::mapper::{MappingResult, MemoryError};
+use crate::sync::spinlock::Spinlock;
 
 /// The default frame allocator.
 ///
@@ -70,7 +70,7 @@ impl FrameAllocator {
     }
 }
 
-static PMM: Mutex<FrameAllocator> = Mutex::new(FrameAllocator::empty());
+static PMM: Spinlock<FrameAllocator> = Spinlock::new(FrameAllocator::empty());
 
 /// Execute something using the PMM.
 pub fn with_pmm<F, T>(f: F) -> T

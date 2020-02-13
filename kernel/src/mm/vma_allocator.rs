@@ -1,11 +1,10 @@
 //! Allocator used to split a domain into virtual memory areas.
 
-use spin::Mutex;
-
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::PAGE_SIZE;
 use crate::mm::avl_interval_tree::AVLIntervalTree;
 use crate::mm::mapper::MemoryError;
+use crate::sync::spinlock::Spinlock;
 
 pub struct VMAAllocator {
     tree: AVLIntervalTree,
@@ -78,7 +77,7 @@ impl VMAAllocator {
     }
 }
 
-static VMA_ALLOCATOR: Mutex<VMAAllocator> = Mutex::new(VMAAllocator::new());
+static VMA_ALLOCATOR: Spinlock<VMAAllocator> = Spinlock::new(VMAAllocator::new());
 
 /// Execute something using the VMA allocator.
 pub fn with_vma_allocator<F, T>(f: F) -> T

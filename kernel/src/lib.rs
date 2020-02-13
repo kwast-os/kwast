@@ -20,10 +20,8 @@ use arch::interrupts;
 
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::with_scheduler;
 use crate::tasking::scheduler::SwitchReason;
 use crate::tasking::thread::Thread;
-use crate::tasking::thread::ThreadId;
 
 #[macro_use]
 mod macros;
@@ -76,10 +74,8 @@ fn kernel_main() {
     let test_thread_a = Thread::create(VirtAddr::new(tasking_test_a as usize)).unwrap();
     let test_thread_b = Thread::create(VirtAddr::new(tasking_test_b as usize)).unwrap();
 
-    with_scheduler(|scheduler| {
-        scheduler.add_thread(ThreadId::new(), test_thread_a);
-        scheduler.add_thread(ThreadId::new(), test_thread_b);
-    });
+    scheduler::add_and_schedule_thread(test_thread_a);
+    scheduler::add_and_schedule_thread(test_thread_b);
 
     interrupts::enable();
     interrupts::setup_timer();

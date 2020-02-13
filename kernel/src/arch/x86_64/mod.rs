@@ -122,9 +122,6 @@ pub unsafe fn compare_exchange_acquire_relaxed_hle(
 
 /// Atomic store with release ordering, using hardware lock elision.
 #[inline(always)]
-pub unsafe fn store_release_hle(
-    ptr: *mut bool,
-    val: bool,
-) {
+pub unsafe fn store_release_hle(ptr: *mut bool, val: bool) {
     asm!("xrelease; movb $1, $0" : : "*m"(ptr), "I"(val) : "memory" : "volatile");
 }

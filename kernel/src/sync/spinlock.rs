@@ -1,11 +1,8 @@
 //! Spinlock, based on https://docs.rs/lock_api/0.3.3/lock_api/index.html, scheduler-aware.
 
 use crate::sync::atomic_hle::AtomicHLE;
-use core::sync::atomic::{spin_loop_hint, AtomicBool, AtomicU32, Ordering};
-use lock_api::RawRwLock;
+use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 use lock_api::{GuardSend, Mutex, MutexGuard, RawMutex};
-
-static TEST: AtomicU32 = AtomicU32::new(0);
 
 pub struct RawSpinlock(AtomicBool);
 

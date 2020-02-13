@@ -8,6 +8,8 @@ use crate::sync::spinlock::Spinlock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 
+// TODO: get rid of lookup in hashmap during critical path?
+
 #[derive(Debug)]
 #[repr(u64)]
 pub enum SwitchReason {
@@ -15,20 +17,47 @@ pub enum SwitchReason {
     Exit,
 }
 
-// TODO: RwLock
-/*pub struct SchedulerCommon {
+/// Common data for all per-core schedulers.
+pub struct SchedulerCommon {
     threads: HashMap<ThreadId, Thread>,
-}*/
+}
 
-// TODO: make this better, split the scheduler into a common part and a per-core part
-// TODO: runqueue needs a lock, the other stuff not
-// TODO: document the scheduler is per-core
+/// Per-core scheduler.
 pub struct Scheduler {
-    threads: HashMap<ThreadId, Thread>,
+    // TODO: handle this so we can add without locking, currently this is no issue because you can only schedule on the current cpu
     runqueue: VecDeque<ThreadId>,
     garbage: Option<ThreadId>,
     current_thread_id: ThreadId,
     idle_thread_id: ThreadId,
+}
+
+impl SchedulerCommon {
+    /// New scheduler common data.
+    pub fn new() -> Self {
+        Self {
+            threads: HashMap::new(),
+        }
+    }
+
+    /// Adds a thread.
+    pub fn add_thread(&mut self, id: ThreadId, thread: Thread) {
+        self.threads.insert(id, thread);
+    }
+
+    /// Removes a thread.
+    pub fn remove_thread(&mut self, id: ThreadId) {
+        self.threads.remove(&id);
+    }
+
+    /// Update thread state.
+    pub fn update_thread_state(&mut self, id: ThreadId, stack: VirtAddr) {
+        self.threads.get_mut(&id).unwrap().set_stack_address(stack);
+    }
+
+    /// Gets the thread stack address.
+    pub fn get_thread_stack(&self, id: ThreadId) -> VirtAddr {
+        self.threads.get(&id).unwrap().get_stack_address()
+    }
 }
 
 impl Scheduler {
@@ -38,11 +67,9 @@ impl Scheduler {
         let idle_thread = unsafe { Thread::new(Stack::new(Vma::empty())) };
 
         let idle_thread_id = ThreadId::new();
-        let mut threads = HashMap::new();
-        threads.insert(idle_thread_id, idle_thread);
+        with_common(|common| common.add_thread(idle_thread_id, idle_thread));
 
         Self {
-            threads,
             runqueue: VecDeque::new(),
             garbage: None,
             current_thread_id: idle_thread_id,
@@ -50,14 +77,14 @@ impl Scheduler {
         }
     }
 
-    /// Adds a thread.
-    pub fn add_thread(&mut self, id: ThreadId, thread: Thread) {
-        self.threads.insert(id, thread);
+    /// Adds a thread to the runqueue.
+    pub fn queue_thread(&mut self, id: ThreadId) {
         self.runqueue.push_back(id);
     }
 
-    /// Decides which thread to run next.
-    fn next_thread(&mut self) -> ThreadId {
+    /// Gets the next thread id.
+    fn next_thread_id(&mut self) -> ThreadId {
+        // Decide next thread.
         if let Some(id) = self.runqueue.pop_front() {
             id
         } else {
@@ -71,32 +98,33 @@ impl Scheduler {
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
     ) -> VirtAddr {
-        if let Some(garbage) = self.garbage {
-            self.threads.remove(&garbage);
-            self.garbage = None;
-        }
+        let next_id = self.next_thread_id();
+        let next_stack = with_common(|common| {
+            // Cleanup old thread.
+            if let Some(garbage) = self.garbage {
+                common.remove_thread(garbage);
+                self.garbage = None;
+            }
 
-        match switch_reason {
-            // Regular switch.
-            SwitchReason::RegularSwitch => {
-                self.threads
-                    .get_mut(&self.current_thread_id)
-                    .unwrap()
-                    .set_stack_address(old_stack);
+            match switch_reason {
+                // Regular switch.
+                SwitchReason::RegularSwitch => {
+                    common.update_thread_state(self.current_thread_id, old_stack);
 
-                if self.current_thread_id != self.idle_thread_id {
-                    self.runqueue.push_back(self.current_thread_id);
+                    if self.current_thread_id != self.idle_thread_id {
+                        self.runqueue.push_back(self.current_thread_id);
+                    }
+                }
+                // Exit the thread.
+                SwitchReason::Exit => {
+                    debug_assert!(self.garbage.is_none());
+                    self.garbage = Some(self.current_thread_id);
                 }
             }
-            // Exit the thread.
-            SwitchReason::Exit => {
-                debug_assert!(self.garbage.is_none());
-                self.garbage = Some(self.current_thread_id);
-            }
-        }
 
-        let next_id = self.next_thread();
-        let next_stack = self.threads.get(&next_id).unwrap().get_stack_address();
+            common.get_thread_stack(next_id)
+        });
+
         self.current_thread_id = next_id;
         next_stack
     }
@@ -117,21 +145,42 @@ pub fn switch_to_next(switch_reason: SwitchReason) {
 /// Saves the old state and gets the next state.
 #[no_mangle]
 pub extern "C" fn next_thread_state(switch_reason: SwitchReason, old_stack: VirtAddr) -> VirtAddr {
-    with_scheduler(|scheduler| scheduler.next_thread_state(switch_reason, old_stack))
+    with_core_scheduler(|scheduler| scheduler.next_thread_state(switch_reason, old_stack))
 }
 
-static SCHEDULER: Spinlock<Option<Scheduler>> = Spinlock::new(None);
+// TODO: make this per core once we go multicore
+static mut SCHEDULER: Option<Scheduler> = None;
 
-/// Execute something using the scheduler.
-pub fn with_scheduler<F, T>(f: F) -> T
+// TODO: RwLock instead of Spinlock?
+static mut SCHEDULER_COMMON: Spinlock<Option<SchedulerCommon>> = Spinlock::new(None);
+
+/// Adds and schedules a thread.
+pub fn add_and_schedule_thread(thread: Thread) -> ThreadId {
+    let id = ThreadId::new();
+    with_common(|common| common.add_thread(id, thread));
+    with_core_scheduler(|scheduler| scheduler.queue_thread(id));
+    id
+}
+
+/// With common scheduler data.
+fn with_common<F, T>(f: F) -> T
+where
+    F: FnOnce(&mut SchedulerCommon) -> T,
+{
+    unsafe { f(SCHEDULER_COMMON.lock().as_mut().unchecked_unwrap()) }
+}
+
+/// Execute something using this core scheduler.
+pub fn with_core_scheduler<F, T>(f: F) -> T
 where
     F: FnOnce(&mut Scheduler) -> T,
 {
-    unsafe { f(SCHEDULER.lock().as_mut().unchecked_unwrap()) }
+    unsafe { f(SCHEDULER.as_mut().unchecked_unwrap()) }
 }
 
 /// Inits scheduler. May only be called once per core.
 pub unsafe fn init() {
-    debug_assert!(SCHEDULER.lock().is_none());
-    *SCHEDULER.lock() = Some(Scheduler::new());
+    debug_assert!(SCHEDULER.is_none());
+    *SCHEDULER_COMMON.lock() = Some(SchedulerCommon::new());
+    SCHEDULER = Some(Scheduler::new());
 }

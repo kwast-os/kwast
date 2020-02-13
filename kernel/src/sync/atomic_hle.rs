@@ -34,9 +34,7 @@ impl AtomicHLE<bool> for AtomicBool {
     fn store_release_maybe_hle(&self, val: bool) {
         if crate::arch::supports_hle() {
             // Safe because it uses the atomic instructions.
-            unsafe {
-                crate::arch::store_release_hle(self.as_mut_ptr(), val)
-            }
+            unsafe { crate::arch::store_release_hle(self.as_mut_ptr(), val) }
         } else {
             self.store(val, Ordering::Release)
         }

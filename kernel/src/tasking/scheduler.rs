@@ -3,6 +3,7 @@ use alloc::collections::VecDeque;
 use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
+use crate::arch::get_per_cpu_data;
 use crate::mm::vma_allocator::Vma;
 use crate::sync::spinlock::Spinlock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
@@ -98,6 +99,15 @@ impl Scheduler {
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
     ) -> VirtAddr {
+        // If we have lock now, it's a bad idea to switch. Postpone it instead.
+        {
+            let mut cpu_data = get_per_cpu_data();
+            if unlikely!(cpu_data.scheduler_block_count != 0) {
+                cpu_data.scheduler_postponed = true;
+                return old_stack;
+            }
+        }
+
         let next_id = self.next_thread_id();
         let next_stack = with_common(|common| {
             // Cleanup old thread.

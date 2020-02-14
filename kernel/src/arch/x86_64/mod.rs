@@ -3,6 +3,7 @@ use core::cmp::max;
 use crate::arch::address::VirtAddr;
 use crate::arch::x86_64::address::PhysAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
+use crate::arch::CpuData;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::with_vma_allocator;
@@ -25,9 +26,18 @@ extern "C" {
     static KERNEL_END_PTR: usize;
 }
 
+/// Per-CPU data for the bootstrap processor.
+static mut PER_CPU_DATA_BSP: CpuData = CpuData::new();
+
 /// Initializes arch-specific stuff.
 #[no_mangle]
 pub extern "C" fn entry(mboot_addr: usize) {
+    // Not shared between cores, but we must be careful about what data we modify or read.
+    unsafe {
+        PER_CPU_DATA_BSP.prepare_to_set();
+        set_per_cpu_data(&mut PER_CPU_DATA_BSP as *mut _);
+    }
+
     interrupts::init();
 
     let kernel_end = unsafe { &KERNEL_END_PTR as *const _ as usize };
@@ -102,6 +112,30 @@ pub const fn supports_hle() -> bool {
     true
 }
 
+/// Sets the per-CPU data pointer.
+fn set_per_cpu_data(ptr: *mut CpuData) {
+    unsafe {
+        wrmsr(0xC000_0101, ptr as u64);
+    }
+}
+
+/// Gets the per-CPU data.
+pub fn get_per_cpu_data() -> &'static mut CpuData {
+    unsafe {
+        let value: *mut CpuData;
+        asm!("mov %gs:0, $0" : "=r" (value));
+        &mut *value
+    }
+}
+
+/// Write Model Specific Register.
+#[inline]
+unsafe fn wrmsr(reg: u32, value: u64) {
+    let lo = value as u32;
+    let hi = (value >> 32) as u32;
+    asm!("wrmsr" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
+}
+
 /// Compare exchange, acquire ordering for success, relaxed for fail, using hardware lock elision.
 #[inline(always)]
 pub unsafe fn compare_exchange_acquire_relaxed_hle(
@@ -111,7 +145,7 @@ pub unsafe fn compare_exchange_acquire_relaxed_hle(
 ) -> Result<bool, bool> {
     let previous: bool;
 
-    asm!("xacquire; lock cmpxchgb $3, $0" : "=*m"(ptr), "={eax}"(previous) : "{eax}"(current), "r"(new) : "memory" : "volatile");
+    asm!("xacquire; lock cmpxchgb $3, $0" : "=*m" (ptr), "={eax}" (previous) : "{eax}" (current), "r" (new) : "memory" : "volatile");
 
     if previous == current {
         Ok(previous)
@@ -123,5 +157,5 @@ pub unsafe fn compare_exchange_acquire_relaxed_hle(
 /// Atomic store with release ordering, using hardware lock elision.
 #[inline(always)]
 pub unsafe fn store_release_hle(ptr: *mut bool, val: bool) {
-    asm!("xrelease; movb $1, $0" : : "*m"(ptr), "I"(val) : "memory" : "volatile");
+    asm!("xrelease; movb $1, $0" :: "*m" (ptr), "I" (val) : "memory" : "volatile");
 }

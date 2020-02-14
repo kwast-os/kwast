@@ -19,6 +19,7 @@ use core::panic::PanicInfo;
 use arch::interrupts;
 
 use crate::arch::address::VirtAddr;
+use crate::sync::spinlock::Spinlock;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::SwitchReason;
 use crate::tasking::thread::Thread;
@@ -92,7 +93,15 @@ fn tasking_test_a() -> ! {
         arch::halt();
         i += 1;
         if i > 20 {
-            scheduler::switch_to_next(SwitchReason::Exit);
+            if i > 100 {
+                scheduler::switch_to_next(SwitchReason::Exit);
+            }
+            let x = Spinlock::new(Some(3));
+            let guard = x.lock();
+            arch::halt();
+            print!("_");
+            drop(guard);
+            arch::halt();
         }
     }
 }

@@ -23,7 +23,6 @@ struct Writer {
     buffer: Unique<Buffer>,
 }
 
-#[allow(dead_code)]
 static WRITER: Spinlock<Writer> = Spinlock::new(Writer {
     x: 0,
     buffer: unsafe { Unique::new_unchecked(0xb8000 as *mut Buffer) },

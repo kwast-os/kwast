@@ -141,7 +141,7 @@ lazy_static! {
         }
 
         // Timer
-        idt.set_handler(32 + 0, irq0 as usize, exc_flags);
+        idt.set_handler(32, irq0 as usize, exc_flags);
 
         for i in 1..16 {
             idt.set_handler(32 + i, irq as usize, exc_flags);

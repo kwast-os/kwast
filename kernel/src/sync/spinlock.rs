@@ -1,6 +1,9 @@
 //! Spinlock, based on https://docs.rs/lock_api/0.3.3/lock_api/index.html, scheduler-aware.
 
+use crate::arch::get_per_cpu_data;
 use crate::sync::atomic_hle::AtomicHLE;
+use crate::tasking::scheduler::switch_to_next;
+use crate::tasking::scheduler::SwitchReason;
 use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 use lock_api::{GuardSend, Mutex, MutexGuard, RawMutex};
 
@@ -26,13 +29,28 @@ unsafe impl RawMutex for RawSpinlock {
         // If it is unlocked, it should currently have false as value.
         // For the success case, we don't want to have reordering, because that could cause data races.
         // For the failed case, we don't care because we didn't acquire the lock anyway.
-        self.0
+        let cpu_data = get_per_cpu_data();
+        cpu_data.scheduler_block_count += 1;
+        let result = self
+            .0
             .compare_exchange_acquire_relaxed_maybe_hle(false, true)
-            .is_ok()
+            .is_ok();
+        if !result {
+            cpu_data.scheduler_block_count -= 1;
+        }
+        result
     }
 
     fn unlock(&self) {
-        self.0.store_release_maybe_hle(false)
+        self.0.store_release_maybe_hle(false);
+
+        // Do the postponed schedule if necessary.
+        let mut cpu_data = get_per_cpu_data();
+        cpu_data.scheduler_block_count -= 1;
+        if unlikely!(cpu_data.scheduler_postponed && cpu_data.scheduler_block_count == 0) {
+            cpu_data.scheduler_postponed = false;
+            switch_to_next(SwitchReason::RegularSwitch);
+        }
     }
 }
 

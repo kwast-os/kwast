@@ -1,5 +1,6 @@
 //! Extends some atomic types to use hardware lock elision if possible.
 
+use crate::arch::atomic::{compare_exchange_acquire_relaxed_hle, store_release_hle};
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 
@@ -22,9 +23,7 @@ impl AtomicHLE<bool> for AtomicBool {
     ) -> Result<bool, bool> {
         if crate::arch::supports_hle() {
             // Safe because it uses the atomic instructions.
-            unsafe {
-                crate::arch::compare_exchange_acquire_relaxed_hle(self.as_mut_ptr(), current, new)
-            }
+            unsafe { compare_exchange_acquire_relaxed_hle(self.as_mut_ptr(), current, new) }
         } else {
             self.compare_exchange(current, new, Ordering::Acquire, Ordering::Relaxed)
         }
@@ -34,7 +33,7 @@ impl AtomicHLE<bool> for AtomicBool {
     fn store_release_maybe_hle(&self, val: bool) {
         if crate::arch::supports_hle() {
             // Safe because it uses the atomic instructions.
-            unsafe { crate::arch::store_release_hle(self.as_mut_ptr(), val) }
+            unsafe { store_release_hle(self.as_mut_ptr(), val) }
         } else {
             self.store(val, Ordering::Release)
         }

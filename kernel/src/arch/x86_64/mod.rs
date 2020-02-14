@@ -1,9 +1,9 @@
 use core::cmp::max;
 
 use crate::arch::address::VirtAddr;
+use crate::arch::cpu_data::CpuData;
 use crate::arch::x86_64::address::PhysAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
-use crate::arch::CpuData;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::with_vma_allocator;
@@ -12,6 +12,7 @@ use multiboot2::ElfSectionFlags;
 #[macro_use]
 pub mod macros;
 pub mod address;
+pub mod atomic;
 pub mod interrupts;
 pub mod paging;
 pub mod port;
@@ -120,6 +121,7 @@ fn set_per_cpu_data(ptr: *mut CpuData) {
 }
 
 /// Gets the per-CPU data.
+#[inline(always)]
 pub fn get_per_cpu_data() -> &'static mut CpuData {
     unsafe {
         let value: *mut CpuData;
@@ -134,28 +136,4 @@ unsafe fn wrmsr(reg: u32, value: u64) {
     let lo = value as u32;
     let hi = (value >> 32) as u32;
     asm!("wrmsr" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
-}
-
-/// Compare exchange, acquire ordering for success, relaxed for fail, using hardware lock elision.
-#[inline(always)]
-pub unsafe fn compare_exchange_acquire_relaxed_hle(
-    ptr: *mut bool,
-    current: bool,
-    new: bool,
-) -> Result<bool, bool> {
-    let previous: bool;
-
-    asm!("xacquire; lock cmpxchgb $3, $0" : "=*m" (ptr), "={eax}" (previous) : "{eax}" (current), "r" (new) : "memory" : "volatile");
-
-    if previous == current {
-        Ok(previous)
-    } else {
-        Err(previous)
-    }
-}
-
-/// Atomic store with release ordering, using hardware lock elision.
-#[inline(always)]
-pub unsafe fn store_release_hle(ptr: *mut bool, val: bool) {
-    asm!("xrelease; movb $1, $0" :: "*m" (ptr), "I" (val) : "memory" : "volatile");
 }

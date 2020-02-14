@@ -11,7 +11,7 @@ use crate::util::unchecked::UncheckedUnwrap;
 
 // TODO: get rid of lookup in hashmap during critical path?
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[repr(u64)]
 pub enum SwitchReason {
     RegularSwitch = 0,
@@ -103,13 +103,13 @@ impl Scheduler {
         {
             let mut cpu_data = get_per_cpu_data();
             if unlikely!(cpu_data.scheduler_block_count != 0) {
+                assert_ne!(switch_reason, SwitchReason::Exit);
                 cpu_data.scheduler_postponed = true;
                 return old_stack;
             }
         }
 
-        let next_id = self.next_thread_id();
-        let next_stack = with_common(|common| {
+        let (next_stack, next_id) = with_common(|common| {
             // Cleanup old thread.
             if let Some(garbage) = self.garbage {
                 common.remove_thread(garbage);
@@ -132,7 +132,8 @@ impl Scheduler {
                 }
             }
 
-            common.get_thread_stack(next_id)
+            let next_id = self.next_thread_id();
+            (common.get_thread_stack(next_id), next_id)
         });
 
         self.current_thread_id = next_id;

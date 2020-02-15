@@ -137,3 +137,24 @@ unsafe fn wrmsr(reg: u32, value: u64) {
     let hi = (value >> 32) as u32;
     asm!("wrmsr" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
 }
+
+/// Irq flags type. Flags register for the x86 architecture.
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct IrqState(pub u64);
+
+/// Saves the IRQ state and stops IRQs.
+pub fn irq_save_and_stop() -> IrqState {
+    unsafe {
+        let state: IrqState;
+        asm!("pushf; pop $0; cli" : "=r" (state) : : "memory");
+        state
+    }
+}
+
+/// Restores an old IRQ state.
+pub fn irq_restore(state: IrqState) {
+    unsafe {
+        asm!("push $0; popf" : : "r" (state) : "memory");
+    }
+}

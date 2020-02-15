@@ -30,7 +30,6 @@ panic = "abort"
 
 [dependencies]
 volatile = "^0.2.6"
-lock_api = { version = "^0.3.3", features = ["nightly"] }
 bit_field = "^0.10.0"
 bitflags = "^1.2.1"
 multiboot2 = "^0.8.1"

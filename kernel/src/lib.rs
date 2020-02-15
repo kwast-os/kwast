@@ -40,8 +40,8 @@ mod wasm;
 #[cfg(not(feature = "integration-test"))]
 fn panic(info: &PanicInfo) -> ! {
     // TODO: notify other processors/cores
-    println!("{:#?}", info);
     interrupts::disable();
+    println!("{:#?}", info);
     loop {
         arch::halt();
     }
@@ -80,8 +80,8 @@ fn kernel_main() {
 
     interrupts::enable();
     interrupts::setup_timer();
+    scheduler::switch_to_next(SwitchReason::RegularSwitch);
     loop {
-        scheduler::switch_to_next(SwitchReason::RegularSwitch);
         arch::halt();
     }
 }
@@ -98,9 +98,10 @@ fn tasking_test_a() -> ! {
             }
             let x = Spinlock::new(Some(3));
             let guard = x.lock();
-            arch::halt();
             print!("_");
+
             drop(guard);
+            scheduler::switch_to_next(SwitchReason::RegularSwitch);
             arch::halt();
         }
     }

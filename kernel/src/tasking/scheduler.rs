@@ -3,7 +3,6 @@ use alloc::collections::VecDeque;
 use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::get_per_cpu_data;
 use crate::mm::vma_allocator::Vma;
 use crate::sync::spinlock::Spinlock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
@@ -28,7 +27,7 @@ pub struct Scheduler {
     // TODO: handle this so we can add without locking, currently this is no issue because you can only schedule on the current cpu
     runqueue: VecDeque<ThreadId>,
     garbage: Option<ThreadId>,
-    current_thread_id: ThreadId,
+    pub current_thread_id: ThreadId,
     idle_thread_id: ThreadId,
 }
 
@@ -99,16 +98,6 @@ impl Scheduler {
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
     ) -> VirtAddr {
-        // If we have lock now, it's a bad idea to switch. Postpone it instead.
-        {
-            let mut cpu_data = get_per_cpu_data();
-            if unlikely!(cpu_data.scheduler_block_count != 0) {
-                assert_ne!(switch_reason, SwitchReason::Exit);
-                cpu_data.scheduler_postponed = true;
-                return old_stack;
-            }
-        }
-
         let (next_stack, next_id) = with_common(|common| {
             // Cleanup old thread.
             if let Some(garbage) = self.garbage {
@@ -133,6 +122,7 @@ impl Scheduler {
             }
 
             let next_id = self.next_thread_id();
+            debug_assert!(switch_reason != SwitchReason::Exit || next_id != self.current_thread_id);
             (common.get_thread_stack(next_id), next_id)
         });
 

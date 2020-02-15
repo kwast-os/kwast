@@ -4,7 +4,7 @@ use core::ops::Add;
 use bit_field::BitField;
 
 use crate::arch::x86_64::paging::PAGE_SIZE;
-use bitflags::_core::ops::{AddAssign, Sub, SubAssign};
+use core::ops::{AddAssign, Sub, SubAssign};
 
 /// A 64-bit physical address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

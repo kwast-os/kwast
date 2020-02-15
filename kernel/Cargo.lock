@@ -175,7 +175,6 @@ dependencies = [
  "cranelift-wasm",
  "hashbrown",
  "lazy_static",
- "lock_api",
  "multiboot2",
  "volatile",
 ]
@@ -194,15 +193,6 @@ name = "libc"
 version = "0.2.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d515b1f41455adea1313a4a2ac8a8a477634fbae63cc6100e3aebb207ce61558"
-
-[[package]]
-name = "lock_api"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79b2de95ecb4691949fea4716ca53cdbcfccb2c612e19644a8bad05edcf9f47b"
-dependencies = [
- "scopeguard",
-]
 
 [[package]]
 name = "log"
@@ -270,12 +260,6 @@ checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
  "semver",
 ]
-
-[[package]]
-name = "scopeguard"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b42e15e59b18a828bbf5c58ea01debb36b9b096346de35d941dcb89009f24a0d"
 
 [[package]]
 name = "semver"

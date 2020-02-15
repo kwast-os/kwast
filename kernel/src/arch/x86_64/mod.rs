@@ -141,7 +141,7 @@ unsafe fn wrmsr(reg: u32, value: u64) {
 /// Irq flags type. Flags register for the x86 architecture.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct IrqState(pub u64);
+pub struct IrqState(u64);
 
 /// Saves the IRQ state and stops IRQs.
 pub fn irq_save_and_stop() -> IrqState {

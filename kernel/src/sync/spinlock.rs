@@ -1,7 +1,6 @@
 //! Spinlock, based on https://docs.rs/lock_api/0.3.3/lock_api/index.html, scheduler-aware.
 
 use crate::arch;
-use crate::arch::IrqState;
 use crate::sync::atomic_hle::AtomicHLE;
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};

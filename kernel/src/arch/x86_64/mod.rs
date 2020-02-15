@@ -147,7 +147,7 @@ pub struct IrqState(u64);
 pub fn irq_save_and_stop() -> IrqState {
     unsafe {
         let state: IrqState;
-        asm!("pushf; pop $0; cli" : "=r" (state) : : "memory");
+        asm!("pushf; pop $0; cli" : "=r" (state) : : "memory" : "volatile");
         state
     }
 }
@@ -155,6 +155,6 @@ pub fn irq_save_and_stop() -> IrqState {
 /// Restores an old IRQ state.
 pub fn irq_restore(state: IrqState) {
     unsafe {
-        asm!("push $0; popf" : : "r" (state) : "memory");
+        asm!("push $0; popf" : : "r" (state) : "memory" : "volatile");
     }
 }

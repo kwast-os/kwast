@@ -1,16 +1,16 @@
-//! Spinlock, based on https://docs.rs/lock_api/0.3.3/lock_api/index.html, scheduler-aware.
-
 use crate::arch;
 use crate::sync::atomic_hle::AtomicHLE;
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{spin_loop_hint, AtomicBool, Ordering};
 
+/// Spinlock, with IRQ safety.
 pub struct Spinlock<T: ?Sized> {
     flag: AtomicBool,
     data: UnsafeCell<T>,
 }
 
+/// RAII structure for Spinlock, when dropped will unlock the lock.
 pub struct SpinlockGuard<'a, T: ?Sized + 'a> {
     lock: &'a Spinlock<T>,
     state: arch::IrqState,

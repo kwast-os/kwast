@@ -15,31 +15,31 @@ mboot_hdr_start:
 // Information request tag
 .align 8
 info_req_start:
-.word 1                           // Type
-.word TAG_REQUIRED                // Flags
-.long InfoReqEnd - info_req_start // Size of this tag
-.long 1                           // Request: command line
-.long 6                           // Request: memory map
-.long 15                          // Request: ACPI
-InfoReqEnd:
+.word 1                             // Type
+.word TAG_REQUIRED                  // Flags
+.long info_req_end - info_req_start // Size of this tag
+.long 1                             // Request: command line
+.long 6                             // Request: memory map
+.long 15                            // Request: ACPI
+info_req_end:
 
 // Framebuffer tag
 //.align 8
 //lfb_start:
-//.word 5                         // Type
-//.word TAG_REQUIRED              // Flags
-//.long lfb_end - lfb_start       // Size of this tag
-//.long 1024                      // Width (can be overriden in grub.cfg)
-//.long 768                       // Height (can be overriden in grub.cfg)
-//.long 32                        // Depth
+//.word 5                           // Type
+//.word TAG_REQUIRED                // Flags
+//.long lfb_end - lfb_start         // Size of this tag
+//.long 1024                        // Width (can be overriden in grub.cfg)
+//.long 768                         // Height (can be overriden in grub.cfg)
+//.long 32                          // Depth (can be overriden in grub.cfg)
 //lfb_end:
 
 // End tag
 .align 8
 end_tag_start:
-.word 0                           // Type
-.word 0                           // Flags
-.long end_tag_end - end_tag_start // Size of this tag
+.word 0                             // Type
+.word 0                             // Flags
+.long end_tag_end - end_tag_start   // Size of this tag
 end_tag_end:
 mboot_hdr_end:
 
@@ -145,9 +145,9 @@ start:
 1:
     // The upper 32 bits are undefined when switching from 32-bit to 64-bit or vice versa.
     // Clear the top bits of the stack to prevent issues.
-    // ebx contains our multiboot ptr, also clear ebx upper bits.
+    // ebx contains our multiboot ptr, also clear ebx upper bits by already moving it to the argument register.
     mov %esp, %esp
-    mov %ebx, %ebx
+    mov %ebx, %edi
 
     // Switch segments
     xor %ax, %ax
@@ -158,7 +158,6 @@ start:
     ltr %ax
 
     .extern entry
-    mov %rbx, %rdi
     call entry
 
 halt:

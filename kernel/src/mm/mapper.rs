@@ -58,4 +58,6 @@ pub enum MemoryError {
     OOM,
     /// Out of virtual memory (no more virtual memory areas).
     NoMoreVMA,
+    /// Invalid memory range (for example partial mapping a Vma out of bounds).
+    InvalidRange,
 }

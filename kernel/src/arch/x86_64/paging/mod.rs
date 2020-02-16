@@ -107,7 +107,7 @@ impl MemoryMapper for ActiveMapping {
     }
 
     fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
-        let mut e = self.get_4k_entry(vaddr)?;
+        let mut e = self.get_4k_entry_may_create(vaddr)?;
 
         with_pmm(|pmm| {
             pmm.pop_top(move |top| {
@@ -124,7 +124,7 @@ impl MemoryMapper for ActiveMapping {
 
     fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
         debug_assert!(paddr.is_page_aligned());
-        self.get_4k_entry(vaddr)?.set(paddr, flags);
+        self.get_4k_entry_may_create(vaddr)?.set(paddr, flags);
         Ok(())
     }
 
@@ -204,7 +204,7 @@ impl MemoryMapper for ActiveMapping {
         debug_assert!(vaddr.is_page_aligned());
 
         for _ in (0..size).step_by(PAGE_SIZE) {
-            self.get_4k_entry(vaddr)?.set_flags(flags);
+            self.get_4k_entry_may_create(vaddr)?.set_flags(flags);
             vaddr += PAGE_SIZE;
         }
 
@@ -218,15 +218,14 @@ impl ActiveMapping {
     fn unmap_single_internal(&mut self, vaddr: VirtAddr, frame: bool) {
         debug_assert!(vaddr.is_page_aligned());
 
-        let p3 = self
-            .p4
-            .next_table_mut(vaddr.p4_index())
-            .expect("p3 not mapped");
-        let p2 = p3.next_table_mut(vaddr.p3_index()).expect("p2 not mapped");
-        let p1 = p2.next_table_mut(vaddr.p2_index()).expect("p1 not mapped");
+        let p3 = unwrap_or_return!(self.p4.next_table_mut(vaddr.p4_index()));
+        let p2 = unwrap_or_return!(p3.next_table_mut(vaddr.p3_index()));
+        let p1 = unwrap_or_return!(p2.next_table_mut(vaddr.p2_index()));
 
         let e = &mut p1.entries[vaddr.p1_index()];
-        debug_assert!(e.flags().contains(EntryFlags::PRESENT));
+        if !e.flags().contains(EntryFlags::PRESENT) {
+            return;
+        }
 
         if frame {
             with_pmm(|pmm| {
@@ -250,6 +249,7 @@ impl ActiveMapping {
         if p1.used_count() == 0 {
             let vaddr = VirtAddr::new(p1 as *mut _ as usize);
             self.unmap_single_internal(vaddr, true);
+            // TODO: p2, p3
         }
     }
 
@@ -281,7 +281,10 @@ impl ActiveMapping {
     }
 
     /// Gets the entry modifier for a 4 KiB page. Sets the page as used.
-    pub fn get_4k_entry(&mut self, vaddr: VirtAddr) -> Result<EntryModifier, MemoryError> {
+    pub fn get_4k_entry_may_create(
+        &mut self,
+        vaddr: VirtAddr,
+    ) -> Result<EntryModifier, MemoryError> {
         debug_assert!(vaddr.is_page_aligned());
 
         let p1 = self

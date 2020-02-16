@@ -93,7 +93,7 @@ fn tasking_test_a() -> ! {
         arch::halt();
         i += 1;
         if i > 20 {
-            if i > 100 {
+            if i > 40 {
                 scheduler::switch_to_next(SwitchReason::Exit);
             }
             let x = Spinlock::new(Some(3));

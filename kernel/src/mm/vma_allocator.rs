@@ -1,11 +1,12 @@
-//! Allocator used to split a domain into virtual memory areas.
+//! Allocator used to split an address space domain into virtual memory areas.
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::PAGE_SIZE;
+use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::avl_interval_tree::AVLIntervalTree;
-use crate::mm::mapper::MemoryError;
+use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::sync::spinlock::Spinlock;
 
+/// Virtual memory allocator.
 pub struct VMAAllocator {
     tree: AVLIntervalTree,
 }
@@ -17,20 +18,36 @@ pub struct Vma {
     len: usize,
 }
 
+/// Mapped of a Vma (may be partially).
+pub struct MappedVma {
+    vma: Vma,
+}
+
 impl Vma {
     /// Creates a new Vma of the requested size.
     pub fn create(len: usize) -> Result<Self, MemoryError> {
-        with_vma_allocator(|allocator| {
-            let start = allocator.alloc_region(len).ok_or(MemoryError::NoMoreVMA)?;
-            Ok(Self { start, len })
-        })
+        with_vma_allocator(|allocator| allocator.alloc_region(len))
+            .map(|start| Self { start, len })
+            .ok_or(MemoryError::NoMoreVMA)
     }
 
-    /// Empty Vma.
-    pub const fn empty() -> Self {
-        Self {
-            start: VirtAddr::null(),
-            len: 0,
+    /// Convert to mapped Vma.
+    pub fn map(
+        self,
+        map_off: usize,
+        map_len: usize,
+        flags: EntryFlags,
+    ) -> Result<MappedVma, MemoryError> {
+        debug_assert!(map_off % PAGE_SIZE == 0);
+        debug_assert!(map_len % PAGE_SIZE == 0);
+
+        if unlikely!(map_off >= self.len || map_off + map_len > self.len) {
+            Err(MemoryError::InvalidRange)
+        } else {
+            let mut mapping = ActiveMapping::get();
+            mapping.map_range(self.start + map_off, map_len, flags)?;
+
+            Ok(MappedVma { vma: self })
         }
     }
 
@@ -47,11 +64,43 @@ impl Vma {
     }
 }
 
+impl MappedVma {
+    /// Empty Vma.
+    pub const fn empty() -> Self {
+        Self {
+            vma: Vma {
+                start: VirtAddr::null(),
+                len: 0,
+            },
+        }
+    }
+
+    /// Gets the starting address.
+    #[inline]
+    pub fn address(&self) -> VirtAddr {
+        self.vma.start
+    }
+
+    /// Gets the length.
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.vma.len
+    }
+}
+
 impl Drop for Vma {
     fn drop(&mut self) {
         if likely!(!self.address().is_null()) {
             with_vma_allocator(|allocator| allocator.insert_region(self.start, self.len));
         }
+    }
+}
+
+impl Drop for MappedVma {
+    fn drop(&mut self) {
+        let mut mapping = ActiveMapping::get();
+        // We don't need to tell the exact mapped range, we own all of this.
+        mapping.free_and_unmap_range(self.vma.start, self.vma.len);
     }
 }
 

@@ -3,11 +3,11 @@ use core::mem::size_of;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::Vma;
+use crate::mm::vma_allocator::{MappedVma, Vma};
 
 /// The stack of a thread.
 pub struct Stack {
-    _vma: Vma,
+    _vma: MappedVma,
     current_location: VirtAddr,
 }
 
@@ -63,16 +63,13 @@ impl Stack {
     pub fn create(size: usize) -> Result<Stack, MemoryError> {
         let vma = {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            let vma = Vma::create(size)?;
-            // TODO: leaks now
-            ActiveMapping::get().map_range(vma.address(), size, flags)?;
-            vma
+            Vma::create(size)?.map(0, size, flags)?
         };
         Ok(Stack::new(vma))
     }
 
     /// Creates a new stack from given parameters.
-    pub fn new(vma: Vma) -> Self {
+    pub fn new(vma: MappedVma) -> Self {
         let current_location = vma.address() + vma.size();
         Self {
             _vma: vma,

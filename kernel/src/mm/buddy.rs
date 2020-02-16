@@ -1,4 +1,5 @@
 use core::cmp;
+use core::intrinsics::unlikely;
 
 /// Amount of top nodes.
 pub const MAX_LEVEL: usize = 15;
@@ -59,7 +60,7 @@ impl Tree {
         // Make logical
         let size = size + 1;
 
-        if unlikely!(self.nodes[0] < size as u8) {
+        if unlikely(self.nodes[0] < size as u8) {
             return None;
         }
 

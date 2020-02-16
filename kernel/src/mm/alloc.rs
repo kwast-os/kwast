@@ -7,6 +7,7 @@ use crate::sync::spinlock::Spinlock;
 use crate::util::unchecked::UncheckedUnwrap;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cmp;
+use core::intrinsics::unlikely;
 use core::mem::size_of;
 use core::ptr::{null_mut, NonNull};
 
@@ -280,7 +281,7 @@ impl Cache {
         let oldest = unsafe { oldest.as_mut() };
 
         // Cleanup oldest
-        if unlikely!(oldest.prev.is_none()) {
+        if unlikely(oldest.prev.is_none()) {
             // No previous, so must be the first one in the chain.
             self.free = SlabLink(None);
         } else {
@@ -443,7 +444,7 @@ impl<'t> SpaceManager<'t> {
         let size = PAGE_SIZE << order;
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-        if unlikely!(ActiveMapping::get().map_range(addr, size, flags).is_err()) {
+        if unlikely(ActiveMapping::get().map_range(addr, size, flags).is_err()) {
             self.tree.dealloc(offset);
             null_mut()
         } else {
@@ -471,7 +472,7 @@ impl<'t> SpaceManager<'t> {
         let offset = self.tree.alloc(order)?;
         let ptr = self.offset_to_ptr_and_map(order, offset);
 
-        if unlikely!(ptr.is_null()) {
+        if unlikely(ptr.is_null()) {
             None
         } else {
             let slab = unsafe { &mut *(ptr as usize as *mut Slab) };

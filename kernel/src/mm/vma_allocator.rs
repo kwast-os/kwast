@@ -5,6 +5,7 @@ use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::avl_interval_tree::AVLIntervalTree;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::sync::spinlock::Spinlock;
+use core::intrinsics::{likely, unlikely};
 
 /// Virtual memory allocator.
 pub struct VMAAllocator {
@@ -41,7 +42,7 @@ impl Vma {
         debug_assert!(map_off % PAGE_SIZE == 0);
         debug_assert!(map_size % PAGE_SIZE == 0);
 
-        if unlikely!(map_off >= self.size || map_off + map_size > self.size) {
+        if unlikely(map_off >= self.size || map_off + map_size > self.size) {
             Err(MemoryError::InvalidRange)
         } else {
             let mut mapping = ActiveMapping::get();
@@ -90,7 +91,7 @@ impl MappedVma {
 
 impl Drop for Vma {
     fn drop(&mut self) {
-        if likely!(!self.address().is_null()) {
+        if likely(!self.address().is_null()) {
             with_vma_allocator(|allocator| allocator.insert_region(self.start, self.size));
         }
     }

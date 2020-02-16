@@ -3,6 +3,7 @@ use multiboot2::BootInformation;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::mm::mapper::{MappingResult, MemoryError};
 use crate::sync::spinlock::Spinlock;
+use core::intrinsics::unlikely;
 
 /// The default frame allocator.
 ///
@@ -49,7 +50,7 @@ impl FrameAllocator {
     where
         F: FnOnce(PhysAddr) -> VirtAddr,
     {
-        if unlikely!(self.top.is_null()) {
+        if unlikely(self.top.is_null()) {
             return Err(MemoryError::OOM);
         }
 

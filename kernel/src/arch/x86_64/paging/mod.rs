@@ -7,6 +7,7 @@ pub use self::entry::EntryFlags;
 use self::table::{Level4, Table};
 use crate::mm::mapper::{MappingResult, MemoryError, MemoryMapper};
 use crate::mm::pmm::with_pmm;
+use core::intrinsics::unlikely;
 
 mod entry;
 mod frame;
@@ -147,7 +148,7 @@ impl MemoryMapper for ActiveMapping {
 
         for offset in (0..size).step_by(PAGE_SIZE) {
             let res = self.map_single(vaddr, paddr, flags);
-            if unlikely!(res.is_err()) {
+            if unlikely(res.is_err()) {
                 self.unmap_range(start_vaddr, offset);
                 return res;
             }
@@ -166,7 +167,7 @@ impl MemoryMapper for ActiveMapping {
 
         for offset in (0..size).step_by(PAGE_SIZE) {
             let res = self.get_and_map_single(vaddr, flags);
-            if unlikely!(res.is_err()) {
+            if unlikely(res.is_err()) {
                 self.free_and_unmap_range(start_vaddr, offset);
                 return res;
             }

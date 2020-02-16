@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="Kwast" src="https://github.com/nielsdos/kwast/raw/master/docs/small_logo.png">
+# Kwast
 
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Build Status](https://travis-ci.org/nielsdos/kwast.svg?branch=master)](https://travis-ci.org/nielsdos/kwast)
 </p>

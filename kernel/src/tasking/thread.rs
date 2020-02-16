@@ -3,6 +3,7 @@ use core::mem::size_of;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{EntryFlags, PAGE_SIZE};
 use crate::mm::mapper::MemoryError;
+use crate::mm::vma_allocator::LazilyMappedVma;
 use crate::mm::vma_allocator::{MappedVma, Vma};
 
 /// The stack of a thread.
@@ -26,26 +27,31 @@ impl ThreadId {
 
 pub struct Thread {
     stack: Stack,
+    heap: LazilyMappedVma,
+    code: MappedVma,
 }
 
 impl Thread {
     /// Creates a thread.
-    pub fn create(entry: VirtAddr) -> Result<Thread, MemoryError> {
+    pub fn create(
+        entry: VirtAddr,
+        code: MappedVma,
+        heap: LazilyMappedVma,
+    ) -> Result<Thread, MemoryError> {
         // TODO
         let stack_size = 8 * PAGE_SIZE;
         let stack_guard_size: usize = PAGE_SIZE;
         let mut stack = Stack::create(stack_size, stack_guard_size)?;
-        println!("{:?}", stack._vma.address());
         // Safe because enough size on the stack and stack allocated at a known good location.
         unsafe {
             stack.prepare(entry);
+            Ok(Self::new(stack, code, heap))
         }
-        Ok(Self { stack })
     }
 
     /// Creates a new thread from given parameters.
-    pub unsafe fn new(stack: Stack) -> Self {
-        Self { stack }
+    pub unsafe fn new(stack: Stack, code: MappedVma, heap: LazilyMappedVma) -> Self {
+        Self { stack, heap, code }
     }
 
     /// Gets the current stack address.

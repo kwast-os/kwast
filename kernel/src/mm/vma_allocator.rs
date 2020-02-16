@@ -13,7 +13,6 @@ pub struct VMAAllocator {
 }
 
 /// Virtual memory area.
-#[derive(Debug)]
 pub struct Vma {
     start: VirtAddr,
     size: usize,
@@ -24,7 +23,24 @@ pub struct MappedVma {
     vma: Vma,
 }
 
+/// Lazily mapped Vma, mapped on access.
+pub struct LazilyMappedVma {
+    vma: Vma,
+    /// The flags to use when mapping the memory.
+    flags: EntryFlags,
+    /// The size of the real mapped part.
+    mapped_size: usize,
+}
+
 impl Vma {
+    /// Empty Vma.
+    pub const fn empty() -> Self {
+        Self {
+            start: VirtAddr::null(),
+            size: 0,
+        }
+    }
+
     /// Creates a new Vma of the requested size.
     pub fn create(size: usize) -> Result<Self, MemoryError> {
         with_vma_allocator(|allocator| allocator.alloc_region(size))
@@ -52,6 +68,15 @@ impl Vma {
         }
     }
 
+    /// Convert to a lazily mapped Vma.
+    pub fn map_lazily(self, flags: EntryFlags) -> LazilyMappedVma {
+        LazilyMappedVma {
+            vma: self,
+            flags,
+            mapped_size: 0,
+        }
+    }
+
     /// Gets the starting address.
     #[inline]
     pub fn address(&self) -> VirtAddr {
@@ -68,12 +93,7 @@ impl Vma {
 impl MappedVma {
     /// Empty Vma.
     pub const fn empty() -> Self {
-        Self {
-            vma: Vma {
-                start: VirtAddr::null(),
-                size: 0,
-            },
-        }
+        Self { vma: Vma::empty() }
     }
 
     /// Gets the starting address.
@@ -82,10 +102,39 @@ impl MappedVma {
         self.vma.start
     }
 
-    /// Gets the length.
+    /// Gets the size.
     #[inline]
     pub fn size(&self) -> usize {
         self.vma.size
+    }
+}
+
+impl LazilyMappedVma {
+    /// Empty Vma.
+    pub const fn empty() -> Self {
+        Self {
+            vma: Vma::empty(),
+            flags: EntryFlags::empty(),
+            mapped_size: 0,
+        }
+    }
+
+    /// Gets the flags to use when mapping the memory.
+    #[inline]
+    pub fn flags(&self) -> EntryFlags {
+        self.flags
+    }
+
+    /// Gets the starting address.
+    #[inline]
+    pub fn address(&self) -> VirtAddr {
+        self.vma.start
+    }
+
+    /// Gets the size.
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.mapped_size
     }
 }
 
@@ -97,11 +146,22 @@ impl Drop for Vma {
     }
 }
 
+fn drop_mapping(start: VirtAddr, size: usize) {
+    let mut mapping = ActiveMapping::get();
+    // We don't need to tell the exact mapped range, we own all of this.
+    // For an empty mapping, the size will be zero, so we don't have to check that.
+    mapping.free_and_unmap_range(start, size);
+}
+
 impl Drop for MappedVma {
     fn drop(&mut self) {
-        let mut mapping = ActiveMapping::get();
-        // We don't need to tell the exact mapped range, we own all of this.
-        mapping.free_and_unmap_range(self.vma.start, self.vma.size);
+        drop_mapping(self.address(), self.size());
+    }
+}
+
+impl Drop for LazilyMappedVma {
+    fn drop(&mut self) {
+        drop_mapping(self.address(), self.size());
     }
 }
 

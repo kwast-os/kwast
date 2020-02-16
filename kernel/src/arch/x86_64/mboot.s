@@ -130,6 +130,13 @@ start:
     orl $(1 << 31 | 1 << 16), %eax
     mov %eax, %cr0
 
+    // Setup rest of TSS descriptor
+    movl $tss, %eax
+    movw %ax, tss_base0
+    shr $16, %eax
+    movb %al, tss_base1
+    movb %ah, tss_base2
+
     // Switch to long mode
     lgdt gdt_descriptor
     jmp $0x8, $1f
@@ -147,6 +154,8 @@ start:
     movw %ax, %ds
     movw %ax, %es
     movw %ax, %ss
+    movw $16, %ax
+    ltr %ax
 
     .extern entry
     mov %rbx, %rdi
@@ -158,12 +167,42 @@ halt:
 
 .section .rodata
 gdt:
+// NULL segment
 .quad 0
-.quad (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53) // Kernel code segment, only one segment really needed
+// Kernel code segment, only one segment really needed
+.quad (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53)
+// TSS
+.word tss_end - tss - 1
+tss_base0: .word 0 // base 15:00
+tss_base1: .byte 0 // base 23:16
+.byte 0b10001001
+.byte 0
+tss_base2: .byte 0 // base 31:24
+.long 0 // base 63:32, will be zero because lower memory
+.long 0
 gdt_descriptor:
 .word gdt_descriptor - gdt - 1
 .quad gdt
+tss:
+.long 0                    // reserved0
+.quad 0                    // rsp0
+.quad 0                    // rsp1
+.quad 0                    // rsp2
+.quad 0                    // reserved1
+.quad interrupt_stack_top  // ist1
+.quad 0                    // ist2
+.quad 0                    // ist3
+.quad 0                    // ist4
+.quad 0                    // ist5
+.quad 0                    // ist6
+.quad 0                    // ist7
+.quad 0                    // reserved2
+.word 0                    // reserved3
+.word 0                    // IO map base address offset
+tss_end:
 
 .section .bss, "aw", @nobits
-.skip 32768
+.skip 16384
 stack_top:
+.skip 16384
+interrupt_stack_top:

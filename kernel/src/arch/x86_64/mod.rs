@@ -30,11 +30,40 @@ extern "C" {
 /// Per-CPU data for the bootstrap processor.
 static mut PER_CPU_DATA_BSP: CpuData = CpuData::new();
 
+/*#[repr(C, packed)]
+struct TSS {
+    reserved0: u32,
+    rsp: [VirtAddr; 3],
+    reserved1: u64,
+    ist: [VirtAddr; 7],
+    reserved2: u64,
+    reserved3: u16,
+    io_map_base: u16,
+}
+
+impl TSS {
+    const fn new() -> Self {
+        Self {
+            reserved0: 0,
+            rsp: [VirtAddr::null(); 3],
+            reserved1: 0,
+            ist: [VirtAddr::null(); 7],
+            reserved2: 0,
+            reserved3: 0,
+            io_map_base: 0,
+        }
+    }
+
+    fn set_ist(&mut self, n: usize, addr: VirtAddr) {
+        self.ist[n] = addr;
+    }
+}*/
+
 /// Initializes arch-specific stuff.
 #[no_mangle]
 pub extern "C" fn entry(mboot_addr: usize) {
-    // Not shared between cores, but we must be careful about what data we modify or read.
     unsafe {
+        // Not shared between cores, but we must be careful about what data we modify or read.
         PER_CPU_DATA_BSP.prepare_to_set();
         set_per_cpu_data(&mut PER_CPU_DATA_BSP as *mut _);
     }
@@ -136,25 +165,4 @@ unsafe fn wrmsr(reg: u32, value: u64) {
     let lo = value as u32;
     let hi = (value >> 32) as u32;
     asm!("wrmsr" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
-}
-
-/// Irq flags type. Flags register for the x86 architecture.
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct IrqState(u64);
-
-/// Saves the IRQ state and stops IRQs.
-pub fn irq_save_and_stop() -> IrqState {
-    unsafe {
-        let state: IrqState;
-        asm!("pushf; pop $0; cli" : "=r" (state) : : "memory" : "volatile");
-        state
-    }
-}
-
-/// Restores an old IRQ state.
-pub fn irq_restore(state: IrqState) {
-    unsafe {
-        asm!("push $0; popf" : : "r" (state) : "memory" : "volatile");
-    }
 }

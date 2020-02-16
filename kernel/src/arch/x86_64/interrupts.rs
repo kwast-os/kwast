@@ -59,12 +59,17 @@ const ENTRY_COUNT: usize = 64;
 
 struct IDT([Entry; ENTRY_COUNT]);
 
+/// Irq flags type. Flags register for the x86 architecture.
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct IrqState(u64);
+
 impl Entry {
-    fn new(handler: usize, flags: EntryFlags) -> Self {
+    fn new(handler: usize, flags: EntryFlags, ist: u8) -> Self {
         Self {
             offset_1: handler as u16,
             selector: 0x08,
-            ist: 0,
+            ist,
             type_attr: flags.bits(),
             offset_2: (handler >> 16) as u16,
             offset_3: (handler >> 32) as u32,
@@ -73,7 +78,7 @@ impl Entry {
     }
 
     fn empty() -> Self {
-        Self::new(0, EntryFlags::empty())
+        Self::new(0, EntryFlags::empty(), 0)
     }
 }
 
@@ -93,8 +98,8 @@ impl IDT {
         }
     }
 
-    fn set_handler(&mut self, n: usize, handler: usize, flags: EntryFlags) {
-        self.0[n as usize] = Entry::new(handler, flags);
+    fn set_handler(&mut self, n: usize, handler: usize, flags: EntryFlags, ist: u8) {
+        self.0[n] = Entry::new(handler, flags, ist);
     }
 }
 
@@ -103,48 +108,48 @@ lazy_static! {
         let exc_flags = EntryFlags::PRESENT | EntryFlags::INT_GATE;
 
         let mut idt = IDT::new();
-        idt.set_handler(0, exc_divide_by_zero as usize, exc_flags);
-        idt.set_handler(1, exc_debug as usize, exc_flags);
-        idt.set_handler(2, exc_nmi as usize, exc_flags);
-        idt.set_handler(3, exc_breakpoint as usize, exc_flags);
-        idt.set_handler(4, exc_overflow as usize, exc_flags);
-        idt.set_handler(5, exc_bound_range_exceeded as usize, exc_flags);
-        idt.set_handler(6, exc_invalid_opcode as usize, exc_flags);
-        idt.set_handler(7, exc_device_not_available as usize, exc_flags);
-        idt.set_handler(8, exc_double_fault as usize, exc_flags);
-        idt.set_handler(9, exc_unknown as usize, exc_flags);
-        idt.set_handler(10, exc_invalid_tss as usize, exc_flags);
-        idt.set_handler(11, exc_segment_not_present as usize, exc_flags);
-        idt.set_handler(12, exc_stack_segment as usize, exc_flags);
-        idt.set_handler(13, exc_gpf as usize, exc_flags);
-        idt.set_handler(14, exc_pf as usize, exc_flags);
-        idt.set_handler(15, exc_unknown as usize, exc_flags);
-        idt.set_handler(16, exc_fp as usize, exc_flags);
-        idt.set_handler(17, exc_alignment_check as usize, exc_flags);
-        idt.set_handler(18, exc_machine_check as usize, exc_flags);
-        idt.set_handler(19, exc_simd_fp as usize, exc_flags);
-        idt.set_handler(20, exc_virtualization as usize, exc_flags);
-        idt.set_handler(21, exc_unknown as usize, exc_flags);
-        idt.set_handler(22, exc_unknown as usize, exc_flags);
-        idt.set_handler(23, exc_unknown as usize, exc_flags);
-        idt.set_handler(24, exc_unknown as usize, exc_flags);
-        idt.set_handler(25, exc_unknown as usize, exc_flags);
-        idt.set_handler(26, exc_unknown as usize, exc_flags);
-        idt.set_handler(27, exc_unknown as usize, exc_flags);
-        idt.set_handler(28, exc_unknown as usize, exc_flags);
-        idt.set_handler(29, exc_unknown as usize, exc_flags);
-        idt.set_handler(30, exc_unknown as usize, exc_flags);
-        idt.set_handler(31, exc_unknown as usize, exc_flags);
+        idt.set_handler(0, exc_divide_by_zero as usize, exc_flags, 0);
+        idt.set_handler(1, exc_debug as usize, exc_flags, 0);
+        idt.set_handler(2, exc_nmi as usize, exc_flags, 1);
+        idt.set_handler(3, exc_breakpoint as usize, exc_flags, 0);
+        idt.set_handler(4, exc_overflow as usize, exc_flags, 0);
+        idt.set_handler(5, exc_bound_range_exceeded as usize, exc_flags, 0);
+        idt.set_handler(6, exc_invalid_opcode as usize, exc_flags, 0);
+        idt.set_handler(7, exc_device_not_available as usize, exc_flags, 0);
+        idt.set_handler(8, exc_double_fault as usize, exc_flags, 1);
+        idt.set_handler(9, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(10, exc_invalid_tss as usize, exc_flags, 0);
+        idt.set_handler(11, exc_segment_not_present as usize, exc_flags, 0);
+        idt.set_handler(12, exc_stack_segment as usize, exc_flags, 0);
+        idt.set_handler(13, exc_gpf as usize, exc_flags, 1);
+        idt.set_handler(14, exc_pf as usize, exc_flags, 1);
+        idt.set_handler(15, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(16, exc_fp as usize, exc_flags, 0);
+        idt.set_handler(17, exc_alignment_check as usize, exc_flags, 0);
+        idt.set_handler(18, exc_machine_check as usize, exc_flags, 0);
+        idt.set_handler(19, exc_simd_fp as usize, exc_flags, 0);
+        idt.set_handler(20, exc_virtualization as usize, exc_flags, 0);
+        idt.set_handler(21, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(22, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(23, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(24, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(25, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(26, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(27, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(28, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(29, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(30, exc_unknown as usize, exc_flags, 0);
+        idt.set_handler(31, exc_unknown as usize, exc_flags, 0);
 
         extern "C" {
             fn irq0();
         }
 
         // Timer
-        idt.set_handler(32, irq0 as usize, exc_flags);
+        idt.set_handler(32, irq0 as usize, exc_flags, 0);
 
         for i in 1..16 {
-            idt.set_handler(32 + i, irq as usize, exc_flags);
+            idt.set_handler(32 + i, irq as usize, exc_flags, 0);
         }
 
         idt
@@ -186,6 +191,22 @@ pub fn enable() {
 pub fn disable() {
     unsafe {
         asm!("cli" :::: "volatile");
+    }
+}
+
+/// Saves the IRQ state and stops IRQs.
+pub fn irq_save_and_stop() -> IrqState {
+    unsafe {
+        let state: IrqState;
+        asm!("pushf; pop $0; cli" : "=r" (state) : : "memory" : "volatile");
+        state
+    }
+}
+
+/// Restores an old IRQ state.
+pub fn irq_restore(state: IrqState) {
+    unsafe {
+        asm!("push $0; popf" : : "r" (state) : "memory" : "volatile");
     }
 }
 

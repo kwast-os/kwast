@@ -1,4 +1,4 @@
-use crate::arch;
+use crate::arch::interrupts;
 use crate::sync::atomic_hle::AtomicHLE;
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
@@ -13,7 +13,7 @@ pub struct Spinlock<T: ?Sized> {
 /// RAII structure for Spinlock, when dropped will unlock the lock.
 pub struct SpinlockGuard<'a, T: ?Sized + 'a> {
     lock: &'a Spinlock<T>,
-    state: arch::IrqState,
+    state: interrupts::IrqState,
 }
 
 unsafe impl<T: ?Sized + Send> Send for Spinlock<T> {}
@@ -30,7 +30,7 @@ impl<T> Spinlock<T> {
 
     /// Lock.
     pub fn lock(&self) -> SpinlockGuard<T> {
-        let state = arch::irq_save_and_stop();
+        let state = interrupts::irq_save_and_stop();
 
         // We want to immediately try to acquire the lock, but if that fails, we want to use "test followed by test-and-set".
         // This is better for performance.
@@ -58,12 +58,12 @@ impl<T> Spinlock<T> {
     /// Try locking.
     #[allow(dead_code)]
     pub fn try_lock(&self) -> Option<SpinlockGuard<T>> {
-        let state = arch::irq_save_and_stop();
+        let state = interrupts::irq_save_and_stop();
 
         if self.try_set_lock_flag() {
             Some(SpinlockGuard { lock: self, state })
         } else {
-            arch::irq_restore(state);
+            interrupts::irq_restore(state);
             None
         }
     }
@@ -73,7 +73,7 @@ impl<'a, T: ?Sized> Drop for SpinlockGuard<'a, T> {
     #[inline]
     fn drop(&mut self) {
         self.lock.flag.store_release_maybe_hle(false);
-        arch::irq_restore(self.state);
+        interrupts::irq_restore(self.state);
     }
 }
 

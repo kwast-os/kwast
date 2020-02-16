@@ -1,8 +1,8 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
-use crate::mm::mapper::{MemoryError, MemoryMapper};
+use crate::arch::paging::{EntryFlags, PAGE_SIZE};
+use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{MappedVma, Vma};
 
 /// The stack of a thread.
@@ -33,8 +33,10 @@ impl Thread {
     pub fn create(entry: VirtAddr) -> Result<Thread, MemoryError> {
         // TODO
         let stack_size = 8 * PAGE_SIZE;
-        let mut stack = Stack::create(stack_size)?;
-        // Safe because enough size on the stack.
+        let stack_guard_size: usize = PAGE_SIZE;
+        let mut stack = Stack::create(stack_size, stack_guard_size)?;
+        println!("{:?}", stack._vma.address());
+        // Safe because enough size on the stack and stack allocated at a known good location.
         unsafe {
             stack.prepare(entry);
         }
@@ -57,13 +59,12 @@ impl Thread {
     }
 }
 
-// TODO: bounds
 impl Stack {
     /// Creates a stack.
-    pub fn create(size: usize) -> Result<Stack, MemoryError> {
+    pub fn create(size: usize, guard_size: usize) -> Result<Stack, MemoryError> {
         let vma = {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            Vma::create(size)?.map(0, size, flags)?
+            Vma::create(size + guard_size)?.map(guard_size, size, flags)?
         };
         Ok(Stack::new(vma))
     }

@@ -95,6 +95,7 @@ fn tasking_test_a() -> ! {
         if i > 20 {
             if i > 40 {
                 scheduler::switch_to_next(SwitchReason::Exit);
+                unreachable!();
             }
             let x = Spinlock::new(Some(3));
             let guard = x.lock();
@@ -108,8 +109,17 @@ fn tasking_test_a() -> ! {
 }
 
 fn tasking_test_b() -> ! {
+    let mut i = 0;
     loop {
         print!("B");
+        i += 1;
+        if i > 100 {
+            // Test basic stack overflow.
+            fn test(i: i32) -> i32 {
+                1 + test(i + 1)
+            }
+            print!("{}", test(0));
+        }
         arch::halt();
     }
 }

@@ -15,7 +15,7 @@ pub struct VMAAllocator {
 #[derive(Debug)]
 pub struct Vma {
     start: VirtAddr,
-    len: usize,
+    size: usize,
 }
 
 /// Mapped of a Vma (may be partially).
@@ -25,9 +25,9 @@ pub struct MappedVma {
 
 impl Vma {
     /// Creates a new Vma of the requested size.
-    pub fn create(len: usize) -> Result<Self, MemoryError> {
-        with_vma_allocator(|allocator| allocator.alloc_region(len))
-            .map(|start| Self { start, len })
+    pub fn create(size: usize) -> Result<Self, MemoryError> {
+        with_vma_allocator(|allocator| allocator.alloc_region(size))
+            .map(|start| Self { start, size })
             .ok_or(MemoryError::NoMoreVMA)
     }
 
@@ -35,17 +35,17 @@ impl Vma {
     pub fn map(
         self,
         map_off: usize,
-        map_len: usize,
+        map_size: usize,
         flags: EntryFlags,
     ) -> Result<MappedVma, MemoryError> {
         debug_assert!(map_off % PAGE_SIZE == 0);
-        debug_assert!(map_len % PAGE_SIZE == 0);
+        debug_assert!(map_size % PAGE_SIZE == 0);
 
-        if unlikely!(map_off >= self.len || map_off + map_len > self.len) {
+        if unlikely!(map_off >= self.size || map_off + map_size > self.size) {
             Err(MemoryError::InvalidRange)
         } else {
             let mut mapping = ActiveMapping::get();
-            mapping.map_range(self.start + map_off, map_len, flags)?;
+            mapping.map_range(self.start + map_off, map_size, flags)?;
 
             Ok(MappedVma { vma: self })
         }
@@ -60,7 +60,7 @@ impl Vma {
     /// Gets the length.
     #[inline]
     pub fn size(&self) -> usize {
-        self.len
+        self.size
     }
 }
 
@@ -70,7 +70,7 @@ impl MappedVma {
         Self {
             vma: Vma {
                 start: VirtAddr::null(),
-                len: 0,
+                size: 0,
             },
         }
     }
@@ -84,14 +84,14 @@ impl MappedVma {
     /// Gets the length.
     #[inline]
     pub fn size(&self) -> usize {
-        self.vma.len
+        self.vma.size
     }
 }
 
 impl Drop for Vma {
     fn drop(&mut self) {
         if likely!(!self.address().is_null()) {
-            with_vma_allocator(|allocator| allocator.insert_region(self.start, self.len));
+            with_vma_allocator(|allocator| allocator.insert_region(self.start, self.size));
         }
     }
 }
@@ -100,7 +100,7 @@ impl Drop for MappedVma {
     fn drop(&mut self) {
         let mut mapping = ActiveMapping::get();
         // We don't need to tell the exact mapped range, we own all of this.
-        mapping.free_and_unmap_range(self.vma.start, self.vma.len);
+        mapping.free_and_unmap_range(self.vma.start, self.vma.size);
     }
 }
 

@@ -3,7 +3,7 @@ use alloc::collections::VecDeque;
 use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
-use crate::mm::vma_allocator::{MappedVma, Vma};
+use crate::mm::vma_allocator::MappedVma;
 use crate::sync::spinlock::Spinlock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;

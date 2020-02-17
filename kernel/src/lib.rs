@@ -76,14 +76,14 @@ fn kernel_main() {
 
     let test_thread_a = Thread::create(
         VirtAddr::new(tasking_test_a as usize),
-        MappedVma::empty(),
-        LazilyMappedVma::empty(),
+        MappedVma::dummy(),
+        LazilyMappedVma::dummy(),
     )
     .unwrap();
     let test_thread_b = Thread::create(
         VirtAddr::new(tasking_test_b as usize),
-        MappedVma::empty(),
-        LazilyMappedVma::empty(),
+        MappedVma::dummy(),
+        LazilyMappedVma::dummy(),
     )
     .unwrap();
 
@@ -105,7 +105,7 @@ fn tasking_test_a() -> ! {
         arch::halt();
         i += 1;
         if i > 20 {
-            if i > 40 {
+            if i > 80 {
                 scheduler::switch_to_next(SwitchReason::Exit);
                 unreachable!();
             }

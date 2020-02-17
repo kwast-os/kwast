@@ -7,6 +7,8 @@ use crate::arch::x86_64::address::VirtAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, PageFaultError};
 use crate::arch::x86_64::port::write_port8;
 use crate::mm::mapper::MemoryMapper;
+use crate::tasking::scheduler;
+use crate::tasking::scheduler::SwitchReason;
 
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
@@ -271,6 +273,8 @@ extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError)
     unsafe {
         asm!("movq %cr2, $0" : "=r"(addr));
     }
+    scheduler::switch_to_next(SwitchReason::RegularSwitch);
+
     let phys = ActiveMapping::get().translate(addr);
     panic!(
         "Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}",

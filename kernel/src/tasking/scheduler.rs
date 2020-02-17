@@ -67,9 +67,9 @@ impl Scheduler {
         // This will be overwritten on the first context switch with valid data.
         let idle_thread = unsafe {
             Thread::new(
-                Stack::new(MappedVma::empty()),
-                MappedVma::empty(),
-                LazilyMappedVma::empty(),
+                Stack::new(MappedVma::dummy()),
+                MappedVma::dummy(),
+                LazilyMappedVma::dummy(),
             )
         };
 

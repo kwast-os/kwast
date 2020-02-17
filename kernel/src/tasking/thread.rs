@@ -4,9 +4,11 @@ use crate::arch::address::VirtAddr;
 use crate::arch::paging::{EntryFlags, PAGE_SIZE};
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::LazilyMappedVma;
+use crate::mm::vma_allocator::MappableVma;
 use crate::mm::vma_allocator::{MappedVma, Vma};
 
 /// The stack of a thread.
+#[derive(Debug)]
 pub struct Stack {
     _vma: MappedVma,
     current_location: VirtAddr,
@@ -55,13 +57,15 @@ impl Thread {
     }
 
     /// Gets the current stack address.
+    #[inline]
     pub fn get_stack_address(&self) -> VirtAddr {
-        self.stack.as_virt_addr()
+        self.stack.get_current_location()
     }
 
     /// Sets the current stack address.
+    #[inline]
     pub fn set_stack_address(&mut self, addr: VirtAddr) {
-        self.stack.current_location = addr;
+        self.stack.set_current_location(addr)
     }
 }
 
@@ -84,10 +88,22 @@ impl Stack {
         }
     }
 
-    /// As a virtual address.
+    /// Gets the current location.
     #[inline]
-    pub fn as_virt_addr(&self) -> VirtAddr {
+    pub fn get_current_location(&self) -> VirtAddr {
         self.current_location
+    }
+
+    /// Sets the current location.
+    #[inline]
+    pub fn set_current_location(&mut self, location: VirtAddr) {
+        debug_assert!(
+            self._vma.is_dummy() || self._vma.is_contained(location),
+            "the address {:?} does not belong to the stack {:?}",
+            location,
+            self
+        );
+        self.current_location = location;
     }
 
     /// Pushes a value on the stack.

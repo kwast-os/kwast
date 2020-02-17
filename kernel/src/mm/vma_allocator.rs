@@ -13,12 +13,28 @@ pub struct VMAAllocator {
 }
 
 /// Virtual memory area.
+#[derive(Debug, Eq, PartialEq)]
 pub struct Vma {
     start: VirtAddr,
     size: usize,
 }
 
+pub trait MappableVma {
+    /// Gets the starting address.
+    fn address(&self) -> VirtAddr;
+
+    /// Gets the size.
+    fn size(&self) -> usize;
+
+    /// Checks if the address is contained within the area.
+    fn is_contained(&self, addr: VirtAddr) -> bool {
+        self.address().as_usize() <= addr.as_usize()
+            && (self.address() + self.size()).as_usize() > addr.as_usize()
+    }
+}
+
 /// Mapped of a Vma (may be partially).
+#[derive(Debug, Eq, PartialEq)]
 pub struct MappedVma {
     vma: Vma,
 }
@@ -33,8 +49,8 @@ pub struct LazilyMappedVma {
 }
 
 impl Vma {
-    /// Empty Vma.
-    pub const fn empty() -> Self {
+    /// Dummy Vma.
+    pub const fn dummy() -> Self {
         Self {
             start: VirtAddr::null(),
             size: 0,
@@ -91,29 +107,34 @@ impl Vma {
 }
 
 impl MappedVma {
-    /// Empty Vma.
-    pub const fn empty() -> Self {
-        Self { vma: Vma::empty() }
+    /// Dummy Vma.
+    pub const fn dummy() -> Self {
+        Self { vma: Vma::dummy() }
     }
 
-    /// Gets the starting address.
+    /// Is dummy?
+    pub fn is_dummy(&self) -> bool {
+        *self == Self::dummy()
+    }
+}
+
+impl MappableVma for MappedVma {
     #[inline]
-    pub fn address(&self) -> VirtAddr {
-        self.vma.start
+    fn address(&self) -> VirtAddr {
+        self.vma.address()
     }
 
-    /// Gets the size.
     #[inline]
-    pub fn size(&self) -> usize {
-        self.vma.size
+    fn size(&self) -> usize {
+        self.vma.size()
     }
 }
 
 impl LazilyMappedVma {
-    /// Empty Vma.
-    pub const fn empty() -> Self {
+    /// Dummy mapped Vma.
+    pub const fn dummy() -> Self {
         Self {
-            vma: Vma::empty(),
+            vma: Vma::dummy(),
             flags: EntryFlags::empty(),
             mapped_size: 0,
         }
@@ -124,16 +145,16 @@ impl LazilyMappedVma {
     pub fn flags(&self) -> EntryFlags {
         self.flags
     }
+}
 
-    /// Gets the starting address.
+impl MappableVma for LazilyMappedVma {
     #[inline]
-    pub fn address(&self) -> VirtAddr {
-        self.vma.start
+    fn address(&self) -> VirtAddr {
+        self.vma.address()
     }
 
-    /// Gets the size.
     #[inline]
-    pub fn size(&self) -> usize {
+    fn size(&self) -> usize {
         self.mapped_size
     }
 }

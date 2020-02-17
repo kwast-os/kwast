@@ -197,7 +197,7 @@ tss:
 .quad 0                    // ist7
 .quad 0                    // reserved2
 .word 0                    // reserved3
-.word 0                    // IO map base address offset
+.word 104                  // IO map base address offset.
 tss_end:
 
 .section .bss, "aw", @nobits

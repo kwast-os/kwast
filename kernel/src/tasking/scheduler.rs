@@ -8,8 +8,8 @@ use crate::mm::vma_allocator::MappedVma;
 use crate::sync::spinlock::Spinlock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
-
-// TODO: get rid of lookup in hashmap during critical path?
+use alloc::sync::Arc;
+use core::mem::swap;
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -20,16 +20,16 @@ pub enum SwitchReason {
 
 /// Common data for all per-core schedulers.
 pub struct SchedulerCommon {
-    threads: HashMap<ThreadId, Thread>,
+    threads: HashMap<ThreadId, Arc<Thread>>,
 }
 
 /// Per-core scheduler.
 pub struct Scheduler {
     // TODO: handle this so we can add without locking, currently this is no issue because you can only schedule on the current cpu
-    runqueue: VecDeque<ThreadId>,
+    run_queue: VecDeque<Arc<Thread>>,
     garbage: Option<ThreadId>,
-    pub current_thread_id: ThreadId,
-    idle_thread_id: ThreadId,
+    current_thread: Arc<Thread>,
+    idle_thread: Arc<Thread>,
 }
 
 impl SchedulerCommon {
@@ -41,23 +41,13 @@ impl SchedulerCommon {
     }
 
     /// Adds a thread.
-    pub fn add_thread(&mut self, id: ThreadId, thread: Thread) {
-        self.threads.insert(id, thread);
+    pub fn add_thread(&mut self, thread: Arc<Thread>) {
+        self.threads.insert(thread.id(), thread);
     }
 
     /// Removes a thread.
     pub fn remove_thread(&mut self, id: ThreadId) {
         self.threads.remove(&id);
-    }
-
-    /// Update thread state.
-    pub fn update_thread_state(&mut self, id: ThreadId, stack: VirtAddr) {
-        self.threads.get_mut(&id).unwrap().set_stack_address(stack);
-    }
-
-    /// Gets the thread stack address.
-    pub fn get_thread_stack(&self, id: ThreadId) -> VirtAddr {
-        self.threads.get(&id).unwrap().get_stack_address()
     }
 }
 
@@ -65,37 +55,36 @@ impl Scheduler {
     /// New scheduler.
     fn new() -> Self {
         // This will be overwritten on the first context switch with valid data.
-        let idle_thread = unsafe {
+        let idle_thread = Arc::new(unsafe {
             Thread::new(
                 Stack::new(MappedVma::dummy()),
                 MappedVma::dummy(),
                 LazilyMappedVma::dummy(),
             )
-        };
+        });
 
-        let idle_thread_id = ThreadId::new();
-        with_common(|common| common.add_thread(idle_thread_id, idle_thread));
+        with_common(|common| common.add_thread(idle_thread.clone()));
 
         Self {
-            runqueue: VecDeque::new(),
+            run_queue: VecDeque::new(),
             garbage: None,
-            current_thread_id: idle_thread_id,
-            idle_thread_id,
+            current_thread: idle_thread.clone(),
+            idle_thread,
         }
     }
 
     /// Adds a thread to the runqueue.
-    pub fn queue_thread(&mut self, id: ThreadId) {
-        self.runqueue.push_back(id);
+    pub fn queue_thread(&mut self, thread: Arc<Thread>) {
+        self.run_queue.push_back(thread);
     }
 
-    /// Gets the next thread id.
-    fn next_thread_id(&mut self) -> ThreadId {
+    /// Gets the next thread to run.
+    fn next_thread(&mut self) -> Arc<Thread> {
         // Decide next thread.
-        if let Some(id) = self.runqueue.pop_front() {
-            id
+        if let Some(thread) = self.run_queue.pop_front() {
+            thread
         } else {
-            self.idle_thread_id
+            self.idle_thread.clone()
         }
     }
 
@@ -105,35 +94,36 @@ impl Scheduler {
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
     ) -> VirtAddr {
-        let (next_stack, next_id) = with_common(|common| {
-            // Cleanup old thread.
-            if let Some(garbage) = self.garbage {
-                common.remove_thread(garbage);
-                self.garbage = None;
-            }
+        // Cleanup old thread.
+        if let Some(garbage) = self.garbage {
+            with_common(|common| common.remove_thread(garbage));
+            self.garbage = None;
+        }
 
-            match switch_reason {
-                // Regular switch.
-                SwitchReason::RegularSwitch => {
-                    common.update_thread_state(self.current_thread_id, old_stack);
+        // Decide which thread to run next.
+        let (old_thread, next_stack) = {
+            let mut next_thread = self.next_thread();
+            let next_stack = next_thread.stack.get_current_location();
+            swap(&mut self.current_thread, &mut next_thread);
+            (next_thread, next_stack)
+        };
 
-                    if self.current_thread_id != self.idle_thread_id {
-                        self.runqueue.push_back(self.current_thread_id);
-                    }
+        match switch_reason {
+            // Regular switch.
+            SwitchReason::RegularSwitch => {
+                old_thread.stack.set_current_location(old_stack);
+
+                if !Arc::ptr_eq(&old_thread, &self.idle_thread) {
+                    self.run_queue.push_back(old_thread);
                 }
-                // Exit the thread.
-                SwitchReason::Exit => {
-                    debug_assert!(self.garbage.is_none());
-                    self.garbage = Some(self.current_thread_id);
-                }
             }
+            // Exit the thread.
+            SwitchReason::Exit => {
+                debug_assert!(self.garbage.is_none());
+                self.garbage = Some(old_thread.id());
+            }
+        }
 
-            let next_id = self.next_thread_id();
-            debug_assert!(switch_reason != SwitchReason::Exit || next_id != self.current_thread_id);
-            (common.get_thread_stack(next_id), next_id)
-        });
-
-        self.current_thread_id = next_id;
         next_stack
     }
 }
@@ -163,11 +153,10 @@ static mut SCHEDULER: Option<Scheduler> = None;
 static mut SCHEDULER_COMMON: Spinlock<Option<SchedulerCommon>> = Spinlock::new(None);
 
 /// Adds and schedules a thread.
-pub fn add_and_schedule_thread(thread: Thread) -> ThreadId {
-    let id = ThreadId::new();
-    with_common(|common| common.add_thread(id, thread));
-    with_core_scheduler(|scheduler| scheduler.queue_thread(id));
-    id
+pub fn add_and_schedule_thread(thread: Thread) {
+    let thread = Arc::new(thread);
+    with_common(|common| common.add_thread(thread.clone()));
+    with_core_scheduler(|scheduler| scheduler.queue_thread(thread));
 }
 
 /// With common scheduler data.

@@ -6,12 +6,13 @@ use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::LazilyMappedVma;
 use crate::mm::vma_allocator::MappableVma;
 use crate::mm::vma_allocator::{MappedVma, Vma};
+use core::cell::Cell;
 
 /// The stack of a thread.
 #[derive(Debug)]
 pub struct Stack {
     _vma: MappedVma,
-    current_location: VirtAddr,
+    current_location: Cell<VirtAddr>,
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -28,9 +29,10 @@ impl ThreadId {
 }
 
 pub struct Thread {
-    stack: Stack,
+    pub stack: Stack,
     heap: LazilyMappedVma,
     code: MappedVma,
+    id: ThreadId,
 }
 
 impl Thread {
@@ -53,19 +55,17 @@ impl Thread {
 
     /// Creates a new thread from given parameters.
     pub unsafe fn new(stack: Stack, code: MappedVma, heap: LazilyMappedVma) -> Self {
-        Self { stack, heap, code }
+        Self {
+            stack,
+            heap,
+            code,
+            id: ThreadId::new(),
+        }
     }
 
-    /// Gets the current stack address.
-    #[inline]
-    pub fn get_stack_address(&self) -> VirtAddr {
-        self.stack.get_current_location()
-    }
-
-    /// Sets the current stack address.
-    #[inline]
-    pub fn set_stack_address(&mut self, addr: VirtAddr) {
-        self.stack.set_current_location(addr)
+    /// Gets the thread id.
+    pub fn id(&self) -> ThreadId {
+        self.id
     }
 }
 
@@ -76,6 +76,7 @@ impl Stack {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
             Vma::create(size + guard_size)?.map(guard_size, size, flags)?
         };
+        println!("{:?}", vma);
         Ok(Stack::new(vma))
     }
 
@@ -84,32 +85,33 @@ impl Stack {
         let current_location = vma.address() + vma.size();
         Self {
             _vma: vma,
-            current_location,
+            current_location: Cell::new(current_location),
         }
     }
 
     /// Gets the current location.
     #[inline]
     pub fn get_current_location(&self) -> VirtAddr {
-        self.current_location
+        self.current_location.get()
     }
 
     /// Sets the current location.
     #[inline]
-    pub fn set_current_location(&mut self, location: VirtAddr) {
+    pub fn set_current_location(&self, location: VirtAddr) {
         debug_assert!(
             self._vma.is_dummy() || self._vma.is_contained(location),
             "the address {:?} does not belong to the stack {:?}",
             location,
             self
         );
-        self.current_location = location;
+        self.current_location.replace(location);
     }
 
     /// Pushes a value on the stack.
     pub unsafe fn push<T>(&mut self, value: T) {
-        self.current_location -= size_of::<T>();
-        let ptr = self.current_location.as_mut();
+        let current = self.current_location.get_mut();
+        *current -= size_of::<T>();
+        let ptr = current.as_mut();
         *ptr = value;
     }
 }

@@ -14,6 +14,10 @@ _switch_to_next:
     pushq %r14
     pushq %r15
 
+    // Protect the scheduler from nesting.
+    // The interrupt flag will be restored because of the popfq later.
+    cli
+
     movq %rsp, %rsi
     // rdi already contains `switch_reason`
     call next_thread_state

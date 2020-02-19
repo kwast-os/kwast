@@ -273,7 +273,7 @@ extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError)
     unsafe {
         asm!("movq %cr2, $0" : "=r"(addr));
     }
-    scheduler::switch_to_next(SwitchReason::RegularSwitch);
+    scheduler::switch_to_next(SwitchReason::Exit); // TODO: verify and exit if invalid
 
     let phys = ActiveMapping::get().translate(addr);
     panic!(

@@ -80,12 +80,16 @@ impl Scheduler {
 
     /// Gets the next thread to run.
     fn next_thread(&mut self) -> Arc<Thread> {
-        // Decide next thread.
         if let Some(thread) = self.run_queue.pop_front() {
             thread
         } else {
             self.idle_thread.clone()
         }
+    }
+
+    /// Gets the current thread.
+    pub fn get_current_thread(&self) -> &Arc<Thread> {
+        &self.current_thread
     }
 
     /// Sets the scheduler up for switching to the next thread and gets the next thread stack address.

@@ -28,9 +28,12 @@ pub struct ModuleEnv<'data> {
     pub func_bodies: Vec<FunctionBody<'data>>,
     /// Memories.
     memories: Vec<Memory>,
+    /// Keep track of the imported function count.
+    imported_func_count: u32,
 }
 
 impl<'data> ModuleEnv<'data> {
+    /// Creates a new module environment for the given configuration.
     pub fn new(cfg: TargetFrontendConfig) -> Self {
         Self {
             cfg,
@@ -39,12 +42,20 @@ impl<'data> ModuleEnv<'data> {
             func_types: Vec::new(),
             func_bodies: Vec::new(),
             memories: Vec::new(),
+            imported_func_count: 0,
         }
     }
 
+    /// Gets the signature of the given function.
     pub fn get_sig(&self, index: FuncIndex) -> Signature {
         let sig_index = self.func_types[index.as_u32() as usize];
         self.signatures[sig_index.as_u32() as usize].clone()
+    }
+
+    /// Returns whether the function index corresponds to an imported function.
+    pub fn is_imported_func(&self, index: FuncIndex) -> bool {
+        // Imported functions are defined first.
+        index.as_u32() < self.imported_func_count
     }
 }
 
@@ -71,11 +82,15 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
 
     fn declare_func_import(
         &mut self,
-        _sig_index: SignatureIndex,
-        _module: &'data str,
-        _field: &'data str,
+        sig_index: SignatureIndex,
+        module: &'data str,
+        field: &'data str,
     ) -> WasmResult<()> {
-        unimplemented!()
+        println!("{:?} {} {}", sig_index, module, field);
+        self.func_types.push(sig_index);
+        self.imported_func_count += 1;
+        // TODO: track module & field
+        Ok(())
     }
 
     fn declare_table_import(

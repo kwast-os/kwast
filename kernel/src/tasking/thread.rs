@@ -1,12 +1,13 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{EntryFlags, PAGE_SIZE};
-use crate::mm::mapper::MemoryError;
+use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
+use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::LazilyMappedVma;
 use crate::mm::vma_allocator::MappableVma;
 use crate::mm::vma_allocator::{MappedVma, Vma};
 use core::cell::Cell;
+use core::intrinsics::likely;
 
 /// The stack of a thread.
 #[derive(Debug)]
@@ -67,6 +68,20 @@ impl Thread {
     pub fn id(&self) -> ThreadId {
         self.id
     }
+
+    /// Handle a page fault for this thread. Returns true if handled successfully.
+    pub fn page_fault(&self, fault_addr: VirtAddr) -> bool {
+        // Optimize for the likely case.
+        if likely(self.heap.is_contained(fault_addr)) {
+            let mut mapping = ActiveMapping::get();
+            let flags = self.heap.flags();
+            mapping
+                .get_and_map_single(fault_addr.align_down(), flags)
+                .is_ok()
+        } else {
+            false
+        }
+    }
 }
 
 impl Stack {
@@ -76,7 +91,6 @@ impl Stack {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
             Vma::create(size + guard_size)?.map(guard_size, size, flags)?
         };
-        println!("{:?}", vma);
         Ok(Stack::new(vma))
     }
 

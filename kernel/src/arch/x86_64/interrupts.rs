@@ -8,7 +8,8 @@ use crate::arch::x86_64::paging::{ActiveMapping, PageFaultError};
 use crate::arch::x86_64::port::write_port8;
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::SwitchReason;
+use crate::tasking::scheduler::{with_core_scheduler, SwitchReason};
+use core::intrinsics::unlikely;
 
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
@@ -271,15 +272,22 @@ extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
 extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError) {
     let addr: VirtAddr;
     unsafe {
-        asm!("movq %cr2, $0" : "=r"(addr));
+        asm!("movq %cr2, $0" : "=r" (addr));
     }
-    scheduler::switch_to_next(SwitchReason::Exit); // TODO: verify and exit if invalid
 
+    // TODO: when to panic the kernel?
     let phys = ActiveMapping::get().translate(addr);
     panic!(
         "Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}",
         frame, err, addr, phys
     );
+
+    if unlikely(!with_core_scheduler(|scheduler| {
+        scheduler.get_current_thread().page_fault(addr)
+    })) {
+        // Failed, kill thread.
+        scheduler::switch_to_next(SwitchReason::Exit);
+    }
 }
 
 extern "x86-interrupt" fn exc_fp(frame: &mut ISRStackFrame) {

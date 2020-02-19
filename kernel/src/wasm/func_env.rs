@@ -124,7 +124,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     fn translate_call(
         &mut self,
         mut pos: FuncCursor,
-        _callee_index: FuncIndex,
+        callee_index: FuncIndex,
         callee: FuncRef,
         call_args: &[Value],
     ) -> WasmResult<Inst> {
@@ -134,7 +134,11 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         call_args_with_vmctx.extend_from_slice(call_args);
         call_args_with_vmctx.push(vmctx);
 
-        Ok(pos.ins().call(callee, &call_args_with_vmctx))
+        if self.module_env.is_imported_func(callee_index) {
+            unimplemented!()
+        } else {
+            Ok(pos.ins().call(callee, &call_args_with_vmctx))
+        }
     }
 
     fn translate_memory_grow(

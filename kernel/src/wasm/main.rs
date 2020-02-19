@@ -8,7 +8,7 @@ use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 use crate::arch::address::align_up;
 use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::Vma;
+use crate::mm::vma_allocator::{MappableVma, Vma};
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{FunctionBody, ModuleEnv};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
@@ -38,15 +38,6 @@ struct CompileResult {
     total_size: usize,
 }
 
-/*struct TrapSink {
-}
-
-impl binemit::TrapSink for TrapSink {
-    fn trap(&mut self, a: u32, b: SourceLoc, c: TrapCode) {
-        println!("{:?} {:?} {:?}", a, b, c);
-    }
-}*/
-
 pub fn test() -> Result<(), Error> {
     // TODO: make better
     let compile_result = compile()?;
@@ -54,25 +45,19 @@ pub fn test() -> Result<(), Error> {
     // Create virtual memory areas.
     let code_vma = {
         let len = align_up(compile_result.total_size);
-        Vma::create(len).map_err(Error::MemoryError)?
+        let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+        Vma::create(len)
+            .and_then(|x| x.map(0, len, flags))
+            .map_err(Error::MemoryError)?
     };
     let heap_vma = {
         // TODO: can max size be limited by wasm somehow?
         let len = HEAP_SIZE + HEAP_GUARD_SIZE;
-        Vma::create(len as usize).map_err(Error::MemoryError)?
-    };
-
-    let mut mapping = ActiveMapping::get();
-
-    // Map writable section for code. We will later change this to read-only.
-    {
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-        mapping
-            .map_range(code_vma.address(), code_vma.size(), flags)
-            .map_err(Error::MemoryError)?;
+        Vma::create(len as usize)
+            .and_then(|x| Ok(x.map_lazily(flags)))
+            .map_err(Error::MemoryError)?
     };
-
-    // TODO: change flags method & expose that also to the boot
 
     // Emit code
     let capacity = compile_result.contexts.len();
@@ -141,8 +126,9 @@ pub fn test() -> Result<(), Error> {
         }
     }
 
-    // Now the code is written, change it to read-only.
+    // Now the code is written, change it to read-only & executable.
     {
+        let mut mapping = ActiveMapping::get();
         let flags = EntryFlags::PRESENT;
         mapping
             .change_flags_range(code_vma.address(), code_vma.size(), flags)
@@ -156,53 +142,37 @@ pub fn test() -> Result<(), Error> {
         }
     }
 
-    println!();
-    println!("now going to execute code"); // TODO: should happen in a process
+    loop{}
 
     let vmctx = VMContext {
         heap_base: heap_vma.address(),
     };
+    println!();
+    println!("now going to execute code"); // TODO: should happen in a process
 
-    // TODO: do this properly (allocate on access)
-    {
-        let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-        mapping
-            .map_range(heap_vma.address(), PAGE_SIZE, flags)
-            .unwrap();
-    }
 
+    //let ptr = code_vma.address().as_usize() as *const ();
+    //let code: extern "C" fn(i32, i32, &VMContext) -> () = unsafe { transmute(ptr) };
+    //code(4, 10, &vmctx); // write fibonacci(10) to 0x500+4
+    //println!("execution stopped, reading: {}", unsafe {
+    //    *((vmctx.heap_base.as_usize() + 4) as *const i32)
+    //});
     let ptr = code_vma.address().as_usize() as *const ();
-    let code: extern "C" fn(i32, i32, &VMContext) -> () = unsafe { transmute(ptr) };
-    code(4, 10, &vmctx); // write fibonacci(10) to 0x500+4
-    println!("execution stopped, reading: {}", unsafe {
-        *((vmctx.heap_base.as_usize() + 4) as *const i32)
-    });
+    println!("{:?}", ptr);
+    let code: extern "C" fn(i32, i32, &VMContext) -> i32 = unsafe { transmute(ptr) };
+    println!("{}", code(4, 3, &vmctx));
 
     Ok(())
 }
 
 fn compile() -> Result<CompileResult, Error> {
     // Hardcoded test
-    /*let buffer = [
-        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x06, 0x01, 0x60,
-        0x01, 0x7f, 0x01, 0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x0c, 0x01, 0x08,
-        0x6f, 0x76, 0x65, 0x72, 0x66, 0x6c, 0x6f, 0x77, 0x00, 0x00, 0x0a, 0x0b,
-        0x01, 0x09, 0x00, 0x20, 0x00, 0x10, 0x00, 0x20, 0x00, 0x6a, 0x0b
-    ];*/
-    /*let buffer = [
-        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00, 0x00, 0x03,
-        0x02, 0x01, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x08, 0x01, 0x04, 0x74, 0x65, 0x73,
-        0x74, 0x00, 0x00, 0x0a, 0x0f, 0x01, 0x0d, 0x00, 0x41, 0x7f, 0x41, 0xad, 0xbd, 0xb7, 0xf5,
-        0x7d, 0x36, 0x02, 0x00, 0x0b,
-    ];*/
     let buffer = [
-        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0b, 0x02, 0x60, 0x02, 0x7f, 0x7f,
-        0x00, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x03, 0x03, 0x02, 0x00, 0x01, 0x05, 0x03, 0x01, 0x00,
-        0x01, 0x07, 0x17, 0x01, 0x13, 0x72, 0x65, 0x63, 0x75, 0x72, 0x73, 0x69, 0x76, 0x65, 0x5f,
-        0x66, 0x69, 0x62, 0x6f, 0x6e, 0x61, 0x63, 0x63, 0x69, 0x00, 0x01, 0x0a, 0x2a, 0x02, 0x0b,
-        0x00, 0x20, 0x00, 0x20, 0x01, 0x10, 0x01, 0x36, 0x02, 0x00, 0x0b, 0x1c, 0x00, 0x20, 0x00,
-        0x41, 0x02, 0x49, 0x04, 0x7f, 0x41, 0x01, 0x05, 0x20, 0x00, 0x41, 0x01, 0x6b, 0x10, 0x01,
-        0x20, 0x00, 0x41, 0x02, 0x6b, 0x10, 0x01, 0x6a, 0x0b, 0x0b,
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x60,
+        0x01, 0x7f, 0x00, 0x60, 0x00, 0x00, 0x02, 0x0c, 0x01, 0x02, 0x6f, 0x73,
+        0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x00, 0x03, 0x02, 0x01, 0x01,
+        0x08, 0x01, 0x01, 0x0a, 0x09, 0x01, 0x07, 0x00, 0x41, 0xd2, 0x09, 0x10,
+        0x00, 0x0b
     ];
 
     let isa_builder = cranelift_native::builder().unwrap();
@@ -210,7 +180,7 @@ fn compile() -> Result<CompileResult, Error> {
 
     // Flags
     flag_builder.set("opt_level", "speed_and_size").unwrap();
-    //flag_builder.set("enable_probestack", "true").unwrap();
+    flag_builder.set("enable_probestack", "true").unwrap();
 
     let flags = settings::Flags::new(flag_builder);
     let isa = isa_builder.finish(flags);

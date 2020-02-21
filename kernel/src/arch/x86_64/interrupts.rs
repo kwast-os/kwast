@@ -3,7 +3,7 @@ use core::mem::size_of;
 use bitflags::bitflags;
 use lazy_static::lazy_static;
 
-use crate::arch::x86_64::address::VirtAddr;
+use crate::arch::x86_64::address::{VirtAddr, PhysAddr};
 use crate::arch::x86_64::paging::{ActiveMapping, PageFaultError};
 use crate::arch::x86_64::port::write_port8;
 use crate::mm::mapper::MemoryMapper;

@@ -5,14 +5,14 @@ use cranelift_codegen::{CodegenError, Context};
 use cranelift_wasm::translate_module;
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
-use crate::arch::address::align_up;
-use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
+use crate::arch::address::{align_up, VirtAddr};
+use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{MappableVma, Vma};
 use crate::wasm::func_env::FuncEnv;
-use crate::wasm::module_env::{FunctionBody, ModuleEnv};
+use crate::wasm::module_env::{FunctionBody, FunctionImport, ModuleEnv};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
-use crate::wasm::vmctx::{VMContext, HEAP_GUARD_SIZE, HEAP_SIZE};
+use crate::wasm::vmctx::{VmContext, VmContextContainer, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::intrinsics::transmute;
@@ -35,12 +35,15 @@ pub enum Error {
 struct CompileResult {
     isa: Box<dyn TargetIsa>,
     contexts: Vec<Context>,
+    start_func: Option<FuncIndex>,
+    function_imports: Vec<FunctionImport>,
     total_size: usize,
 }
 
 pub fn test() -> Result<(), Error> {
     // TODO: make better
     let compile_result = compile()?;
+    let defined_function_offset = compile_result.function_imports.len();
 
     // Create virtual memory areas.
     let code_vma = {
@@ -90,14 +93,15 @@ pub fn test() -> Result<(), Error> {
     // Relocations
     for (idx, reloc_sink) in reloc_sinks.iter().enumerate() {
         for relocation in &reloc_sink.relocations {
+            println!("relocation: {:?}", relocation);
+
             let reloc_addr =
                 code_vma.address().as_usize() + func_offsets[idx] + relocation.code_offset as usize;
 
             // Determine target address.
             let target_off = match relocation.target {
                 RelocationTarget::UserFunction(target_idx) => {
-                    // TODO: must be defined, not imported?
-                    func_offsets[target_idx.as_u32() as usize]
+                    func_offsets[target_idx.as_u32() as usize - defined_function_offset]
                 }
                 RelocationTarget::LibCall(_libcall) => unimplemented!(),
                 RelocationTarget::JumpTable(_jt) => unimplemented!(),
@@ -142,37 +146,49 @@ pub fn test() -> Result<(), Error> {
         }
     }
 
-    loop{}
-
-    let vmctx = VMContext {
-        heap_base: heap_vma.address(),
+    // Create the vm context.
+    let mut vmctx_container = unsafe {
+        VmContextContainer::new(
+            heap_vma.address(),
+            compile_result.function_imports.len() as u32,
+        )
     };
-    println!();
-    println!("now going to execute code"); // TODO: should happen in a process
 
+    // Resolve import addresses.
+    for (i, import) in compile_result.function_imports.iter().enumerate() {
+        println!("{} {:?}", i, import);
 
-    //let ptr = code_vma.address().as_usize() as *const ();
-    //let code: extern "C" fn(i32, i32, &VMContext) -> () = unsafe { transmute(ptr) };
-    //code(4, 10, &vmctx); // write fibonacci(10) to 0x500+4
-    //println!("execution stopped, reading: {}", unsafe {
-    //    *((vmctx.heap_base.as_usize() + 4) as *const i32)
-    //});
-    let ptr = code_vma.address().as_usize() as *const ();
-    println!("{:?}", ptr);
-    let code: extern "C" fn(i32, i32, &VMContext) -> i32 = unsafe { transmute(ptr) };
-    println!("{}", code(4, 3, &vmctx));
+        // TODO: improve this
+        match import.module.as_str() {
+            "os" => {
+                // TODO: hardcoded to a fixed function atm
+                vmctx_container.set_function_import(i as u32, VirtAddr::new(test_func as usize)); // TODO
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    // Test
+    // TODO: what if no start address
+    let start_offset = func_offsets[compile_result.start_func.unwrap().as_u32() as usize - defined_function_offset];
+    let ptr = (code_vma.address().as_usize() + start_offset) as *const ();
+    let code: extern "C" fn(*const VmContext) -> () = unsafe { transmute(ptr) };
+    code(vmctx_container.ptr());
 
     Ok(())
+}
+
+fn test_func(_vmctx: *const VmContext, param: i32) {
+    println!("called here {}", param);
 }
 
 fn compile() -> Result<CompileResult, Error> {
     // Hardcoded test
     let buffer = [
-        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x60,
-        0x01, 0x7f, 0x00, 0x60, 0x00, 0x00, 0x02, 0x0c, 0x01, 0x02, 0x6f, 0x73,
-        0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x00, 0x03, 0x02, 0x01, 0x01,
-        0x08, 0x01, 0x01, 0x0a, 0x09, 0x01, 0x07, 0x00, 0x41, 0xd2, 0x09, 0x10,
-        0x00, 0x0b
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0c, 0x03, 0x60, 0x01, 0x7f, 0x00,
+        0x60, 0x00, 0x01, 0x7f, 0x60, 0x00, 0x00, 0x02, 0x0c, 0x01, 0x02, 0x6f, 0x73, 0x05, 0x68,
+        0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x00, 0x03, 0x03, 0x02, 0x01, 0x02, 0x08, 0x01, 0x02, 0x0a,
+        0x0e, 0x02, 0x05, 0x00, 0x41, 0xd2, 0x09, 0x0b, 0x06, 0x00, 0x10, 0x01, 0x10, 0x00, 0x0b,
     ];
 
     let isa_builder = cranelift_native::builder().unwrap();
@@ -188,13 +204,14 @@ fn compile() -> Result<CompileResult, Error> {
     // Module
     let mut env = ModuleEnv::new(isa.frontend_config());
     let translation = translate_module(&buffer, &mut env).map_err(Error::WasmError)?;
+    let defined_function_offset = env.function_imports.len();
 
     // Compile the functions and store their contexts.
     let mut contexts: Vec<Context> = Vec::with_capacity(env.func_bodies.len());
     let mut total_size: usize = 0;
     for idx in 0..env.func_bodies.len() {
         let mut ctx = Context::new();
-        ctx.func.signature = env.get_sig(FuncIndex::from_u32(idx as u32));
+        ctx.func.signature = env.get_sig(FuncIndex::from_u32((idx + defined_function_offset) as u32));
 
         let FunctionBody { body, offset } = env.func_bodies[idx];
 
@@ -209,6 +226,8 @@ fn compile() -> Result<CompileResult, Error> {
             )
             .map_err(Error::WasmError)?;
 
+        println!("{:?}", ctx.func);
+
         let info = ctx.compile(&*isa).map_err(Error::CodegenError)?;
         //println!("code_size: {}, rodata_size: {}, total_size: {}", info.code_size, info.rodata_size, info.total_size);
         total_size += info.total_size as usize;
@@ -218,6 +237,8 @@ fn compile() -> Result<CompileResult, Error> {
     Ok(CompileResult {
         isa,
         contexts,
+        start_func: env.start_func,
+        function_imports: env.function_imports,
         total_size,
     })
 }

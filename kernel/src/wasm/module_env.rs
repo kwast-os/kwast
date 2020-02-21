@@ -1,6 +1,7 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
 use alloc::boxed::Box;
+use alloc::string::String;
 use alloc::vec::Vec;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Signature};
 use cranelift_codegen::isa;
@@ -15,11 +16,17 @@ pub struct FunctionBody<'data> {
     pub offset: usize,
 }
 
+#[derive(Debug)]
+pub struct FunctionImport {
+    pub module: String,
+    pub field: String,
+}
+
 pub struct ModuleEnv<'data> {
     /// Passed target configuration.
     cfg: isa::TargetFrontendConfig,
     /// Starting function.
-    start_func: Option<FuncIndex>,
+    pub start_func: Option<FuncIndex>,
     /// Vector of all signatures.
     signatures: Vec<Signature>,
     /// Function types.
@@ -28,8 +35,8 @@ pub struct ModuleEnv<'data> {
     pub func_bodies: Vec<FunctionBody<'data>>,
     /// Memories.
     memories: Vec<Memory>,
-    /// Keep track of the imported function count.
-    imported_func_count: u32,
+    /// Keep track of the imported functions.
+    pub function_imports: Vec<FunctionImport>,
 }
 
 impl<'data> ModuleEnv<'data> {
@@ -42,7 +49,7 @@ impl<'data> ModuleEnv<'data> {
             func_types: Vec::new(),
             func_bodies: Vec::new(),
             memories: Vec::new(),
-            imported_func_count: 0,
+            function_imports: Vec::new(),
         }
     }
 
@@ -55,7 +62,7 @@ impl<'data> ModuleEnv<'data> {
     /// Returns whether the function index corresponds to an imported function.
     pub fn is_imported_func(&self, index: FuncIndex) -> bool {
         // Imported functions are defined first.
-        index.as_u32() < self.imported_func_count
+        (index.as_u32() as usize) < self.function_imports.len()
     }
 }
 
@@ -72,10 +79,10 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
     }
 
     fn declare_signature(&mut self, mut sig: Signature) -> WasmResult<()> {
-        sig.params.push(AbiParam::special(
-            self.pointer_type(),
-            ArgumentPurpose::VMContext,
-        ));
+        sig.params.insert(
+            0,
+            AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+        );
         self.signatures.push(sig);
         Ok(())
     }
@@ -86,10 +93,11 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         module: &'data str,
         field: &'data str,
     ) -> WasmResult<()> {
-        println!("{:?} {} {}", sig_index, module, field);
         self.func_types.push(sig_index);
-        self.imported_func_count += 1;
-        // TODO: track module & field
+        self.function_imports.push(FunctionImport {
+            module: String::from(module),
+            field: String::from(field),
+        });
         Ok(())
     }
 
@@ -132,6 +140,11 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
 
     fn declare_table(&mut self, _table: Table) -> WasmResult<()> {
         unimplemented!()
+    }
+
+    fn reserve_memories(&mut self, num: u32) -> WasmResult<()> {
+        self.memories.reserve_exact(num as usize);
+        Ok(())
     }
 
     fn declare_memory(&mut self, memory: Memory) -> WasmResult<()> {

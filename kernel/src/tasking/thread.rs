@@ -77,7 +77,7 @@ impl Thread {
             let flags = self.heap.flags();
             mapping
                 .get_and_map_single(fault_addr.align_down(), flags)
-                .is_ok()
+                .is_ok() // TODO: clean page for security reasons?
         } else {
             false
         }

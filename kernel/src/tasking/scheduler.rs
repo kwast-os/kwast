@@ -15,7 +15,7 @@ use core::mem::swap;
 #[repr(u64)]
 pub enum SwitchReason {
     RegularSwitch = 0,
-    Exit,
+    Exit = 1,
 }
 
 /// Common data for all per-core schedulers.

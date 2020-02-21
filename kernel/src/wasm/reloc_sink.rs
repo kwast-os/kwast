@@ -66,7 +66,7 @@ impl binemit::RelocSink for RelocSink {
         // Not necessary unless we split the code and rodata.
     }
 
-    fn reloc_jt(&mut self, code_offset: u32, reloc: Reloc, jt: JumpTable) {
+    fn reloc_jt(&mut self, _code_offset: u32, _reloc: Reloc, _jt: JumpTable) {
         /*self.relocations.push(Relocation {
             code_offset,
             reloc,

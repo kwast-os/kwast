@@ -127,8 +127,6 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         callee: FuncRef,
         call_args: &[Value],
     ) -> WasmResult<Inst> {
-        let x: GlobalValueData;
-
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
 
         let mut call_args_with_vmctx = Vec::with_capacity(call_args.len() + 1);

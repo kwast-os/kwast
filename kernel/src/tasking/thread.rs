@@ -6,6 +6,7 @@ use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::LazilyMappedVma;
 use crate::mm::vma_allocator::MappableVma;
 use crate::mm::vma_allocator::{MappedVma, Vma};
+use crate::wasm::vmctx::VmContextContainer;
 use core::cell::Cell;
 use core::intrinsics::likely;
 
@@ -32,7 +33,7 @@ impl ThreadId {
 pub struct Thread {
     pub stack: Stack,
     heap: LazilyMappedVma,
-    code: MappedVma,
+    _code: MappedVma,
     id: ThreadId,
 }
 
@@ -42,6 +43,7 @@ impl Thread {
         entry: VirtAddr,
         code: MappedVma,
         heap: LazilyMappedVma,
+        vmctx_container: VmContextContainer,
     ) -> Result<Thread, MemoryError> {
         // TODO
         let stack_size = 8 * PAGE_SIZE;
@@ -49,7 +51,7 @@ impl Thread {
         let mut stack = Stack::create(stack_size, stack_guard_size)?;
         // Safe because enough size on the stack and stack allocated at a known good location.
         unsafe {
-            stack.prepare(entry);
+            stack.prepare_trampoline(entry, vmctx_container.ptr());
             Ok(Self::new(stack, code, heap))
         }
     }
@@ -59,7 +61,7 @@ impl Thread {
         Self {
             stack,
             heap,
-            code,
+            _code: code,
             id: ThreadId::new(),
         }
     }

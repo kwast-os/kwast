@@ -6,4 +6,4 @@ mod func_env;
 pub mod main;
 mod module_env;
 mod reloc_sink;
-mod vmctx;
+pub mod vmctx;

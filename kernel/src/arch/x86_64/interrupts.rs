@@ -4,9 +4,8 @@ use bitflags::bitflags;
 use lazy_static::lazy_static;
 
 use crate::arch::x86_64::address::VirtAddr;
-use crate::arch::x86_64::paging::{ActiveMapping, PageFaultError};
+use crate::arch::x86_64::paging::PageFaultError;
 use crate::arch::x86_64::port::write_port8;
-use crate::mm::mapper::MemoryMapper;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::{with_core_scheduler, SwitchReason};
 use core::intrinsics::unlikely;
@@ -273,7 +272,7 @@ extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
     panic!("GPF: {:#?}, errcode {:x}", frame, err);
 }
 
-extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError) {
+extern "x86-interrupt" fn exc_pf(_frame: &mut ISRStackFrame, _err: PageFaultError) {
     let addr: VirtAddr;
     unsafe {
         asm!("movq %cr2, $0" : "=r" (addr));

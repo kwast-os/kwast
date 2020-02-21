@@ -5,11 +5,11 @@ use crate::wasm::vmctx::{VmContext, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::vec::Vec;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
+use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::ir::{
     types, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, HeapStyle, Inst, SigRef, Table, Value,
 };
-use cranelift_codegen::ir::{InstBuilder, MemFlags};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_wasm::{
     FuncEnvironment, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex,
@@ -139,20 +139,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
 
             // Get callee address from vmctx.
-
-            // TODO: correctness? (too much deref?)
             let vmctx = self.vmctx(&mut pos.func);
-            /*let imported_lut = pos.func.create_global_value(GlobalValueData::Load {
-                base: vmctx,
-                offset: Offset32::new(VmContext::imported_funcs_offset()),
-                global_type: self.pointer_type(),
-                readonly: true,
-            });*/
             let gv = pos.func.create_global_value(GlobalValueData::IAddImm {
-                /*base: imported_lut,
-                offset: Imm64::new(
-                    VmContext::imported_func_entry_offset(callee_index.as_u32()) as i64
-                ),*/
                 base: vmctx,
                 offset: Imm64::new(
                     VmContext::imported_func_entry_offset(callee_index.as_u32()) as i64

@@ -162,7 +162,8 @@ pub fn test() -> Result<(), Error> {
         match import.module.as_str() {
             "os" => {
                 // TODO: hardcoded to a fixed function atm
-                vmctx_container.set_function_import(i as u32, VirtAddr::new(test_func as usize)); // TODO
+                vmctx_container.set_function_import(i as u32, VirtAddr::new(test_func as usize));
+                // TODO
             }
             _ => unimplemented!(),
         }
@@ -170,7 +171,8 @@ pub fn test() -> Result<(), Error> {
 
     // Test
     // TODO: what if no start address
-    let start_offset = func_offsets[compile_result.start_func.unwrap().as_u32() as usize - defined_function_offset];
+    let start_offset = func_offsets
+        [compile_result.start_func.unwrap().as_u32() as usize - defined_function_offset];
     let ptr = (code_vma.address().as_usize() + start_offset) as *const ();
     let code: extern "C" fn(*const VmContext) -> () = unsafe { transmute(ptr) };
     code(vmctx_container.ptr());
@@ -211,7 +213,8 @@ fn compile() -> Result<CompileResult, Error> {
     let mut total_size: usize = 0;
     for idx in 0..env.func_bodies.len() {
         let mut ctx = Context::new();
-        ctx.func.signature = env.get_sig(FuncIndex::from_u32((idx + defined_function_offset) as u32));
+        ctx.func.signature =
+            env.get_sig(FuncIndex::from_u32((idx + defined_function_offset) as u32));
 
         let FunctionBody { body, offset } = env.func_bodies[idx];
 

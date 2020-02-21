@@ -18,22 +18,26 @@ lazy_static! {
 impl SerialPort {
     /// Inits and creates a serial port.
     fn new(port: u16) -> Self {
-        write_port8(port + 1, 0x00);
-        write_port8(port + 3, 0x80);
-        write_port8(port, 0x01);
-        write_port8(port + 1, 0x00);
-        write_port8(port + 3, 0x03);
-        write_port8(port + 2, 0xc7);
-        write_port8(port + 4, 0x0b);
-        write_port8(port + 1, 0x01);
+        unsafe {
+            write_port8(port + 1, 0x00);
+            write_port8(port + 3, 0x80);
+            write_port8(port, 0x01);
+            write_port8(port + 1, 0x00);
+            write_port8(port + 3, 0x03);
+            write_port8(port + 2, 0xc7);
+            write_port8(port + 4, 0x0b);
+            write_port8(port + 1, 0x01);
+        }
 
         Self { port }
     }
 
     /// Sends a byte.
     fn send(&mut self, byte: u8) {
-        while (read_port8(self.port + 0x05) & 0x20) == 0 {}
-        write_port8(self.port, byte);
+        unsafe {
+            while (read_port8(self.port + 0x05) & 0x20) == 0 {}
+            write_port8(self.port, byte);
+        }
     }
 }
 

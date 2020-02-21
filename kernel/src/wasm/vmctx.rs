@@ -43,6 +43,7 @@ impl VmContext {
     }
 }
 
+#[allow(clippy::cast_ptr_alignment)]
 impl VmContextContainer {
     /// Creates a new container for a VmContext.
     pub unsafe fn new(heap: VirtAddr, num_imported_funcs: u32) -> VmContextContainer {

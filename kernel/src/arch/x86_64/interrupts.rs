@@ -3,7 +3,7 @@ use core::mem::size_of;
 use bitflags::bitflags;
 use lazy_static::lazy_static;
 
-use crate::arch::x86_64::address::{VirtAddr, PhysAddr};
+use crate::arch::x86_64::address::VirtAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, PageFaultError};
 use crate::arch::x86_64::port::write_port8;
 use crate::mm::mapper::MemoryMapper;
@@ -163,26 +163,30 @@ pub fn init() {
     IDT_INSTANCE.lidt();
 
     // Remap PIC
-    write_port8(0x20, 0x11);
-    write_port8(0xA0, 0x11);
-    write_port8(0x21, 0x20);
-    write_port8(0xA1, 0x28);
-    write_port8(0x21, 0x04);
-    write_port8(0xA1, 0x02);
-    write_port8(0x21, 0x01);
-    write_port8(0xA1, 0x01);
-    write_port8(0x21, 0x00);
-    write_port8(0xA1, 0x00);
+    unsafe {
+        write_port8(0x20, 0x11);
+        write_port8(0xA0, 0x11);
+        write_port8(0x21, 0x20);
+        write_port8(0xA1, 0x28);
+        write_port8(0x21, 0x04);
+        write_port8(0xA1, 0x02);
+        write_port8(0x21, 0x01);
+        write_port8(0xA1, 0x01);
+        write_port8(0x21, 0x00);
+        write_port8(0xA1, 0x00);
+    }
 }
 
 pub fn setup_timer() {
     // TODO: replace this with the APIC timer
-    // Write to command port: channel 0, access mode lo&hi, mode 3, binary
-    write_port8(0x43, 0b0011_0110);
-    let hz = 100;
-    let divisor: i32 = 1_193_182 / hz;
-    write_port8(0x40, (divisor & 0xFF) as u8);
-    write_port8(0x40, (divisor >> 8) as u8);
+    unsafe {
+        // Write to command port: channel 0, access mode lo&hi, mode 3, binary
+        write_port8(0x43, 0b0011_0110);
+        let hz = 100;
+        let divisor: i32 = 1_193_182 / hz;
+        write_port8(0x40, (divisor & 0xFF) as u8);
+        write_port8(0x40, (divisor >> 8) as u8);
+    }
 }
 
 pub fn enable() {
@@ -276,15 +280,15 @@ extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError)
     }
 
     // TODO: when to panic the kernel?
-    let phys = ActiveMapping::get().translate(addr);
-    panic!(
-        "Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}",
-        frame, err, addr, phys
-    );
+    //let phys = ActiveMapping::get().translate(addr);
+    //panic!(
+    //    "Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}",
+    //    frame, err, addr, phys
+    //);
 
-    if unlikely(!with_core_scheduler(|scheduler| {
-        scheduler.get_current_thread().page_fault(addr)
-    })) {
+    let failed = !with_core_scheduler(|scheduler| scheduler.get_current_thread().page_fault(addr));
+
+    if unlikely(failed) {
         // Failed, kill thread.
         scheduler::switch_to_next(SwitchReason::Exit);
     }

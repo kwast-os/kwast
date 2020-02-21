@@ -10,7 +10,6 @@ pub const HEAP_GUARD_SIZE: u64 = PAGE_SIZE as u64;
 
 pub struct VmContext {}
 
-#[derive(Debug)]
 pub struct VmContextContainer {
     ptr: *mut VmContext,
     num_imported_funcs: u32,

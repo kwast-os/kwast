@@ -60,6 +60,7 @@ impl Scheduler {
                 Stack::new(MappedVma::dummy()),
                 MappedVma::dummy(),
                 LazilyMappedVma::dummy(),
+                None,
             )
         });
 

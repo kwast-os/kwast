@@ -35,6 +35,7 @@ pub struct Thread {
     heap: LazilyMappedVma,
     _code: MappedVma,
     id: ThreadId,
+    _vmctx_container: Option<VmContextContainer>,
 }
 
 impl Thread {
@@ -52,17 +53,23 @@ impl Thread {
         // Safe because enough size on the stack and stack allocated at a known good location.
         unsafe {
             stack.prepare_trampoline(entry, vmctx_container.ptr());
-            Ok(Self::new(stack, code, heap))
+            Ok(Self::new(stack, code, heap, Some(vmctx_container)))
         }
     }
 
     /// Creates a new thread from given parameters.
-    pub unsafe fn new(stack: Stack, code: MappedVma, heap: LazilyMappedVma) -> Self {
+    pub unsafe fn new(
+        stack: Stack,
+        code: MappedVma,
+        heap: LazilyMappedVma,
+        vmctx_container: Option<VmContextContainer>,
+    ) -> Self {
         Self {
             stack,
             heap,
             _code: code,
             id: ThreadId::new(),
+            _vmctx_container: vmctx_container,
         }
     }
 

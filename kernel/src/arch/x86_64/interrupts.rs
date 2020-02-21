@@ -279,11 +279,7 @@ extern "x86-interrupt" fn exc_pf(_frame: &mut ISRStackFrame, _err: PageFaultErro
     }
 
     // TODO: when to panic the kernel?
-    //let phys = ActiveMapping::get().translate(addr);
-    //panic!(
-    //    "Page fault: {:#?}, {:?}, CR2: {:?}, phys: {:?}",
-    //    frame, err, addr, phys
-    //);
+    //panic!("Page fault: {:#?}, {:?}, CR2: {:?}", _frame, _err, addr);
 
     let failed = !with_core_scheduler(|scheduler| scheduler.get_current_thread().page_fault(addr));
 

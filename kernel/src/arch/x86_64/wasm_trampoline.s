@@ -5,7 +5,7 @@
 .type wasm_trampoline, @function
 
 wasm_trampoline:
-    // TODO: stack alignment?
+    // The stack is page aligned right now, so also 16 byte like it should for the System V ABI.
     movq %rbp, %rdi
     callq *%rbx
 

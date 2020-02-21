@@ -136,6 +136,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         call_args_with_vmctx.extend_from_slice(call_args);
 
         if self.module_env.is_imported_func(callee_index) {
+            // TODO: we should verify the signature
+
             let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
 
             // Get callee address from vmctx.

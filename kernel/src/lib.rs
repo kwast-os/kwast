@@ -68,7 +68,7 @@ pub fn kernel_run(reserved_end: VirtAddr) {
 /// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
 fn kernel_main() {
-    // Start two threads to test.
+    // Start three threads to test.
     wasm::main::test().unwrap();
     wasm::main::test().unwrap();
     wasm::main::test().unwrap();

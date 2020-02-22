@@ -5,7 +5,6 @@ use cranelift_codegen::{CodegenError, Context};
 use cranelift_wasm::translate_module;
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
-use crate::arch;
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
@@ -188,7 +187,7 @@ pub fn test() -> Result<(), Error> {
 
 fn test_func(_vmctx: *const VmContext, param: i32) {
     let id = with_core_scheduler(|scheduler| scheduler.get_current_thread().id());
-    println!("{:?}    called here {} {:#p}", id, param, _vmctx);
+    println!("{:?}    os hello {} {:#p}", id, param, _vmctx);
     //arch::halt();
 }
 

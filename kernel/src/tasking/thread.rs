@@ -85,14 +85,16 @@ impl Thread {
         if likely(self.heap.is_contained(fault_addr)) {
             let mut mapping = ActiveMapping::get();
             let flags = self.heap.flags();
+
+            // After the mapping is successful, we need to clear the memory to avoid information leaks.
             if mapping
                 .get_and_map_single(fault_addr.align_down(), flags)
                 .is_ok()
             {
-                let ptr: *mut usize = fault_addr.as_mut();
+                let ptr: *mut u8 = fault_addr.as_mut();
                 // Safe because valid pointer and valid size.
                 unsafe {
-                    write_bytes(ptr, 0, PAGE_SIZE / size_of::<usize>());
+                    write_bytes(ptr, 0, PAGE_SIZE);
                 }
 
                 true

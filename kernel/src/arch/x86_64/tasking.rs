@@ -13,7 +13,7 @@ impl Stack {
         self.push(wasm_trampoline as usize);
         self.push(rflags);
         self.push(entry.as_u64()); // rbx
-        self.push(vmctx as usize); // rbp
+        self.push(vmctx as u64); // rbp
         self.push(0u64); // r12
         self.push(0u64); // r13
         self.push(0u64); // r14

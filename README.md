@@ -64,20 +64,11 @@ The heap uses a slab allocator design, and the virtual memory areas are managed 
 Here's a screenshot of three instances of a test program calling a syscall.
 ![Screenshot](docs/screenshot.png "Three threads calling a syscall")
 
-### Contributing
-Interested in contributing to the project? Check the issues.
+## Short-term goals
 
-## Goals
-
-### Short-term goals
 * Simple PS/2 server & similar small servers
 * Run basic programs
 * SMP
-
-### Personal goals
-* Port my C++ kernel to Rust
-* Improve my Rust skills
-* Get a better understanding of WebAssembly
 
 ## Built With
 

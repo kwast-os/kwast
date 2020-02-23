@@ -56,14 +56,22 @@ make iso BUILD=release # (or run)
 ./run_tests
 ```
 
+## Current status
+
+Currently, it runs very basic WebAssembly code in a basic multitasked environment.
+The heap uses a slab allocator design, and the virtual memory areas are managed by an AVL tree.
+
+Here's a screenshot of three instances of a test program calling a syscall.
+![Screenshot](docs/screenshot.png "Three threads calling a syscall")
+
 ### Contributing
 Interested in contributing to the project? Check the issues.
 
 ## Goals
 
 ### Short-term goals
-* Multitasking
 * Simple PS/2 server & similar small servers
+* Run basic programs
 * SMP
 
 ### Personal goals

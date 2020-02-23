@@ -1,9 +1,6 @@
 # Kwast
 
-<p align="center">
-  
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Build Status](https://travis-ci.com/kwast-os/kwast.svg?branch=master)](https://travis-ci.org/kwast-os/kwast)
-</p>
 
 **Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture for flexibility.
 
@@ -14,7 +11,23 @@ Another interesting thing is that it means the software is cross-platform and th
 For notes on Spectre, Meltdown and other related issues, see [#10](https://github.com/nielsdos/kwast/issues/10).
 An additional idea is to allow to use optional hardware protection domains in the future if requested.
 
-## Getting Started
+## Contents
+
+* [Current status](#current_status)
+* [Getting started](#getting_started)
+* [Short-term goals](#short_term_goals)
+* [Built with](#built_with)
+* [Similar projects](#similar_projects)
+
+## <a name="current_status"> Current status </a>
+
+Currently, it runs very basic WebAssembly code in a basic multitasked environment.
+The heap uses a slab allocator design, and the virtual memory areas are managed by an AVL tree.
+
+Here's a screenshot of three instances of a test program calling a syscall.
+![Screenshot](docs/screenshot.png "Three threads calling a syscall")
+
+## <a name="getting_started"> Getting started </a>
 
 These instructions help you get started with building the source and getting it to run.
 
@@ -56,27 +69,19 @@ make iso BUILD=release # (or run)
 ./run_tests
 ```
 
-## Current status
-
-Currently, it runs very basic WebAssembly code in a basic multitasked environment.
-The heap uses a slab allocator design, and the virtual memory areas are managed by an AVL tree.
-
-Here's a screenshot of three instances of a test program calling a syscall.
-![Screenshot](docs/screenshot.png "Three threads calling a syscall")
-
-## Short-term goals
+## <a name="short_term_goals"> Short-term goals </a>
 
 * Simple PS/2 server & similar small servers
 * Run basic programs
 * SMP
 
-## Built With
+## <a name="built_with"> Built with </a>
 
 * [Cranelift](https://github.com/bytecodealliance/cranelift) - Code generator used to parse & run WebAssembly. Kwast uses a fork of Cranelift to let it work in a no_std environment.
 
 * To integrate Cranelift, [wasmtime](https://github.com/bytecodealliance/wasmtime/) has been used as a reference implementation, which is licensed under the [Apache License 2.0](https://github.com/bytecodealliance/wasmtime/blob/master/LICENSE).
 
-## Similar projects
+## <a name="similar_projects"> Similar projects </a>
 * [Nebulet](https://github.com/nebulet/nebulet) - A microkernel that implements a WebAssembly "usermode" that runs in Ring 0
 * [wasmjit](https://github.com/kenny-ngo/wasmjit) - Small Embeddable WebAssembly Runtime
 * [cervus](https://github.com/cervus-v/cervus) - A WebAssembly subsystem for Linux

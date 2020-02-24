@@ -6,10 +6,7 @@ use alloc::vec::Vec;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Signature};
 use cranelift_codegen::isa;
 use cranelift_codegen::isa::TargetFrontendConfig;
-use cranelift_wasm::{
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleEnvironment, ModuleTranslationState,
-    SignatureIndex, Table, TableIndex, TargetEnvironment, WasmError, WasmResult,
-};
+use cranelift_wasm::{FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleEnvironment, ModuleTranslationState, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmError, WasmResult, PassiveDataIndex, PassiveElemIndex};
 
 pub struct FunctionBody<'data> {
     pub body: &'data [u8],
@@ -200,6 +197,14 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         _offset: usize,
         _elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
+        unimplemented!()
+    }
+
+    fn declare_passive_element(&mut self, _index: PassiveElemIndex, _elements: Box<[FuncIndex]>) -> WasmResult<()> {
+        unimplemented!()
+    }
+
+    fn declare_passive_data(&mut self, _data_index: PassiveDataIndex, _data: &'data [u8]) -> WasmResult<()> {
         unimplemented!()
     }
 

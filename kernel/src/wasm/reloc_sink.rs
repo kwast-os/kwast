@@ -40,7 +40,7 @@ impl RelocSink {
 }
 
 impl binemit::RelocSink for RelocSink {
-    fn reloc_ebb(&mut self, _: u32, _: Reloc, _: u32) {
+    fn reloc_block(&mut self, _: u32, _: Reloc, _: u32) {
         unimplemented!()
     }
 

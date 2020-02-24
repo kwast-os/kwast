@@ -1,6 +1,6 @@
 # Kwast
 
-[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Build Status](https://travis-ci.com/kwast-os/kwast.svg?branch=master)](https://travis-ci.org/kwast-os/kwast)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Build Status](https://travis-ci.com/kwast-os/kwast.svg?branch=master)](https://travis-ci.com/kwast-os/kwast)
 
 **Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture for flexibility.
 

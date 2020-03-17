@@ -140,7 +140,7 @@ dependencies = [
  "cranelift-frontend",
  "hashbrown",
  "log",
- "wasmparser 0.51.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmparser 0.51.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -156,9 +156,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "728e7d31e63d53c436094370f1e6fa249f60a4bb318cc5dfbbbe0aa2bc5a29d7"
+checksum = "479e9d9a1a3f8c489868a935b557ab5710e3e223836da2ecd52901d88935cb56"
 dependencies = [
  "ahash",
  "autocfg",
@@ -205,9 +205,9 @@ dependencies = [
 
 [[package]]
 name = "multiboot2"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f6498094448e4d667346cd1e71ef2c9b442efafd418201889a2185f50bfa637"
+checksum = "24835c1bfe38142c78aa2d00769b0d76239c4b583d92f817e6e0a4f3631f40d6"
 dependencies = [
  "bitflags",
 ]
@@ -225,18 +225,18 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.8"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3acb317c6ff86a4e579dfa00fc5e6cca91ecbb4e7eb2df0468805b674eb88548"
+checksum = "6c09721c6781493a2a492a96b5a5bf19b65917fe6728884e7c44dd0c60ca3435"
 dependencies = [
  "unicode-xid",
 ]
 
 [[package]]
 name = "quote"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "053a8c8bcc71fcce321828dc897a98ab9760bef03a4fc36693c231e5b3216cfe"
+checksum = "2bdc6c187c65bca4260c9011c9e3132efe4909da44726bad24cf7572ae338d7f"
 dependencies = [
  "proc-macro2",
 ]
@@ -290,9 +290,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "syn"
-version = "1.0.14"
+version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af6f3550d8dff9ef7dc34d384ac6f107e5d31c8f57d9f28e0081503f547ac8f5"
+checksum = "123bd9499cfb380418d509322d7a6d52e5315f064fe4b3ad18a53d6b92c07859"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -325,15 +325,15 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasmparser"
-version = "0.51.2"
-source = "git+https://github.com/kwast-os/wasmparser?branch=0.51.2#5749d6f75898d4938c31da9cc5a484019e68f008"
+version = "0.51.4"
+source = "git+https://github.com/kwast-os/wasmparser?branch=0.51.4#e933c5dbf59d59175309900df9b8aeba57fb9efa"
 dependencies = [
  "hashbrown",
 ]
 
 [[package]]
 name = "wasmparser"
-version = "0.51.2"
+version = "0.51.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a40d24f114a3f24b459ec292019220cff6388673b4a2c0a11483665b599ef15c"
-replace = "wasmparser 0.51.2 (git+https://github.com/kwast-os/wasmparser?branch=0.51.2)"
+checksum = "aeb1956b19469d1c5e63e459d29e7b5aa0f558d9f16fcef09736f8a265e6c10a"
+replace = "wasmparser 0.51.4 (git+https://github.com/kwast-os/wasmparser?branch=0.51.4)"

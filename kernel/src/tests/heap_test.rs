@@ -2,6 +2,7 @@ use crate::arch::address::VirtAddr;
 use crate::arch::paging::PAGE_SIZE;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::mem::size_of;
 
 /// Test one allocation.
 #[cfg(feature = "test-heap-one-alloc")]
@@ -37,6 +38,7 @@ pub fn test_main() {
 /// Test heap by inspecting the pointers.
 #[cfg(feature = "test-heap-realloc")]
 pub fn test_main() {
+    // Regular realloc.
     let n = 1000;
     let mut vec = Vec::new();
     for i in 0..n {
@@ -44,6 +46,23 @@ pub fn test_main() {
     }
 
     assert_eq!(vec.iter().sum::<i32>(), (n - 1) * n / 2);
+
+    // Big realloc.
+    let items = 32768 / size_of::<usize>();
+    let mut vec = Vec::<usize>::new();
+    vec.reserve_exact(items);
+    let mut vec2 = Vec::<usize>::new();
+    vec2.reserve_exact(items);
+    for i in 0..items {
+        vec.push(i);
+        vec2.push(i * 2);
+    }
+
+    vec.reserve_exact(items * 2);
+    for i in 0..items {
+        assert_eq!(vec[i], i);
+        assert_eq!(vec2[i], i * 2);
+    }
 }
 
 /// Test heap by inspecting the pointers.

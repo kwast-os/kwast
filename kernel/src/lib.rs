@@ -19,8 +19,10 @@ use core::panic::PanicInfo;
 use arch::interrupts;
 
 use crate::arch::address::VirtAddr;
+use crate::arch::ArchBootModuleProvider;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::SwitchReason;
+use crate::util::boot_module::BootModule;
 
 #[macro_use]
 mod macros;
@@ -46,7 +48,7 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 /// Run.
-pub fn kernel_run(reserved_end: VirtAddr) {
+pub fn kernel_run(reserved_end: VirtAddr, boot_modules: ArchBootModuleProvider) {
     // May only be called once.
     unsafe {
         mm::init(reserved_end);
@@ -54,7 +56,7 @@ pub fn kernel_run(reserved_end: VirtAddr) {
     }
 
     #[cfg(not(feature = "integration-test"))]
-    kernel_main();
+    kernel_main(boot_modules);
     #[cfg(feature = "integration-test")]
     {
         use crate::arch::qemu;
@@ -65,9 +67,18 @@ pub fn kernel_run(reserved_end: VirtAddr) {
     }
 }
 
+/// Handle module.
+fn handle_module(module: BootModule) {
+    println!("{:?}", module);
+}
+
 /// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
-fn kernel_main() {
+fn kernel_main(boot_modules: ArchBootModuleProvider) {
+    for module in boot_modules {
+        handle_module(module);
+    }
+
     // Start three threads to test.
     wasm::main::test().unwrap();
     wasm::main::test().unwrap();

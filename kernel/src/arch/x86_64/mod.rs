@@ -7,7 +7,8 @@ use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::with_vma_allocator;
-use multiboot2::ElfSectionFlags;
+use crate::util::boot_module::{BootModule, BootModuleProvider};
+use multiboot2::{ElfSectionFlags, ModuleIter};
 
 #[macro_use]
 pub mod macros;
@@ -58,6 +59,31 @@ impl TSS {
         self.ist[n] = addr;
     }
 }*/
+
+#[derive(Clone)]
+pub struct ArchBootModuleProvider<'a> {
+    module_iter: ModuleIter<'a>,
+}
+
+impl<'a> ArchBootModuleProvider<'a> {
+    /// Creates a new module provider for this arch.
+    pub fn new(module_iter: ModuleIter<'a>) -> Self {
+        Self { module_iter }
+    }
+}
+
+impl BootModuleProvider for ArchBootModuleProvider<'_> {}
+
+impl Iterator for ArchBootModuleProvider<'_> {
+    type Item = BootModule;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.module_iter.next().map(|item| BootModule {
+            start: VirtAddr::new(item.start_address() as usize),
+            len: (item.end_address() - item.start_address()) as usize,
+        })
+    }
+}
 
 /// Initializes arch-specific stuff.
 #[no_mangle]
@@ -114,7 +140,10 @@ pub extern "C" fn entry(mboot_addr: usize) {
     with_pmm(|pmm| pmm.init(&mboot_struct, PhysAddr::new(reserved_end)));
 
     let reserved_end = VirtAddr::new(reserved_end).align_up();
-    crate::kernel_run(reserved_end);
+    crate::kernel_run(
+        reserved_end,
+        ArchBootModuleProvider::new(mboot_struct.module_tags()),
+    );
 }
 
 /// Inits the VMA regions. May only be called once per VMA allocator.

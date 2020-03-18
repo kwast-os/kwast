@@ -176,8 +176,8 @@ impl CompileResult {
     }
 }
 
-pub fn test() -> Result<(), Error> {
-    let compile_result = compile()?;
+pub fn run(buffer: &[u8]) -> Result<(), Error> {
+    let compile_result = compile(buffer)?;
     let thread = compile_result.emit_and_link()?;
 
     add_and_schedule_thread(thread);
@@ -191,16 +191,7 @@ fn test_func(_vmctx: *const VmContext, param: i32) {
     //arch::halt();
 }
 
-fn compile() -> Result<CompileResult, Error> {
-    // Hardcoded test
-    let buffer = [
-        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0d, 0x03, 0x60, 0x01, 0x7f, 0x00,
-        0x60, 0x01, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x00, 0x02, 0x0c, 0x01, 0x02, 0x6f, 0x73, 0x05,
-        0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x00, 0x03, 0x03, 0x02, 0x01, 0x02, 0x08, 0x01, 0x02,
-        0x0a, 0x1b, 0x02, 0x07, 0x00, 0x20, 0x00, 0x41, 0x01, 0x6a, 0x0b, 0x11, 0x01, 0x01, 0x7f,
-        0x03, 0x40, 0x20, 0x00, 0x10, 0x01, 0x22, 0x00, 0x10, 0x00, 0x0c, 0x00, 0x0b, 0x0b,
-    ];
-
+fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
     let isa_builder = cranelift_native::builder().unwrap();
     let mut flag_builder = settings::builder();
 
@@ -237,7 +228,7 @@ fn compile() -> Result<CompileResult, Error> {
             )
             .map_err(Error::WasmError)?;
 
-        //println!("{:?}", ctx.func);
+        println!("{:?}", ctx.func);
 
         let info = ctx.compile(&*isa).map_err(Error::CodegenError)?;
         total_size += info.total_size as usize;

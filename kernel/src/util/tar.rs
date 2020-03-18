@@ -10,7 +10,8 @@ struct PosixHeader {
     mode: [u8; 8],
     uid: [u8; 8],
     gid: [u8; 8],
-    size: [u8; 12],
+    size: [u8; 11],
+    size_zero_byte: u8,
     mktime: [u8; 12],
     chksum: [u8; 8],
     typeflag: u8,
@@ -53,12 +54,18 @@ impl<'a> Tar<'a> {
     }
 }
 
+impl<'a> TarFile<'a> {
+    /// Gets the file contents as a slice.
+    pub fn as_slice(&self) -> &'a [u8] {
+        self.data
+    }
+}
+
 impl<'a> TarIterator<'a> {
     /// Converts an octal string to a number.
     fn octal_string_to_number(&self, str: &'a [u8]) -> Option<usize> {
         str.iter().try_fold(0, |sum, c| match *c {
             b'0'..=b'9' => Some(sum * 8 + (*c - b'0') as usize),
-            0 => Some(sum),
             _ => None,
         })
     }
@@ -88,15 +95,18 @@ impl<'a> Iterator for TarIterator<'a> {
 
         let header = unsafe { &*self.ptr };
 
-        let size = self.octal_string_to_number(&header.size)?;
-
-        if size == 0 { // TODO: check if not outside bounds
+        if header.name[0] == 0 {
             return None;
         }
 
+        let size = self.octal_string_to_number(&header.size)?;
         let data_ptr = unsafe { self.ptr.offset(1) };
 
         self.ptr = unsafe { data_ptr.offset(((size + 512 - 1) / 512) as isize) };
+
+        if self.ptr > self.end {
+            return None;
+        }
 
         Some(TarFile {
             data: unsafe { slice::from_raw_parts(data_ptr as *const u8, size) },

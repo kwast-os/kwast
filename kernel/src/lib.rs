@@ -74,10 +74,15 @@ fn handle_module(module: BootModule) -> Option<()> {
     println!("{:?}", module);
 
     // Safety: module data is correct.
-    let tar = unsafe { Tar::from_slice(slice::from_raw_parts(module.start.as_const(), module.len)) }?;
+    let tar =
+        unsafe { Tar::from_slice(slice::from_raw_parts(module.start.as_const(), module.len)) }?;
 
+    // For now, just try to run all files in the tar.
+    // Might need a manifest or something alike in the future.
     for file in tar {
-        println!("{:?}", file);
+        wasm::main::run(file.as_slice()).unwrap_or_else(|e| {
+            println!("Could not start: {:?}", e);
+        });
     }
 
     Some(())
@@ -91,11 +96,6 @@ fn kernel_main(boot_modules: ArchBootModuleProvider) {
             println!("Failed to handle module {:?}", module);
         });
     }
-
-    // Start three threads to test.
-    wasm::main::test().unwrap();
-    wasm::main::test().unwrap();
-    wasm::main::test().unwrap();
 
     interrupts::enable();
     interrupts::setup_timer();

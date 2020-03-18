@@ -99,7 +99,18 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let kernel_end = unsafe { &KERNEL_END_PTR as *const _ as usize };
     let mboot_struct = unsafe { multiboot2::load(mboot_addr) };
     let mboot_end = mboot_struct.end_address();
-    let reserved_end = max(kernel_end, mboot_end);
+    let reserved_end = {
+        let mut reserved_end = max(kernel_end, mboot_end);
+
+        let highest_module = mboot_struct
+            .module_tags()
+            .max_by_key(|module| module.end_address());
+        if let Some(highest_module) = highest_module {
+            reserved_end = max(reserved_end, highest_module.end_address() as usize);
+        }
+
+        reserved_end
+    };
 
     // Map sections correctly
     {

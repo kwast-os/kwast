@@ -23,6 +23,8 @@ use crate::arch::ArchBootModuleProvider;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::SwitchReason;
 use crate::util::boot_module::BootModule;
+use crate::util::tar::Tar;
+use core::slice;
 
 #[macro_use]
 mod macros;
@@ -68,15 +70,26 @@ pub fn kernel_run(reserved_end: VirtAddr, boot_modules: ArchBootModuleProvider) 
 }
 
 /// Handle module.
-fn handle_module(module: BootModule) {
+fn handle_module(module: BootModule) -> Option<()> {
     println!("{:?}", module);
+
+    // Safety: module data is correct.
+    let tar = unsafe { Tar::from_slice(slice::from_raw_parts(module.start.as_const(), module.len)) }?;
+
+    for file in tar {
+        println!("{:?}", file);
+    }
+
+    Some(())
 }
 
 /// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
 fn kernel_main(boot_modules: ArchBootModuleProvider) {
     for module in boot_modules {
-        handle_module(module);
+        handle_module(module).unwrap_or_else(|| {
+            println!("Failed to handle module {:?}", module);
+        });
     }
 
     // Start three threads to test.

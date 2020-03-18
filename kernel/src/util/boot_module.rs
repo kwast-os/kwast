@@ -3,7 +3,7 @@
 use crate::arch::address::VirtAddr;
 
 /// A boot module.
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct BootModule {
     pub start: VirtAddr,
     pub len: usize,

@@ -50,7 +50,7 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 /// Run.
-pub fn kernel_run(reserved_end: VirtAddr, boot_modules: ArchBootModuleProvider) {
+pub fn kernel_run(reserved_end: VirtAddr, _boot_modules: ArchBootModuleProvider) {
     // May only be called once.
     unsafe {
         mm::init(reserved_end);
@@ -58,7 +58,7 @@ pub fn kernel_run(reserved_end: VirtAddr, boot_modules: ArchBootModuleProvider) 
     }
 
     #[cfg(not(feature = "integration-test"))]
-    kernel_main(boot_modules);
+    kernel_main(_boot_modules);
     #[cfg(feature = "integration-test")]
     {
         use crate::arch::qemu;

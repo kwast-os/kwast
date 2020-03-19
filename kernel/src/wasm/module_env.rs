@@ -23,11 +23,12 @@ pub struct FunctionImport {
     pub field: String,
 }
 
+#[derive(Debug)]
 pub struct TableElements {
-    index: TableIndex,
-    base: Option<GlobalIndex>,
-    offset: usize,
-    elements: Box<[FuncIndex]>,
+    pub index: TableIndex,
+    pub base: Option<GlobalIndex>,
+    pub offset: usize,
+    pub elements: Box<[FuncIndex]>,
 }
 
 pub struct ModuleEnv<'data> {
@@ -48,7 +49,7 @@ pub struct ModuleEnv<'data> {
     /// Tables.
     pub tables: Vec<Table>,
     /// Table elements.
-    table_elements: Vec<TableElements>,
+    pub table_elements: Vec<TableElements>,
 }
 
 impl<'data> ModuleEnv<'data> {
@@ -241,7 +242,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
             index: table_index,
             base,
             offset,
-            elements
+            elements,
         });
         Ok(())
     }

@@ -2,7 +2,7 @@
 
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{CodegenError, Context};
-use cranelift_wasm::translate_module;
+use cranelift_wasm::{translate_module, Table, TableElementType};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
@@ -12,9 +12,9 @@ use crate::mm::vma_allocator::{MappableVma, Vma};
 use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
-use crate::wasm::module_env::{FunctionBody, FunctionImport, ModuleEnv};
+use crate::wasm::module_env::{FunctionBody, FunctionImport, ModuleEnv, TableElements};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
-use crate::wasm::vmctx::{VmContext, VmContextContainer, HEAP_GUARD_SIZE, HEAP_SIZE};
+use crate::wasm::vmctx::{VmContext, VmContextContainer, VmFunctionImportEntry, HEAP_GUARD_SIZE, HEAP_SIZE, VmTable};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::write_unaligned;
@@ -40,13 +40,18 @@ struct CompileResult {
     contexts: Vec<Context>,
     start_func: Option<FuncIndex>,
     function_imports: Vec<FunctionImport>,
+    tables: Vec<Table>,
+    table_elements: Vec<TableElements>,
     total_size: usize,
 }
 
 impl CompileResult {
     /// Emit and link.
     pub fn emit_and_link(&self) -> Result<Thread, Error> {
+
         // TODO
+
+
         //let start_func = self.start_func.ok_or(Error::NoStart)?;
         let defined_function_offset = self.function_imports.len();
 
@@ -154,22 +159,47 @@ impl CompileResult {
 
         // Create the vm context.
         let mut vmctx_container = unsafe {
-            VmContextContainer::new(heap_vma.address(), self.function_imports.len() as u32)
+            VmContextContainer::new(
+                heap_vma.address(),
+                self.function_imports.len() as u32,
+                self.tables.len() as u32,
+            )
         };
 
         // Resolve import addresses.
-        for (i, import) in self.function_imports.iter().enumerate() {
-            println!("{} {:?}", i, import);
+        {
+            let function_imports = unsafe { vmctx_container.function_imports_as_mut_slice() };
+            for (i, import) in self.function_imports.iter().enumerate() {
+                println!("{} {:?}", i, import);
 
-            // TODO: improve this
-            match import.module.as_str() {
-                "os" => {
-                    // TODO: hardcoded to a fixed function atm
-                    vmctx_container
-                        .set_function_import(i as u32, VirtAddr::new(test_func as usize));
-                    // TODO
+                // TODO: improve this
+                match import.module.as_str() {
+                    "os" => {
+                        // TODO: hardcoded to a fixed function atm
+                        function_imports[i] = VmFunctionImportEntry {
+                            address: VirtAddr::new(test_func as usize),
+                        };
+                        // TODO
+                    }
+                    _ => unimplemented!(),
                 }
-                _ => unimplemented!(),
+            }
+        }
+
+        // Fill in tables.
+        {
+            // Initialize table vectors.
+            let tables: Vec<Vec<VmTable>> = self.tables.iter().map(|x| {
+                match x.ty {
+                    TableElementType::Func => {
+                        Vec::with_capacity(x.minimum as usize)
+                    },
+                    TableElementType::Val(_) => unimplemented!(),
+                }
+            }).collect();
+
+            for element in &self.table_elements {
+                println!("{:?}", element);
             }
         }
 
@@ -252,6 +282,8 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         contexts,
         start_func: env.start_func,
         function_imports: env.function_imports,
+        tables: env.tables,
+        table_elements: env.table_elements,
         total_size,
     })
 }

@@ -104,7 +104,7 @@ impl<'a> Iterator for TarIterator<'a> {
 
         self.ptr = unsafe { data_ptr.offset(((size + 512 - 1) / 512) as isize) };
 
-        if self.ptr > self.end {
+        if self.ptr >= self.end {
             return None;
         }
 

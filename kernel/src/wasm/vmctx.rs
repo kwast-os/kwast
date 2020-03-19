@@ -3,16 +3,28 @@ use crate::arch::paging::PAGE_SIZE;
 use alloc::alloc::{alloc, dealloc, handle_alloc_error};
 use core::alloc::Layout;
 use core::mem::{align_of, size_of};
+use core::slice;
 
 pub const HEAP_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
 
 pub const HEAP_GUARD_SIZE: u64 = PAGE_SIZE as u64;
+
+#[repr(C)]
+pub struct VmFunctionImportEntry {
+    pub address: VirtAddr,
+}
+
+#[repr(C)]
+pub struct VmTable {
+    pub base_address: VirtAddr,
+}
 
 pub struct VmContext {}
 
 pub struct VmContextContainer {
     ptr: *mut VmContext,
     num_imported_funcs: u32,
+    num_tables: u32,
 }
 
 impl VmContext {
@@ -32,21 +44,29 @@ impl VmContext {
     }
 
     /// Offset of an imported function entry.
-    pub const fn imported_func_entry_offset(index: u32) -> usize {
-        Self::imported_funcs_offset() as usize + size_of::<usize>() * index as usize
+    pub const fn imported_func_entry_offset(index: u32) -> isize {
+        Self::imported_funcs_offset() as isize
+            + (size_of::<VmFunctionImportEntry>() * index as usize) as isize
+    }
+
+    /// Offset of the tables.
+    pub const fn table_offset(num_imported_funcs: u32) -> isize {
+        Self::imported_func_entry_offset(num_imported_funcs)
     }
 
     /// Calculates the size of the context.
-    pub const fn size(num_imported_funcs: u32) -> usize {
-        Self::imported_funcs_offset() as usize + (num_imported_funcs as usize) * size_of::<usize>()
+    pub const fn size(num_imported_funcs: u32, num_tables: u32) -> usize {
+        Self::imported_funcs_offset() as usize
+            + (num_imported_funcs as usize) * size_of::<VmFunctionImportEntry>()
+            + (num_tables as usize) * size_of::<VmTable>()
     }
 }
 
 #[allow(clippy::cast_ptr_alignment)]
 impl VmContextContainer {
     /// Creates a new container for a VmContext.
-    pub unsafe fn new(heap: VirtAddr, num_imported_funcs: u32) -> VmContextContainer {
-        let layout = Self::layout(num_imported_funcs);
+    pub unsafe fn new(heap: VirtAddr, num_imported_funcs: u32, num_tables: u32) -> Self {
+        let layout = Self::layout(num_imported_funcs, num_tables);
         let ptr = alloc(layout);
         if ptr.is_null() {
             handle_alloc_error(layout);
@@ -58,6 +78,7 @@ impl VmContextContainer {
         Self {
             ptr: ptr as *mut _,
             num_imported_funcs,
+            num_tables,
         }
     }
 
@@ -66,18 +87,27 @@ impl VmContextContainer {
         self.ptr
     }
 
-    pub fn set_function_import(&mut self, index: u32, address: VirtAddr) {
-        debug_assert!(index < self.num_imported_funcs);
-        unsafe {
-            let ptr = (self.ptr as *mut u8).offset(VmContext::imported_funcs_offset() as isize)
-                as *mut VirtAddr;
-            *ptr = address;
-        }
+    /// Gets the function imports as a slice.
+    /// Unsafe because you might be able to get multiple mutable references.
+    pub unsafe fn function_imports_as_mut_slice(&mut self) -> &mut [VmFunctionImportEntry] {
+        // Safety: we allocated the memory correctly and the bounds are correct at this point.
+        let ptr = (self.ptr as *mut u8).offset(VmContext::imported_funcs_offset() as isize)
+            as *mut VmFunctionImportEntry;
+        slice::from_raw_parts_mut(ptr, self.num_imported_funcs as usize)
+    }
+
+    /// Gets the tables as a slice.
+    /// Unsafe because you might be able to get multiple mutable references.
+    pub unsafe fn tables_as_mut_slice(&mut self) -> &mut [VmTable] {
+        // Safety: we allocated the memory correctly and the bounds are correct at this point.
+        let ptr = (self.ptr as *mut u8).offset(VmContext::table_offset(self.num_imported_funcs))
+            as *mut VmTable;
+        slice::from_raw_parts_mut(ptr, self.num_tables as usize)
     }
 
     /// Calculates the allocation layout of the context.
-    fn layout(num_imported_funcs: u32) -> Layout {
-        let size = VmContext::size(num_imported_funcs);
+    fn layout(num_imported_funcs: u32, num_tables: u32) -> Layout {
+        let size = VmContext::size(num_imported_funcs, num_tables);
         let align = align_of::<Self>();
         Layout::from_size_align(size, align).unwrap()
     }
@@ -86,7 +116,10 @@ impl VmContextContainer {
 impl Drop for VmContextContainer {
     fn drop(&mut self) {
         unsafe {
-            dealloc(self.ptr.cast(), Self::layout(self.num_imported_funcs));
+            dealloc(
+                self.ptr.cast(),
+                Self::layout(self.num_imported_funcs, self.num_tables),
+            );
         }
     }
 }

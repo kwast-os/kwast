@@ -5,11 +5,11 @@ use crate::wasm::vmctx::{VmContext, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::vec::Vec;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
-use cranelift_codegen::ir::{InstBuilder, TableData, MemFlags};
 use cranelift_codegen::ir::{
     types, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, HeapStyle, Inst, SigRef, Table, Value,
 };
+use cranelift_codegen::ir::{InstBuilder, MemFlags, TableData};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_wasm::{
     FuncEnvironment, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex,
@@ -101,14 +101,14 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             base: vmctx,
             offset: Offset32::new(0), // TODO
             global_type: self.pointer_type(),
-            readonly: false
+            readonly: false,
         });
-        
+
         let bound_gv = func.create_global_value(GlobalValueData::Load {
             base: vmctx,
             offset: Offset32::new(0), // TODO
             global_type: types::I32,
-            readonly: false
+            readonly: false,
         });
 
         Ok(func.create_table(TableData {
@@ -159,14 +159,16 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             self.pointer_type(),
             MemFlags::trusted(),
             table_entry_addr,
-            120 // TODO
+            120, // TODO
         );
 
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
 
         let call_args_with_vmctx = Self::translate_signature(vmctx, call_args);
 
-        Ok(pos.ins().call_indirect(sig_ref, func_addr, &call_args_with_vmctx))
+        Ok(pos
+            .ins()
+            .call_indirect(sig_ref, func_addr, &call_args_with_vmctx))
     }
 
     fn translate_call(

@@ -46,7 +46,8 @@ struct CompileResult {
 impl CompileResult {
     /// Emit and link.
     pub fn emit_and_link(&self) -> Result<Thread, Error> {
-        let start_func = self.start_func.ok_or(Error::NoStart)?;
+        // TODO
+        //let start_func = self.start_func.ok_or(Error::NoStart)?;
         let defined_function_offset = self.function_imports.len();
 
         // Create code area, will be made executable read-only later.
@@ -133,6 +134,15 @@ impl CompileResult {
             }
         }
 
+        // Debug code: print the bytes of the code section.
+        for i in 0..self.total_size {
+            let address = code_vma.address().as_usize() + i;
+            unsafe {
+                let ptr = address as *const u8;
+                print!("{:#x}, ", *ptr);
+            }
+        }
+
         // Now the code is written, change it to read-only & executable.
         {
             let mut mapping = ActiveMapping::get();
@@ -163,7 +173,9 @@ impl CompileResult {
             }
         }
 
-        let start_offset = func_offsets[start_func.as_u32() as usize - defined_function_offset];
+        // TODO
+        //let start_offset = func_offsets[start_func.as_u32() as usize - defined_function_offset];
+        let start_offset = func_offsets[1];
         let start_addr = code_vma.address().as_usize() + start_offset;
 
         Ok(Thread::create(

@@ -5,7 +5,7 @@ use crate::wasm::vmctx::{VmContext, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::vec::Vec;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
-use cranelift_codegen::ir::{InstBuilder, TableData};
+use cranelift_codegen::ir::{InstBuilder, TableData, MemFlags};
 use cranelift_codegen::ir::{
     types, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, HeapStyle, Inst, SigRef, Table, Value,
@@ -84,8 +84,22 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
     fn make_table(&mut self, func: &mut Function, index: TableIndex) -> Result<Table, WasmError> {
         // TODO: this is just to get it to continue right now
-        let base_gv = func.create_global_value(GlobalValueData::VMContext);
-        let bound_gv = func.create_global_value(GlobalValueData::VMContext);
+
+        let vmctx = self.vmctx(func);
+
+        let base_gv = func.create_global_value(GlobalValueData::Load {
+            base: vmctx,
+            offset: Offset32::new(0), // TODO
+            global_type: self.pointer_type(),
+            readonly: false
+        });
+        
+        let bound_gv = func.create_global_value(GlobalValueData::Load {
+            base: vmctx,
+            offset: Offset32::new(0), // TODO
+            global_type: types::I32,
+            readonly: false
+        });
 
         Ok(func.create_table(TableData {
             base_gv,
@@ -119,19 +133,33 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
     fn translate_call_indirect(
         &mut self,
-        _pos: FuncCursor,
+        mut pos: FuncCursor,
         _table_index: TableIndex,
-        _table: Table,
+        table: Table,
         _sig_index: SignatureIndex,
-        _sig_ref: SigRef,
-        _callee: Value,
-        _call_args: &[Value],
+        sig_ref: SigRef,
+        callee: Value,
+        call_args: &[Value],
     ) -> Result<Inst, WasmError> {
         // TODO: we should verify the signature and make sure the address it not null
 
-        
+        let table_entry_addr = pos.ins().table_addr(self.pointer_type(), table, callee, 0);
 
-        unimplemented!()
+        let func_addr = pos.ins().load(
+            self.pointer_type(),
+            MemFlags::trusted(),
+            table_entry_addr,
+            120 // TODO
+        );
+
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+
+        // TODO: duplicated code
+        let mut call_args_with_vmctx = Vec::with_capacity(call_args.len() + 1);
+        call_args_with_vmctx.push(vmctx);
+        call_args_with_vmctx.extend_from_slice(call_args);
+
+        Ok(pos.ins().call_indirect(sig_ref, func_addr, &call_args_with_vmctx))
     }
 
     fn translate_call(
@@ -143,6 +171,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     ) -> WasmResult<Inst> {
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
 
+        // TODO: duplicated code
         let mut call_args_with_vmctx = Vec::with_capacity(call_args.len() + 1);
         call_args_with_vmctx.push(vmctx);
         call_args_with_vmctx.extend_from_slice(call_args);

@@ -151,7 +151,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         callee: Value,
         call_args: &[Value],
     ) -> Result<Inst, WasmError> {
-        // TODO: we should verify the signature and make sure the address it not null
+        // TODO: we should verify the signature and make sure the address is not null
 
         let table_entry_addr = pos.ins().table_addr(self.pointer_type(), table, callee, 0);
 

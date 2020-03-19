@@ -212,12 +212,22 @@ impl<'a> Instantiation<'a> {
         heap_vma: &LazilyMappedVma,
     ) -> VmContextContainer {
         // Create the vm context.
-        let mut vmctx_container = unsafe {
-            VmContextContainer::new(
-                heap_vma.address(),
-                self.compile_result.function_imports.len() as u32,
-                self.compile_result.tables.len() as u32,
-            )
+        let mut vmctx_container = {
+            // Initialize table vectors.
+            let tables: Vec<Table> = self
+                .compile_result
+                .tables
+                .iter()
+                .map(|x| Table::new(x))
+                .collect();
+
+            unsafe {
+                VmContextContainer::new(
+                    heap_vma.address(),
+                    self.compile_result.function_imports.len() as u32,
+                    tables,
+                )
+            }
         };
 
         // Resolve import addresses.
@@ -242,14 +252,6 @@ impl<'a> Instantiation<'a> {
 
         // Create tables.
         {
-            // Initialize table vectors.
-            let mut tables: Vec<Table> = self
-                .compile_result
-                .tables
-                .iter()
-                .map(|x| Table::new(x))
-                .collect();
-
             // Fill in the tables.
             for elements in &self.compile_result.table_elements {
                 // TODO: support this
@@ -257,7 +259,7 @@ impl<'a> Instantiation<'a> {
                 assert_eq!(elements.offset, 0, "not implemented yet");
 
                 let offset = 0usize;
-                let table = &mut tables[elements.index.as_u32() as usize];
+                let table = vmctx_container.get_table(elements.index);
 
                 for (i, func_idx) in elements.elements.iter().enumerate() {
                     table.set(
@@ -269,7 +271,7 @@ impl<'a> Instantiation<'a> {
                 }
             }
 
-            // TODO: keep tables in the vm context container
+            vmctx_container.write_tables_to_vmctx();
         }
 
         vmctx_container

@@ -3,7 +3,7 @@ use crate::wasm::vmctx::{VmTable, VmTableElement};
 use alloc::vec::Vec;
 use cranelift_wasm::TableElementType;
 
-/// A table.
+/// A table, manages table data for the runtime.
 pub struct Table {
     vec: Vec<VmTableElement>,
 }

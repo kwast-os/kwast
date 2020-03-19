@@ -2,19 +2,23 @@
 
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{CodegenError, Context};
-use cranelift_wasm::{translate_module, Table, TableElementType};
+use cranelift_wasm::translate_module;
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::{MappableVma, Vma};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
 use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{FunctionBody, FunctionImport, ModuleEnv, TableElements};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
-use crate::wasm::vmctx::{VmContext, VmContextContainer, VmFunctionImportEntry, HEAP_GUARD_SIZE, HEAP_SIZE, VmTable};
+use crate::wasm::table::Table;
+use crate::wasm::vmctx::{
+    VmContext, VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE,
+    HEAP_SIZE,
+};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::write_unaligned;
@@ -40,29 +44,53 @@ struct CompileResult {
     contexts: Vec<Context>,
     start_func: Option<FuncIndex>,
     function_imports: Vec<FunctionImport>,
-    tables: Vec<Table>,
+    tables: Vec<cranelift_wasm::Table>,
     table_elements: Vec<TableElements>,
     total_size: usize,
 }
 
+struct Instantiation<'a> {
+    compile_result: &'a CompileResult,
+    func_offsets: Vec<usize>,
+}
+
 impl CompileResult {
-    /// Emit and link.
-    pub fn emit_and_link(&self) -> Result<Thread, Error> {
+    /// Compile result to instantiation.
+    pub fn instantiate(&self) -> Instantiation {
+        Instantiation::new(self)
+    }
+}
 
-        // TODO
+impl<'a> Instantiation<'a> {
+    fn new(compile_result: &'a CompileResult) -> Self {
+        let capacity = compile_result.contexts.len();
 
+        Self {
+            compile_result,
+            func_offsets: Vec::with_capacity(capacity),
+        }
+    }
 
-        //let start_func = self.start_func.ok_or(Error::NoStart)?;
-        let defined_function_offset = self.function_imports.len();
+    fn defined_function_offset(&self) -> usize {
+        self.compile_result.function_imports.len()
+    }
 
+    // Helper to get  the function address from a function index.
+    fn get_func_address(&self, code_vma: &MappedVma, index: FuncIndex) -> VirtAddr {
+        let offset = self.func_offsets[index.as_u32() as usize - self.defined_function_offset()];
+        VirtAddr::new(code_vma.address().as_usize() + offset)
+    }
+
+    fn emit(&mut self) -> Result<(MappedVma, LazilyMappedVma, Vec<RelocSink>), Error> {
         // Create code area, will be made executable read-only later.
         let code_vma = {
-            let len = align_up(self.total_size);
+            let len = align_up(self.compile_result.total_size);
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
             Vma::create(len)
                 .and_then(|x| x.map(0, len, flags))
                 .map_err(Error::MemoryError)?
         };
+
         let heap_vma = {
             // TODO: can max size be limited by wasm somehow?
             let len = HEAP_SIZE + HEAP_GUARD_SIZE;
@@ -73,11 +101,11 @@ impl CompileResult {
         };
 
         // Emit code
-        let capacity = self.contexts.len();
+        let capacity = self.compile_result.contexts.len();
         let mut reloc_sinks: Vec<RelocSink> = Vec::with_capacity(capacity);
-        let mut func_offsets: Vec<usize> = Vec::with_capacity(capacity);
         let mut offset: usize = 0;
-        for context in &self.contexts {
+
+        for context in &self.compile_result.contexts {
             let mut reloc_sink = RelocSink::new();
             let mut trap_sink = NullTrapSink {};
             let mut null_stackmap_sink = NullStackmapSink {};
@@ -86,7 +114,7 @@ impl CompileResult {
                 let ptr = (code_vma.address() + offset).as_mut();
 
                 context.emit_to_memory(
-                    &*self.isa,
+                    &*self.compile_result.isa,
                     ptr,
                     &mut reloc_sink,
                     &mut trap_sink,
@@ -94,23 +122,33 @@ impl CompileResult {
                 )
             };
 
-            func_offsets.push(offset);
+            self.func_offsets.push(offset);
             reloc_sinks.push(reloc_sink);
 
             offset += info.total_size as usize;
         }
 
+        Ok((code_vma, heap_vma, reloc_sinks))
+    }
+
+    /// Emit and link.
+    pub fn emit_and_link(&mut self) -> Result<Thread, Error> {
+        let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
+        let defined_function_offset = self.defined_function_offset();
+
+        let (code_vma, heap_vma, reloc_sinks) = self.emit()?;
+
         // Relocations
         for (idx, reloc_sink) in reloc_sinks.iter().enumerate() {
             for relocation in &reloc_sink.relocations {
                 let reloc_addr = code_vma.address().as_usize()
-                    + func_offsets[idx]
+                    + self.func_offsets[idx]
                     + relocation.code_offset as usize;
 
                 // Determine target address.
                 let target_off = match relocation.target {
                     RelocationTarget::UserFunction(target_idx) => {
-                        func_offsets[target_idx.as_u32() as usize - defined_function_offset]
+                        self.func_offsets[target_idx.as_u32() as usize - defined_function_offset]
                     }
                     RelocationTarget::LibCall(_libcall) => unimplemented!(),
                     RelocationTarget::JumpTable(_jt) => unimplemented!(),
@@ -120,7 +158,7 @@ impl CompileResult {
                 match relocation.reloc {
                     Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
                         let delta = target_off
-                            .wrapping_sub(func_offsets[idx] + relocation.code_offset as usize)
+                            .wrapping_sub(self.func_offsets[idx] + relocation.code_offset as usize)
                             .wrapping_add(relocation.addend as usize);
 
                         unsafe {
@@ -140,7 +178,7 @@ impl CompileResult {
         }
 
         // Debug code: print the bytes of the code section.
-        for i in 0..self.total_size {
+        for i in 0..self.compile_result.total_size {
             let address = code_vma.address().as_usize() + i;
             unsafe {
                 let ptr = address as *const u8;
@@ -157,19 +195,35 @@ impl CompileResult {
                 .map_err(Error::MemoryError)?;
         };
 
+        let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma);
+
+        Ok(Thread::create(
+            self.get_func_address(&code_vma, start_func),
+            code_vma,
+            heap_vma,
+            vmctx_container,
+        )
+        .map_err(Error::MemoryError)?)
+    }
+
+    fn create_vmctx_container(
+        &self,
+        code_vma: &MappedVma,
+        heap_vma: &LazilyMappedVma,
+    ) -> VmContextContainer {
         // Create the vm context.
         let mut vmctx_container = unsafe {
             VmContextContainer::new(
                 heap_vma.address(),
-                self.function_imports.len() as u32,
-                self.tables.len() as u32,
+                self.compile_result.function_imports.len() as u32,
+                self.compile_result.tables.len() as u32,
             )
         };
 
         // Resolve import addresses.
         {
             let function_imports = unsafe { vmctx_container.function_imports_as_mut_slice() };
-            for (i, import) in self.function_imports.iter().enumerate() {
+            for (i, import) in self.compile_result.function_imports.iter().enumerate() {
                 println!("{} {:?}", i, import);
 
                 // TODO: improve this
@@ -186,41 +240,48 @@ impl CompileResult {
             }
         }
 
-        // Fill in tables.
+        // Create tables.
         {
             // Initialize table vectors.
-            let tables: Vec<Vec<VmTable>> = self.tables.iter().map(|x| {
-                match x.ty {
-                    TableElementType::Func => {
-                        Vec::with_capacity(x.minimum as usize)
-                    },
-                    TableElementType::Val(_) => unimplemented!(),
-                }
-            }).collect();
+            let mut tables: Vec<Table> = self
+                .compile_result
+                .tables
+                .iter()
+                .map(|x| Table::new(x))
+                .collect();
 
-            for element in &self.table_elements {
-                println!("{:?}", element);
+            // Fill in the tables.
+            for elements in &self.compile_result.table_elements {
+                // TODO: support this
+                assert!(elements.base.is_none(), "not implemented yet");
+                assert_eq!(elements.offset, 0, "not implemented yet");
+
+                let offset = 0usize;
+                let table = &mut tables[elements.index.as_u32() as usize];
+
+                for (i, func_idx) in elements.elements.iter().enumerate() {
+                    table.set(
+                        i + offset,
+                        VmTableElement {
+                            address: self.get_func_address(code_vma, *func_idx),
+                        },
+                    );
+                }
             }
+
+            // TODO: keep tables in the vm context container
         }
 
-        // TODO
-        //let start_offset = func_offsets[start_func.as_u32() as usize - defined_function_offset];
-        let start_offset = func_offsets[1];
-        let start_addr = code_vma.address().as_usize() + start_offset;
-
-        Ok(Thread::create(
-            VirtAddr::new(start_addr),
-            code_vma,
-            heap_vma,
-            vmctx_container,
-        )
-        .map_err(Error::MemoryError)?)
+        vmctx_container
     }
 }
 
 pub fn run(buffer: &[u8]) -> Result<(), Error> {
-    let compile_result = compile(buffer)?;
-    let thread = compile_result.emit_and_link()?;
+    let thread = {
+        let compile_result = compile(buffer)?;
+        let mut instantiation = compile_result.instantiate();
+        instantiation.emit_and_link()?
+    };
 
     add_and_schedule_thread(thread);
 

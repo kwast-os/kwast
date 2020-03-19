@@ -13,4 +13,6 @@
         (i32.const 1234)
         (call_indirect (param i32) (i32.const 0))
     )
+
+    (start $main)
 )

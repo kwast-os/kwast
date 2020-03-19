@@ -25,9 +25,13 @@ pub struct FunctionImport {
 
 #[derive(Debug)]
 pub struct TableElements {
+    /// Index of the table where these elements belong to.
     pub index: TableIndex,
+    /// Base offset by a global into the table.
     pub base: Option<GlobalIndex>,
+    /// Base offset by a number into the table.
     pub offset: usize,
+    /// The table elements.
     pub elements: Box<[FuncIndex]>,
 }
 

@@ -9,14 +9,23 @@ pub const HEAP_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
 
 pub const HEAP_GUARD_SIZE: u64 = PAGE_SIZE as u64;
 
+/// Table representation as it is for the VmContext.
 #[repr(C)]
-pub struct VmFunctionImportEntry {
+pub struct VmTable {
+    /// Base address to the function pointers.
+    pub base_address: VirtAddr,
+}
+
+/// A single element in the table representation for a VmContext.
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct VmTableElement {
     pub address: VirtAddr,
 }
 
 #[repr(C)]
-pub struct VmTable {
-    pub base_address: VirtAddr,
+pub struct VmFunctionImportEntry {
+    pub address: VirtAddr,
 }
 
 pub struct VmContext {}
@@ -25,6 +34,15 @@ pub struct VmContextContainer {
     ptr: *mut VmContext,
     num_imported_funcs: u32,
     num_tables: u32,
+}
+
+impl VmTableElement {
+    // Null.
+    pub const fn null() -> Self {
+        Self {
+            address: VirtAddr::null(),
+        }
+    }
 }
 
 impl VmContext {

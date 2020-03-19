@@ -148,6 +148,8 @@ pub extern "C" fn entry(mboot_addr: usize) {
         }
     }
 
+    // TODO: make sure modules are mapped
+
     with_pmm(|pmm| pmm.init(&mboot_struct, PhysAddr::new(reserved_end)));
 
     let reserved_end = VirtAddr::new(reserved_end).align_up();

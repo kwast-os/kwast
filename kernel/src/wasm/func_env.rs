@@ -4,8 +4,8 @@ use crate::wasm::module_env::ModuleEnv;
 use crate::wasm::vmctx::{VmContext, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::vec::Vec;
 use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir::immediates::{Imm64, Offset32};
-use cranelift_codegen::ir::InstBuilder;
+use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
+use cranelift_codegen::ir::{InstBuilder, TableData};
 use cranelift_codegen::ir::{
     types, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, HeapStyle, Inst, SigRef, Table, Value,
@@ -82,20 +82,30 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         }))
     }
 
-    fn make_table(&mut self, _func: &mut Function, _index: TableIndex) -> Result<Table, WasmError> {
-        unimplemented!()
+    fn make_table(&mut self, func: &mut Function, index: TableIndex) -> Result<Table, WasmError> {
+        // TODO: this is just to get it to continue right now
+        let base_gv = func.create_global_value(GlobalValueData::VMContext);
+        let bound_gv = func.create_global_value(GlobalValueData::VMContext);
+
+        Ok(func.create_table(TableData {
+            base_gv,
+            min_size: Uimm64::new(0),
+            bound_gv,
+            element_size: Uimm64::new(1234),
+            index_type: types::I32,
+        }))
     }
 
     fn make_indirect_sig(
         &mut self,
-        _func: &mut Function,
-        _index: SignatureIndex,
+        func: &mut Function,
+        index: SignatureIndex,
     ) -> WasmResult<SigRef> {
-        unimplemented!()
+        Ok(func.import_signature(self.module_env.get_sig_from_sigidx(index)))
     }
 
     fn make_direct_func(&mut self, func: &mut Function, index: FuncIndex) -> WasmResult<FuncRef> {
-        let signature = func.import_signature(self.module_env.get_sig(index));
+        let signature = func.import_signature(self.module_env.get_sig_from_func(index));
 
         // User-defined external name. Namespace is defined by us, index is just the function index.
         let name = ExternalName::user(0, index.as_u32());
@@ -117,6 +127,10 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _callee: Value,
         _call_args: &[Value],
     ) -> Result<Inst, WasmError> {
+        // TODO: we should verify the signature and make sure the address it not null
+
+        
+
         unimplemented!()
     }
 

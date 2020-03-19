@@ -213,7 +213,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
     for idx in 0..env.func_bodies.len() {
         let mut ctx = Context::new();
         ctx.func.signature =
-            env.get_sig(FuncIndex::from_u32((idx + defined_function_offset) as u32));
+            env.get_sig_from_func(FuncIndex::from_u32((idx + defined_function_offset) as u32));
 
         let FunctionBody { body, offset } = env.func_bodies[idx];
 
@@ -228,7 +228,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
             )
             .map_err(Error::WasmError)?;
 
-        println!("{:?}", ctx.func);
+        // println!("{:?}", ctx.func);
 
         let info = ctx.compile(&*isa).map_err(Error::CodegenError)?;
         total_size += info.total_size as usize;

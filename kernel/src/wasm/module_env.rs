@@ -23,6 +23,13 @@ pub struct FunctionImport {
     pub field: String,
 }
 
+pub struct TableElements {
+    index: TableIndex,
+    base: Option<GlobalIndex>,
+    offset: usize,
+    elements: Box<[FuncIndex]>,
+}
+
 pub struct ModuleEnv<'data> {
     /// Passed target configuration.
     cfg: isa::TargetFrontendConfig,
@@ -38,6 +45,10 @@ pub struct ModuleEnv<'data> {
     memories: Vec<Memory>,
     /// Keep track of the imported functions.
     pub function_imports: Vec<FunctionImport>,
+    /// Tables.
+    pub tables: Vec<Table>,
+    /// Table elements.
+    table_elements: Vec<TableElements>,
 }
 
 impl<'data> ModuleEnv<'data> {
@@ -51,13 +62,20 @@ impl<'data> ModuleEnv<'data> {
             func_bodies: Vec::new(),
             memories: Vec::new(),
             function_imports: Vec::new(),
+            tables: Vec::new(),
+            table_elements: Vec::new(),
         }
     }
 
     /// Gets the signature of the given function.
-    pub fn get_sig(&self, index: FuncIndex) -> Signature {
+    pub fn get_sig_from_func(&self, index: FuncIndex) -> Signature {
         let sig_index = self.func_types[index.as_u32() as usize];
         self.signatures[sig_index.as_u32() as usize].clone()
+    }
+
+    /// Gets the signature.
+    pub fn get_sig_from_sigidx(&self, sig_idx: SignatureIndex) -> Signature {
+        self.signatures[sig_idx.as_u32() as usize].clone()
     }
 
     /// Returns whether the function index corresponds to an imported function.
@@ -139,8 +157,14 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
-    fn declare_table(&mut self, _table: Table) -> WasmResult<()> {
-        unimplemented!()
+    fn reserve_tables(&mut self, num: u32) -> WasmResult<()> {
+        self.tables.reserve_exact(num as usize);
+        Ok(())
+    }
+
+    fn declare_table(&mut self, table: Table) -> WasmResult<()> {
+        self.tables.push(table);
+        Ok(())
     }
 
     fn reserve_memories(&mut self, num: u32) -> WasmResult<()> {
@@ -156,8 +180,11 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
-    fn declare_global(&mut self, _global: Global) -> WasmResult<()> {
-        unimplemented!()
+    fn declare_global(&mut self, global: Global) -> WasmResult<()> {
+        println!("{:?}", global);
+        // TODO
+        //unimplemented!()
+        Ok(())
     }
 
     fn declare_func_export(&mut self, _func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
@@ -178,7 +205,9 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         _memory_index: MemoryIndex,
         _name: &'data str,
     ) -> WasmResult<()> {
-        unimplemented!()
+        //unimplemented!()
+        // TODO
+        Ok(())
     }
 
     fn declare_global_export(
@@ -186,7 +215,9 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         _global_index: GlobalIndex,
         _name: &'data str,
     ) -> WasmResult<()> {
-        unimplemented!()
+        //unimplemented!()
+        // TODO
+        Ok(())
     }
 
     fn declare_start_func(&mut self, index: FuncIndex) -> WasmResult<()> {
@@ -194,14 +225,25 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
+    fn reserve_table_elements(&mut self, num: u32) -> WasmResult<()> {
+        self.table_elements.reserve_exact(num as usize);
+        Ok(())
+    }
+
     fn declare_table_elements(
         &mut self,
-        _table_index: TableIndex,
-        _base: Option<GlobalIndex>,
-        _offset: usize,
-        _elements: Box<[FuncIndex]>,
+        table_index: TableIndex,
+        base: Option<GlobalIndex>,
+        offset: usize,
+        elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
-        unimplemented!()
+        self.table_elements.push(TableElements {
+            index: table_index,
+            base,
+            offset,
+            elements
+        });
+        Ok(())
     }
 
     fn declare_passive_element(
@@ -240,6 +282,8 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         _offset: usize,
         _data: &'data [u8],
     ) -> WasmResult<()> {
-        unimplemented!()
+        //unimplemented!()
+        // TODO
+        Ok(())
     }
 }

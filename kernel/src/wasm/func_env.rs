@@ -24,6 +24,7 @@ pub struct FuncEnv<'m, 'data> {
 }
 
 impl<'m, 'data> FuncEnv<'m, 'data> {
+    /// Creates a new function environment inside a module environment.
     pub fn new(module_environment: &'m ModuleEnv<'data>) -> Self {
         Self {
             module_env: module_environment,
@@ -32,12 +33,21 @@ impl<'m, 'data> FuncEnv<'m, 'data> {
         }
     }
 
+    /// VMContext getter.
     fn vmctx(&mut self, func: &mut Function) -> GlobalValue {
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(GlobalValueData::VMContext);
             self.vmctx = Some(vmctx);
             vmctx
         })
+    }
+
+    /// Translate the signature of a function.
+    fn translate_signature(vmctx: Value, call_args: &[Value]) -> Vec<Value> {
+        let mut call_args_with_vmctx = Vec::with_capacity(call_args.len() + 1);
+        call_args_with_vmctx.push(vmctx);
+        call_args_with_vmctx.extend_from_slice(call_args);
+        call_args_with_vmctx
     }
 }
 
@@ -154,10 +164,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
 
-        // TODO: duplicated code
-        let mut call_args_with_vmctx = Vec::with_capacity(call_args.len() + 1);
-        call_args_with_vmctx.push(vmctx);
-        call_args_with_vmctx.extend_from_slice(call_args);
+        let call_args_with_vmctx = Self::translate_signature(vmctx, call_args);
 
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &call_args_with_vmctx))
     }
@@ -171,10 +178,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     ) -> WasmResult<Inst> {
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
 
-        // TODO: duplicated code
-        let mut call_args_with_vmctx = Vec::with_capacity(call_args.len() + 1);
-        call_args_with_vmctx.push(vmctx);
-        call_args_with_vmctx.extend_from_slice(call_args);
+        let call_args_with_vmctx = Self::translate_signature(vmctx, call_args);
 
         if self.module_env.is_imported_func(callee_index) {
             // TODO: we should verify the signature

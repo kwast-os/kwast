@@ -12,7 +12,7 @@ ISO_FILES    = build/iso
 ISO_IMAGE    = build/img.iso
 ASM_SOURCES  = $(wildcard src/arch/$(ARCH)/*.s)
 ASM_OBJECTS  = $(patsubst src/arch/$(ARCH)/%.s, build/arch/$(ARCH)/%.o, $(ASM_SOURCES))
-INITRD_FILES = global_test.wasm
+INITRD_FILES = global_test.wasm indirect_call.wasm
 
 LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
 LD          = $(ARCH)-elf-ld
@@ -41,6 +41,8 @@ initrd: $(INITRD_FILES)
 	@tar -cf $(ISO_FILES)/boot/initrd.tar -C ../wasm_samples $(INITRD_FILES)
 
 global_test.wasm: 
+
+indirect_call.wasm: 
 
 run: iso
 	@qemu-system-$(ARCH) -cdrom $(ISO_IMAGE) $(QEMUFLAGS)

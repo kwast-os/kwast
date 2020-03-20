@@ -109,7 +109,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
         let base_gv = func.create_global_value(GlobalValueData::Load {
             base: base_gv_offset,
-            offset: Offset32::new(0),
+            offset: Offset32::new(VmTable::base_address_offset()),
             global_type: self.pointer_type(),
             readonly: false,
         });

@@ -51,6 +51,11 @@ impl VmTableElement {
 }
 
 impl VmTable {
+    /// Offset of the field `base_address`.
+    pub const fn base_address_offset() -> i32 {
+        0
+    }
+
     /// Offset of the field `amount_items`.
     pub const fn amount_items_offset() -> i32 {
         size_of::<VirtAddr>() as i32

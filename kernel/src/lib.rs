@@ -18,11 +18,12 @@ use core::panic::PanicInfo;
 
 use arch::interrupts;
 
-use crate::arch::address::VirtAddr;
-use crate::arch::ArchBootModuleProvider;
+use crate::arch::address::{PhysAddr, VirtAddr};
+use crate::arch::paging::{ActiveMapping, EntryFlags};
+use crate::mm::mapper::MemoryMapper;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::SwitchReason;
-use crate::util::boot_module::BootModule;
+use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 use core::slice;
 
@@ -50,7 +51,7 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 /// Run.
-pub fn kernel_run(reserved_end: VirtAddr, _boot_modules: ArchBootModuleProvider) {
+pub fn kernel_run(reserved_end: VirtAddr, _boot_modules: impl BootModuleProvider) {
     // May only be called once.
     unsafe {
         mm::init(reserved_end);
@@ -74,8 +75,12 @@ fn handle_module(module: BootModule) -> Option<()> {
     println!("{:?}", module);
 
     // Safety: module data is correct.
-    let tar =
-        unsafe { Tar::from_slice(slice::from_raw_parts(module.start.as_const(), module.len)) }?;
+    let tar = unsafe {
+        Tar::from_slice(slice::from_raw_parts(
+            module.range.start.as_const(),
+            module.range.len,
+        ))
+    }?;
 
     // For now, just try to run all files in the tar.
     // Might need a manifest or something alike in the future.
@@ -90,7 +95,19 @@ fn handle_module(module: BootModule) -> Option<()> {
 
 /// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
-fn kernel_main(boot_modules: ArchBootModuleProvider) {
+fn kernel_main(boot_modules: impl BootModuleProvider) {
+    // Make sure the boot modules are mapped.
+    if let Some(range) = boot_modules.range() {
+        let mut mapping = ActiveMapping::get();
+        mapping.map_range_physical(
+            range.start,
+            PhysAddr::new(range.start.as_usize()),
+            range.len,
+            EntryFlags::PRESENT,
+        ).expect("mapping modules");
+    }
+
+    // Handle boot modules.
     for module in boot_modules {
         handle_module(module).unwrap_or_else(|| {
             println!("Failed to handle module {:?}", module);

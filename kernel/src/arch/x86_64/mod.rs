@@ -7,8 +7,8 @@ use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::with_vma_allocator;
-use crate::util::boot_module::{BootModule, BootModuleProvider};
-use multiboot2::{ElfSectionFlags, ModuleIter};
+use crate::util::boot_module::{BootModule, BootModuleProvider, Range};
+use multiboot2::{BootInformation, ElfSectionFlags, ModuleIter};
 
 #[macro_use]
 pub mod macros;
@@ -60,27 +60,51 @@ impl TSS {
     }
 }*/
 
-#[derive(Clone)]
-pub struct ArchBootModuleProvider<'a> {
+struct ArchBootModuleProvider<'a> {
     module_iter: ModuleIter<'a>,
+    range: Option<Range>,
 }
 
 impl<'a> ArchBootModuleProvider<'a> {
     /// Creates a new module provider for this arch.
-    pub fn new(module_iter: ModuleIter<'a>) -> Self {
-        Self { module_iter }
+    pub fn new(boot_info: &'a BootInformation) -> Self {
+        let lowest_module = boot_info
+            .module_tags()
+            .min_by_key(|module| module.start_address());
+        let highest_module = boot_info
+            .module_tags()
+            .max_by_key(|module| module.end_address());
+
+        let range = match (lowest_module, highest_module) {
+            (Some(lowest), Some(highest)) => Some(Range {
+                start: VirtAddr::new(lowest.start_address() as usize),
+                len: (highest.end_address() - lowest.start_address()) as usize,
+            }),
+            (_, _) => None,
+        };
+
+        Self {
+            module_iter: boot_info.module_tags(),
+            range,
+        }
     }
 }
 
-impl BootModuleProvider for ArchBootModuleProvider<'_> {}
+impl BootModuleProvider for ArchBootModuleProvider<'_> {
+    fn range(&self) -> Option<Range> {
+        self.range
+    }
+}
 
 impl Iterator for ArchBootModuleProvider<'_> {
     type Item = BootModule;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.module_iter.next().map(|item| BootModule {
-            start: VirtAddr::new(item.start_address() as usize),
-            len: (item.end_address() - item.start_address()) as usize,
+            range: Range {
+                start: VirtAddr::new(item.start_address() as usize),
+                len: (item.end_address() - item.start_address()) as usize,
+            },
         })
     }
 }
@@ -99,14 +123,14 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let kernel_end = unsafe { &KERNEL_END_PTR as *const _ as usize };
     let mboot_struct = unsafe { multiboot2::load(mboot_addr) };
     let mboot_end = mboot_struct.end_address();
+
+    let boot_modules = ArchBootModuleProvider::new(&mboot_struct);
+
     let reserved_end = {
         let mut reserved_end = max(kernel_end, mboot_end);
 
-        let highest_module = mboot_struct
-            .module_tags()
-            .max_by_key(|module| module.end_address());
-        if let Some(highest_module) = highest_module {
-            reserved_end = max(reserved_end, highest_module.end_address() as usize);
+        if let Some(range) = boot_modules.range {
+            reserved_end = max(reserved_end, range.start.as_usize() + range.len);
         }
 
         reserved_end
@@ -118,13 +142,10 @@ pub extern "C" fn entry(mboot_addr: usize) {
         let sections = mboot_struct
             .elf_sections_tag()
             .expect("no elf sections tag");
-        for x in sections.sections() {
-            if x.flags().is_empty()
-                || x.flags() == ElfSectionFlags::WRITABLE | ElfSectionFlags::ALLOCATED
-            {
-                continue;
-            }
-
+        for x in sections.sections().filter(|x| {
+            !x.flags().is_empty()
+                && x.flags() != ElfSectionFlags::WRITABLE | ElfSectionFlags::ALLOCATED
+        }) {
             let mut paging_flags: EntryFlags = EntryFlags::PRESENT;
 
             if x.flags().contains(ElfSectionFlags::WRITABLE) {
@@ -148,15 +169,10 @@ pub extern "C" fn entry(mboot_addr: usize) {
         }
     }
 
-    // TODO: make sure modules are mapped
-
     with_pmm(|pmm| pmm.init(&mboot_struct, PhysAddr::new(reserved_end)));
 
     let reserved_end = VirtAddr::new(reserved_end).align_up();
-    crate::kernel_run(
-        reserved_end,
-        ArchBootModuleProvider::new(mboot_struct.module_tags()),
-    );
+    crate::kernel_run(reserved_end, boot_modules);
 }
 
 /// Inits the VMA regions. May only be called once per VMA allocator.

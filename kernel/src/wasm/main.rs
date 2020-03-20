@@ -181,7 +181,7 @@ impl<'a> Instantiation<'a> {
         }
 
         // Debug code: print the bytes of the code section.
-        self.print_code_as_hex(&code_vma);
+        // self.print_code_as_hex(&code_vma);
 
         // Now the code is written, change it to read-only & executable.
         {
@@ -204,6 +204,7 @@ impl<'a> Instantiation<'a> {
     }
 
     /// Print code section as hex.
+    #[allow(dead_code)]
     fn print_code_as_hex(&self, code_vma: &MappedVma) {
         for i in 0..self.compile_result.total_size {
             let address = code_vma.address().as_usize() + i;

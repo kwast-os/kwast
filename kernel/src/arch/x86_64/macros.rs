@@ -7,9 +7,9 @@ macro_rules! println {
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {
-        //#[cfg(not(feature = "integration-test"))]
-        //    $crate::arch::vga_text::_print(format_args!($($arg)*));
-        //#[cfg(feature = "integration-test")]
+        #[cfg(not(feature = "integration-test"))]
+            $crate::arch::vga_text::_print(format_args!($($arg)*));
+        #[cfg(feature = "integration-test")]
             $crate::arch::serial::_print(format_args!($($arg)*));
     }
 }

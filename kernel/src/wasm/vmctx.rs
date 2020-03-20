@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::mem::{align_of, size_of};
 use core::slice;
-use cranelift_wasm::{Global, TableIndex, GlobalInit};
+use cranelift_wasm::{Global, GlobalInit, TableIndex};
 
 pub const HEAP_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
 

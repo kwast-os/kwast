@@ -75,11 +75,13 @@ impl<'a> IntoIterator for Tar<'a> {
     type Item = TarFile<'a>;
     type IntoIter = TarIterator<'a>;
 
+    #[allow(clippy::cast_ptr_alignment)]
     fn into_iter(self) -> Self::IntoIter {
+        assert_eq!(self.contents.as_ptr() as usize % 512, 0);
         let ptr = self.contents.as_ptr() as *const PosixHeader;
         TarIterator {
             ptr,
-            end: unsafe { ptr.offset((self.contents.len() / 512) as isize) },
+            end: unsafe { ptr.add(self.contents.len() / 512) },
             _phantom: PhantomData,
         }
     }
@@ -104,7 +106,7 @@ impl<'a> Iterator for TarIterator<'a> {
         let size = self.octal_string_to_number(&header.size)?;
         let data_ptr = unsafe { self.ptr.offset(1) };
 
-        self.ptr = unsafe { data_ptr.offset(((size + 512 - 1) / 512) as isize) };
+        self.ptr = unsafe { data_ptr.add((size + 512 - 1) / 512) };
 
         if self.ptr >= self.end {
             return None;

@@ -1,9 +1,7 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
 use crate::wasm::module_env::ModuleEnv;
-use crate::wasm::vmctx::{
-    VmContext, VmContextContainer, VmTable, VmTableElement, HEAP_GUARD_SIZE, HEAP_SIZE,
-};
+use crate::wasm::vmctx::{VmContext, VmTable, VmTableElement, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::vec::Vec;
 use core::mem::size_of;
 use cranelift_codegen::cursor::FuncCursor;
@@ -101,25 +99,31 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         let table_offset_in_vmctx = VmContext::table_entry_offset(
             self.module_env.function_imports.len() as u32,
             index.as_u32(),
-        );
+        ) as i64;
+
+        let base_gv_offset = func.create_global_value(GlobalValueData::IAddImm {
+            base: vmctx,
+            offset: Imm64::new(table_offset_in_vmctx),
+            global_type: self.pointer_type(),
+        });
 
         let base_gv = func.create_global_value(GlobalValueData::Load {
-            base: vmctx,
-            offset: Offset32::new(table_offset_in_vmctx as i32), // TODO: possibly does not fit
+            base: base_gv_offset,
+            offset: Offset32::new(0),
             global_type: self.pointer_type(),
             readonly: false,
         });
 
         let bound_gv = func.create_global_value(GlobalValueData::Load {
-            base: vmctx,
-            offset: Offset32::new(table_offset_in_vmctx as i32 + VmTable::amount_items_offset()), // TODO: possibly does not fit
+            base: base_gv_offset,
+            offset: Offset32::new(VmTable::amount_items_offset()),
             global_type: types::I32,
             readonly: false,
         });
 
         Ok(func.create_table(TableData {
             base_gv,
-            min_size: Uimm64::new(0), // TODO, but works for now(?)
+            min_size: Uimm64::new(self.module_env.tables[index.as_u32() as usize].minimum as u64),
             bound_gv,
             element_size: Uimm64::new(size_of::<VmTableElement>() as u64),
             index_type: types::I32,

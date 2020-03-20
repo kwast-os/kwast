@@ -99,12 +99,14 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     // Make sure the boot modules are mapped.
     if let Some(range) = boot_modules.range() {
         let mut mapping = ActiveMapping::get();
-        mapping.map_range_physical(
-            range.start,
-            PhysAddr::new(range.start.as_usize()),
-            range.len,
-            EntryFlags::PRESENT,
-        ).expect("mapping modules");
+        mapping
+            .map_range_physical(
+                range.start,
+                PhysAddr::new(range.start.as_usize()),
+                range.len,
+                EntryFlags::PRESENT,
+            )
+            .expect("mapping modules");
     }
 
     // Handle boot modules.

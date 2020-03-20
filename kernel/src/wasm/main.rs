@@ -2,7 +2,7 @@
 
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{CodegenError, Context};
-use cranelift_wasm::translate_module;
+use cranelift_wasm::{translate_module, Global};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
@@ -46,6 +46,7 @@ struct CompileResult {
     function_imports: Vec<FunctionImport>,
     tables: Vec<cranelift_wasm::Table>,
     table_elements: Vec<TableElements>,
+    globals: Vec<Global>,
     total_size: usize,
 }
 
@@ -235,6 +236,7 @@ impl<'a> Instantiation<'a> {
             unsafe {
                 VmContextContainer::new(
                     heap_vma.address(),
+                    self.compile_result.globals.len() as u32,
                     self.compile_result.function_imports.len() as u32,
                     tables,
                 )
@@ -243,6 +245,7 @@ impl<'a> Instantiation<'a> {
 
         // Resolve import addresses.
         {
+            // Safety: we are the only ones who have access to this slice right now.
             let function_imports = unsafe { vmctx_container.function_imports_as_mut_slice() };
             for (i, import) in self.compile_result.function_imports.iter().enumerate() {
                 println!("{} {:?}", i, import);
@@ -282,6 +285,16 @@ impl<'a> Instantiation<'a> {
             }
 
             vmctx_container.write_tables_to_vmctx();
+        }
+
+        // Create globals
+        {
+            for (i, global) in self.compile_result.globals.iter().enumerate() {
+                // Safety: valid index
+                unsafe {
+                    vmctx_container.set_global(i as u32, &global);
+                }
+            }
         }
 
         vmctx_container
@@ -359,6 +372,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         function_imports: env.function_imports,
         tables: env.tables,
         table_elements: env.table_elements,
+        globals: env.globals,
         total_size,
     })
 }

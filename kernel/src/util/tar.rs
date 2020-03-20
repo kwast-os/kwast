@@ -99,6 +99,8 @@ impl<'a> Iterator for TarIterator<'a> {
             return None;
         }
 
+        // TODO: check chksum
+
         let size = self.octal_string_to_number(&header.size)?;
         let data_ptr = unsafe { self.ptr.offset(1) };
 

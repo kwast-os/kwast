@@ -65,10 +65,18 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
         let vmctx = self.vmctx(func);
-        let global = self.module_env.globals[index.as_u32() as usize];
+        let index = index.as_u32();
+        let global = self.module_env.globals[index as usize];
+
+        let gv = func.create_global_value(GlobalValueData::IAddImm {
+            base: vmctx,
+            offset: Imm64::new(VmContext::global_entry_offset(index) as i64),
+            global_type: types::I64,
+        });
+
         Ok(GlobalVariable::Memory {
-            gv: vmctx, // TODO
-            offset: Offset32::new(0x1234), // TODO
+            gv,
+            offset: Offset32::new(0),
             ty: global.ty,
         })
     }
@@ -103,6 +111,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         let vmctx = self.vmctx(func);
 
         let table_offset_in_vmctx = VmContext::table_entry_offset(
+            self.module_env.globals.len() as u32,
             self.module_env.function_imports.len() as u32,
             index.as_u32(),
         ) as i64;
@@ -207,9 +216,10 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             let vmctx = self.vmctx(&mut pos.func);
             let gv = pos.func.create_global_value(GlobalValueData::IAddImm {
                 base: vmctx,
-                offset: Imm64::new(
-                    VmContext::imported_func_entry_offset(callee_index.as_u32()) as i64
-                ),
+                offset: Imm64::new(VmContext::imported_func_entry_offset(
+                    self.module_env.globals.len() as u32,
+                    callee_index.as_u32(),
+                ) as i64),
                 global_type: self.pointer_type(),
             });
             let addr = pos.func.create_global_value(GlobalValueData::Load {

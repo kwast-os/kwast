@@ -62,6 +62,7 @@ impl CompileResult {
 }
 
 impl<'a> Instantiation<'a> {
+    /// Creates a new instantiation.
     fn new(compile_result: &'a CompileResult) -> Self {
         let capacity = compile_result.contexts.len();
 
@@ -71,6 +72,7 @@ impl<'a> Instantiation<'a> {
         }
     }
 
+    /// Gets the offset of the defined functions in the function array.
     fn defined_function_offset(&self) -> usize {
         self.compile_result.function_imports.len()
     }
@@ -81,6 +83,7 @@ impl<'a> Instantiation<'a> {
         VirtAddr::new(code_vma.address().as_usize() + offset)
     }
 
+    /// Emit code.
     fn emit(&mut self) -> Result<(MappedVma, LazilyMappedVma, Vec<RelocSink>), Error> {
         // Create code area, will be made executable read-only later.
         let code_vma = {
@@ -178,14 +181,7 @@ impl<'a> Instantiation<'a> {
         }
 
         // Debug code: print the bytes of the code section.
-        for i in 0..self.compile_result.total_size {
-            let address = code_vma.address().as_usize() + i;
-            unsafe {
-                let ptr = address as *const u8;
-                print!("{:#x}, ", *ptr);
-            }
-        }
-        println!();
+        self.print_code_as_hex(&code_vma);
 
         // Now the code is written, change it to read-only & executable.
         {
@@ -207,6 +203,19 @@ impl<'a> Instantiation<'a> {
         .map_err(Error::MemoryError)?)
     }
 
+    /// Print code section as hex.
+    fn print_code_as_hex(&self, code_vma: &MappedVma) {
+        for i in 0..self.compile_result.total_size {
+            let address = code_vma.address().as_usize() + i;
+            unsafe {
+                let ptr = address as *const u8;
+                print!("{:#x}, ", *ptr);
+            }
+        }
+        println!();
+    }
+
+    /// Creates the VmContext container.
     fn create_vmctx_container(
         &self,
         code_vma: &MappedVma,
@@ -255,11 +264,10 @@ impl<'a> Instantiation<'a> {
         {
             // Fill in the tables.
             for elements in &self.compile_result.table_elements {
-                // TODO: support this
+                // TODO: support this and verify bounds?
                 assert!(elements.base.is_none(), "not implemented yet");
-                assert_eq!(elements.offset, 0, "not implemented yet");
 
-                let offset = 0usize;
+                let offset = elements.offset;
                 let table = vmctx_container.get_table(elements.index);
 
                 for (i, func_idx) in elements.elements.iter().enumerate() {
@@ -279,6 +287,7 @@ impl<'a> Instantiation<'a> {
     }
 }
 
+/// Runs WebAssembly from a buffer.
 pub fn run(buffer: &[u8]) -> Result<(), Error> {
     let thread = {
         let compile_result = compile(buffer)?;
@@ -297,6 +306,7 @@ fn test_func(_vmctx: *const VmContext, param: i32) {
     //arch::halt();
 }
 
+/// Compiles a WebAssembly buffer.
 fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
     let isa_builder = cranelift_native::builder().unwrap();
     let mut flag_builder = settings::builder();

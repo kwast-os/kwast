@@ -14,6 +14,9 @@
 #[macro_use]
 extern crate alloc;
 
+#[macro_use]
+extern crate memoffset;
+
 use core::panic::PanicInfo;
 
 use arch::interrupts;

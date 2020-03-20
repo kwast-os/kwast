@@ -10,8 +10,7 @@ struct PosixHeader {
     mode: [u8; 8],
     uid: [u8; 8],
     gid: [u8; 8],
-    size: [u8; 11],
-    size_zero_byte: u8,
+    size: [u8; 12],
     mktime: [u8; 12],
     chksum: [u8; 8],
     typeflag: u8,
@@ -64,6 +63,11 @@ impl<'a> TarFile<'a> {
 impl<'a> TarIterator<'a> {
     /// Converts an octal string to a number.
     fn octal_string_to_number(&self, str: &'a [u8]) -> Option<usize> {
+        let str = match str.iter().position(|x| *x == 0) {
+            Some(i) => &str[..i],
+            None => str,
+        };
+
         str.iter().try_fold(0, |sum, c| match *c {
             b'0'..=b'9' => Some(sum * 8 + (*c - b'0') as usize),
             _ => None,
@@ -95,13 +99,34 @@ impl<'a> Iterator for TarIterator<'a> {
             return None;
         }
 
+        // Calculate checksum
+        let chksum = unsafe {
+            let chksum_offset = offset_of!(PosixHeader, chksum);
+            let mut sum = 0u32;
+            let ptr = self.ptr as *const u8;
+
+            for i in 0..chksum_offset {
+                sum += *ptr.add(i) as u32;
+            }
+
+            sum += 8 * b' ' as u32;
+
+            for i in chksum_offset + 8..512 {
+                sum += *ptr.add(i) as u32;
+            }
+
+            sum
+        };
+
         let header = unsafe { &*self.ptr };
+
+        if self.octal_string_to_number(&header.chksum)? != chksum as usize {
+            return None;
+        }
 
         if header.name[0] == 0 {
             return None;
         }
-
-        // TODO: check chksum
 
         let size = self.octal_string_to_number(&header.size)?;
         let data_ptr = unsafe { self.ptr.offset(1) };

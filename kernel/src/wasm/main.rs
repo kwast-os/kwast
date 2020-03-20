@@ -181,7 +181,7 @@ impl<'a> Instantiation<'a> {
         }
 
         // Debug code: print the bytes of the code section.
-        // self.print_code_as_hex(&code_vma);
+        self.print_code_as_hex(&code_vma);
 
         // Now the code is written, change it to read-only & executable.
         {

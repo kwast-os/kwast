@@ -61,10 +61,16 @@ impl<'m, 'data> TargetEnvironment for FuncEnv<'m, 'data> {
 impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     fn make_global(
         &mut self,
-        _func: &mut Function,
-        _index: GlobalIndex,
+        func: &mut Function,
+        index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
-        unimplemented!()
+        let vmctx = self.vmctx(func);
+        let global = self.module_env.globals[index.as_u32() as usize];
+        Ok(GlobalVariable::Memory {
+            gv: vmctx, // TODO
+            offset: Offset32::new(0x1234), // TODO
+            ty: global.ty,
+        })
     }
 
     fn make_heap(&mut self, func: &mut Function, index: MemoryIndex) -> WasmResult<Heap> {

@@ -54,6 +54,8 @@ pub struct ModuleEnv<'data> {
     pub tables: Vec<Table>,
     /// Table elements.
     pub table_elements: Vec<TableElements>,
+    /// Globals.
+    pub globals: Vec<Global>,
 }
 
 impl<'data> ModuleEnv<'data> {
@@ -69,6 +71,7 @@ impl<'data> ModuleEnv<'data> {
             function_imports: Vec::new(),
             tables: Vec::new(),
             table_elements: Vec::new(),
+            globals: Vec::new(),
         }
     }
 
@@ -185,10 +188,13 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
+    fn reserve_globals(&mut self, num: u32) -> WasmResult<()> {
+        self.globals.reserve_exact(num as usize);
+        Ok(())
+    }
+
     fn declare_global(&mut self, global: Global) -> WasmResult<()> {
-        println!("{:?}", global);
-        // TODO
-        //unimplemented!()
+        self.globals.push(global);
         Ok(())
     }
 

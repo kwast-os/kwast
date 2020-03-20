@@ -2,11 +2,11 @@ use crate::arch::address::VirtAddr;
 use crate::arch::paging::PAGE_SIZE;
 use crate::wasm::table::Table;
 use alloc::alloc::{alloc, dealloc, handle_alloc_error};
+use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::mem::{align_of, size_of};
 use core::slice;
 use cranelift_wasm::TableIndex;
-use alloc::vec::Vec;
 
 pub const HEAP_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
 
@@ -14,14 +14,17 @@ pub const HEAP_GUARD_SIZE: u64 = PAGE_SIZE as u64;
 
 /// Table representation as it is for the VmContext.
 #[repr(C)]
+#[derive(Debug)]
 pub struct VmTable {
     /// Base address to the function pointers.
     pub base_address: VirtAddr,
+    /// Amount of items currently in.
+    pub amount_items: u32,
 }
 
 /// A single element in the table representation for a VmContext.
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct VmTableElement {
     pub address: VirtAddr,
 }
@@ -38,6 +41,20 @@ pub struct VmContextContainer {
     ptr: *mut VmContext,
     num_imported_funcs: u32,
     tables: Vec<Table>,
+}
+
+impl VmTableElement {
+    /// Offset of the field `address`.
+    pub const fn address_offset() -> i32 {
+        0
+    }
+}
+
+impl VmTable {
+    /// Offset of the field `amount_items`.
+    pub const fn amount_items_offset() -> i32 {
+        size_of::<VirtAddr>() as i32
+    }
 }
 
 impl VmTableElement {
@@ -72,8 +89,13 @@ impl VmContext {
     }
 
     /// Offset of the tables.
-    pub const fn table_offset(num_imported_funcs: u32) -> isize {
+    pub const fn tables_offset(num_imported_funcs: u32) -> isize {
         Self::imported_func_entry_offset(num_imported_funcs)
+    }
+
+    /// Offset of a table.
+    pub const fn table_entry_offset(num_imported_funcs: u32, index: u32) -> isize {
+        Self::tables_offset(num_imported_funcs) + (index as usize * size_of::<VmTable>()) as isize
     }
 
     /// Calculates the size of the context.
@@ -124,7 +146,7 @@ impl VmContextContainer {
     /// Unsafe because you might be able to get multiple mutable references.
     pub unsafe fn tables_as_mut_slice(&self) -> &mut [VmTable] {
         // Safety: we allocated the memory correctly and the bounds are correct at this point.
-        let ptr = (self.ptr as *mut u8).offset(VmContext::table_offset(self.num_imported_funcs))
+        let ptr = (self.ptr as *mut u8).offset(VmContext::tables_offset(self.num_imported_funcs))
             as *mut VmTable;
         slice::from_raw_parts_mut(ptr, self.tables.len())
     }
@@ -139,6 +161,7 @@ impl VmContextContainer {
         let vm_tables = unsafe { self.tables_as_mut_slice() };
 
         for (table, vm_table) in self.tables.iter().zip(vm_tables.iter_mut()) {
+            println!("Written {:?}", table.as_vm_table());
             *vm_table = table.as_vm_table();
         }
     }

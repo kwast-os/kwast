@@ -1,8 +1,11 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
 use crate::wasm::module_env::ModuleEnv;
-use crate::wasm::vmctx::{VmContext, HEAP_GUARD_SIZE, HEAP_SIZE};
+use crate::wasm::vmctx::{
+    VmContext, VmContextContainer, VmTable, VmTableElement, HEAP_GUARD_SIZE, HEAP_SIZE,
+};
 use alloc::vec::Vec;
+use core::mem::size_of;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::{
@@ -93,29 +96,32 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     }
 
     fn make_table(&mut self, func: &mut Function, index: TableIndex) -> Result<Table, WasmError> {
-        // TODO: this is just to get it to continue right now
-
         let vmctx = self.vmctx(func);
+
+        let table_offset_in_vmctx = VmContext::table_entry_offset(
+            self.module_env.function_imports.len() as u32,
+            index.as_u32(),
+        );
 
         let base_gv = func.create_global_value(GlobalValueData::Load {
             base: vmctx,
-            offset: Offset32::new(0), // TODO
+            offset: Offset32::new(table_offset_in_vmctx as i32), // TODO: possibly does not fit
             global_type: self.pointer_type(),
             readonly: false,
         });
 
         let bound_gv = func.create_global_value(GlobalValueData::Load {
             base: vmctx,
-            offset: Offset32::new(0), // TODO
+            offset: Offset32::new(table_offset_in_vmctx as i32 + VmTable::amount_items_offset()), // TODO: possibly does not fit
             global_type: types::I32,
             readonly: false,
         });
 
         Ok(func.create_table(TableData {
             base_gv,
-            min_size: Uimm64::new(0),
+            min_size: Uimm64::new(0), // TODO, but works for now(?)
             bound_gv,
-            element_size: Uimm64::new(1234),
+            element_size: Uimm64::new(size_of::<VmTableElement>() as u64),
             index_type: types::I32,
         }))
     }
@@ -159,7 +165,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             self.pointer_type(),
             MemFlags::trusted(),
             table_entry_addr,
-            120, // TODO
+            VmTableElement::address_offset(),
         );
 
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();

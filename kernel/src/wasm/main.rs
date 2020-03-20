@@ -185,6 +185,7 @@ impl<'a> Instantiation<'a> {
                 print!("{:#x}, ", *ptr);
             }
         }
+        println!();
 
         // Now the code is written, change it to read-only & executable.
         {

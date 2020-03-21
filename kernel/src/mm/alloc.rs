@@ -240,7 +240,10 @@ impl Cache {
         debug_assert!(slots_count > 1);
 
         let max_color = (best_wastage / alignment) * alignment;
-        //println!("best_wastage: {}, max_color: {}", best_wastage, max_color);
+        // println!(
+        //     "best_wastage: {}, max_color: {}, order: {}, slots_count: {}",
+        //     best_wastage, max_color, order, slots_count
+        // );
 
         Cache::new(
             obj_size as u32,
@@ -254,7 +257,7 @@ impl Cache {
 
     /// Cleans up free slab(s).
     fn cleanup_free_slab(&mut self, space_manager: &mut SpaceManager) {
-        debug_assert!(self.free_slab_count > 0);
+        debug_assert!(self.free_slab_count > 1);
 
         // Find oldest in chain.
         let mut oldest = unsafe {
@@ -266,12 +269,14 @@ impl Cache {
         };
         let oldest = unsafe { oldest.as_mut() };
 
+        debug_assert!(oldest.next.is_none());
+
         // Cleanup oldest
-        if unlikely(oldest.prev.is_none()) {
+        if let SlabLink(Some(mut prev)) = oldest.prev.take() {
+            unsafe { prev.as_mut() }.next = SlabLink(None);
+        } else {
             // No previous, so must be the first one in the chain.
             self.free = SlabLink(None);
-        } else {
-            unsafe { oldest.prev.unwrap().as_mut() }.next = SlabLink(None);
         }
         self.free_slab_count -= 1;
         space_manager.free_slab(self.slab_order as usize, oldest);
@@ -353,24 +358,27 @@ impl Cache {
         let alignment = PAGE_SIZE << self.slab_order as usize;
         let slab_addr = space_manager.alloc_area_start.as_usize() + (offset & !(alignment - 1));
         let slab = unsafe { &mut *(slab_addr as *mut Slab) };
-        let old_free_count = slab.free_count;
 
         // Can now deallocate
         slab.dealloc(ptr);
 
         // Update partial & free pointers
-        if old_free_count == 0 {
+        if slab.free_count == 1 {
             // It became a partial, and it was full, so it wasn't linked to.
             debug_assert!(slab.next.is_none());
             debug_assert!(slab.prev.is_none());
             slab.next = self.partial;
             self.partial = SlabLink(NonNull::new(slab));
+
+            if let SlabLink(Some(mut next)) = slab.next {
+                unsafe { next.as_mut() }.prev = self.partial;
+            }
         } else {
             // It was linked, either as a free or as a partial slab.
-            if old_free_count + 1 == self.slots_count {
-                //println!("Convert partial to free slab");
-
+            // If it was a partial, it could have become a free slab.
+            if slab.free_count == self.slots_count {
                 // It was a partial slab and it became a free slab.
+
                 if let SlabLink(Some(mut next)) = slab.next {
                     unsafe { next.as_mut() }.prev = slab.prev;
                 }
@@ -380,8 +388,15 @@ impl Cache {
                     // No previous, so must be the first.
                     self.partial = slab.next;
                 }
+
                 slab.next = self.free;
+                slab.prev = SlabLink(None);
                 self.free = SlabLink(NonNull::new(slab));
+
+                if let SlabLink(Some(mut next)) = slab.next {
+                    unsafe { next.as_mut() }.prev = self.free;
+                }
+
                 self.free_slab_count += 1;
 
                 if self.free_slab_count >= 2 {
@@ -419,7 +434,6 @@ impl<'t> SpaceManager<'t> {
     }
 
     /// Offset to address.
-    #[inline]
     fn offset_to_addr(&self, offset: usize) -> VirtAddr {
         self.alloc_area_start + offset * PAGE_SIZE
     }
@@ -431,7 +445,7 @@ impl<'t> SpaceManager<'t> {
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
         if unlikely(ActiveMapping::get().map_range(addr, size, flags).is_err()) {
-            self.tree.dealloc(offset);
+            self.tree.dealloc(order, offset);
             null_mut()
         } else {
             addr.as_mut()
@@ -441,7 +455,7 @@ impl<'t> SpaceManager<'t> {
     /// Unmaps the area assigned to the pointer.
     fn ptr_unmap(&mut self, order: usize, ptr: *mut u8) {
         let offset = (ptr as usize - self.alloc_area_start.as_usize()) / PAGE_SIZE;
-        self.tree.dealloc(offset);
+        self.tree.dealloc(order, offset);
 
         let size = PAGE_SIZE << order;
         ActiveMapping::get().free_and_unmap_range(VirtAddr::new(ptr as usize), size);
@@ -557,7 +571,7 @@ impl Heap {
 
     /// Converts a size to an order.
     fn size_to_order(size: usize) -> usize {
-        let mut size = size / PAGE_SIZE;
+        let mut size = (size + PAGE_SIZE - 1) / PAGE_SIZE;
 
         size -= 1;
         size |= size >> 1;
@@ -582,7 +596,11 @@ impl Heap {
                 .size_to_cache(alloc_size)
                 .alloc(&mut self.space_manager)
         };
-        debug_assert!(ptr as usize >= self.space_manager.alloc_area_start.as_usize());
+        debug_assert!(
+            ptr as usize == 0 || ptr as usize >= self.space_manager.alloc_area_start.as_usize(),
+            "{:?} is invalid",
+            ptr as usize
+        );
         ptr
     }
 

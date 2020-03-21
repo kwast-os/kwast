@@ -2,7 +2,7 @@ use core::cmp;
 use core::intrinsics::unlikely;
 
 /// Amount of top nodes.
-pub const MAX_LEVEL: usize = 15;
+pub const MAX_LEVEL: usize = 18; // TODO: choose a good size?
 
 /// Amount of nodes.
 pub const NODE_COUNT: usize = (1 << MAX_LEVEL) - 1;
@@ -56,25 +56,23 @@ impl Tree {
     }
 
     /// Allocate in tree.
-    pub fn alloc(&mut self, size: usize) -> Option<usize> {
-        // Make logical
-        let size = size + 1;
-
-        if unlikely(self.nodes[0] < size as u8) {
+    pub fn alloc(&mut self, order: usize) -> Option<usize> {
+        if unlikely(self.nodes[0] < 1 + order as u8) {
             return None;
         }
 
         // Find node with smallest size large enough to hold the requested size
-        let wanted_level = MAX_LEVEL - size;
+        let wanted_level = MAX_LEVEL - 1 - order;
         let mut index = 0;
         for _ in 0..wanted_level {
             let left_index = self.left_index(index);
             let right_index = self.right_index(index);
 
             // Because of the check at the beginning, we know one of these two is big enough
-            index = if self.nodes[left_index] >= size as u8 {
+            index = if self.nodes[left_index] > order as u8 {
                 left_index
             } else {
+                debug_assert!(self.nodes[right_index] > order as u8);
                 right_index
             };
         }
@@ -82,7 +80,7 @@ impl Tree {
         // Calculate offset from the index
         let first_index_in_this_level = (1 << wanted_level) - 1;
         let index_in_this_level = index - first_index_in_this_level;
-        let offset = index_in_this_level << (size - 1);
+        let offset = index_in_this_level << order;
 
         // Update the values in the tree so that each node still contains the largest available
         // power of two size in their subtree.
@@ -99,17 +97,19 @@ impl Tree {
     }
 
     // Deallocate in tree.
-    pub fn dealloc(&mut self, offset: usize) {
-        // Go from the bottom row to the top to find our allocation.
-        let mut index = (1 << (MAX_LEVEL - 1)) - 1 + offset;
-        let mut size: u8 = 1;
-        while self.nodes[index] != 0 {
-            index = self.parent_index(index);
-            size += 1;
-        }
+    pub fn dealloc(&mut self, order: usize, offset: usize) {
+        // Calculate the index at which this allocation happened.
+        let mut size = (order + 1) as u8;
+        let wanted_level = MAX_LEVEL - size as usize;
+        let index_in_this_level = offset >> order;
+        let first_index_in_this_level = (1 << wanted_level) - 1;
+        let mut index = index_in_this_level + first_index_in_this_level;
 
         // Update value in the tree to undo the allocation.
+        debug_assert_eq!(self.nodes[index], 0);
         self.nodes[index] = size;
+
+        // Update all parents in the tree.
         while index > 0 {
             index = self.parent_index(index);
             size += 1;
@@ -117,7 +117,10 @@ impl Tree {
             let left_index = self.left_index(index);
             let right_index = self.right_index(index);
 
-            self.nodes[index] = if self.nodes[left_index] == self.nodes[right_index] {
+            // This node becomes a complete node again if both the children are complete nodes.
+            self.nodes[index] = if self.nodes[left_index] == self.nodes[right_index]
+                && self.nodes[left_index] == size - 1
+            {
                 size
             } else {
                 cmp::max(self.nodes[left_index], self.nodes[right_index])

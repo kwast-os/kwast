@@ -345,6 +345,8 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         ctx.func.signature =
             env.get_sig_from_func(FuncIndex::from_u32((idx + defined_function_offset) as u32));
 
+        println!("{:?}", idx);
+
         let FunctionBody { body, offset } = env.func_bodies[idx];
 
         let mut func_trans = FuncTranslator::new();

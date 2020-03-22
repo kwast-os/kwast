@@ -50,6 +50,20 @@ impl<'m, 'data> FuncEnv<'m, 'data> {
         call_args_with_vmctx.extend_from_slice(call_args);
         call_args_with_vmctx
     }
+
+    /// Bulk memory operations unsupported error.
+    fn bulk_memory_unsupported() -> WasmResult<()> {
+        Err(WasmError::Unsupported(
+            "bulk memory operations not supported yet".into(),
+        ))
+    }
+
+    /// Reference types unsupported error.
+    fn reference_types_unsupported<T>() -> WasmResult<T> {
+        Err(WasmError::Unsupported(
+            "reference types not supported yet".into(),
+        ))
+    }
 }
 
 impl<'m, 'data> TargetEnvironment for FuncEnv<'m, 'data> {
@@ -266,7 +280,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _src: Value,
         _len: Value,
     ) -> Result<(), WasmError> {
-        unimplemented!()
+        Self::bulk_memory_unsupported()
     }
 
     fn translate_memory_fill(
@@ -278,7 +292,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _val: Value,
         _len: Value,
     ) -> Result<(), WasmError> {
-        unimplemented!()
+        Self::bulk_memory_unsupported()
     }
 
     fn translate_memory_init(
@@ -291,11 +305,11 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _src: Value,
         _len: Value,
     ) -> Result<(), WasmError> {
-        unimplemented!()
+        Self::bulk_memory_unsupported()
     }
 
     fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> Result<(), WasmError> {
-        unimplemented!()
+        Self::bulk_memory_unsupported()
     }
 
     fn translate_table_size(
@@ -303,8 +317,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _pos: FuncCursor,
         _index: TableIndex,
         _table: Table,
-    ) -> Result<Value, WasmError> {
-        unimplemented!()
+    ) -> WasmResult<Value> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_table_grow(
@@ -313,8 +327,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _table_index: u32,
         _delta: Value,
         _init_value: Value,
-    ) -> Result<Value, WasmError> {
-        unimplemented!()
+    ) -> WasmResult<Value> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_table_get(
@@ -322,8 +336,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _pos: FuncCursor,
         _table_index: u32,
         _index: Value,
-    ) -> Result<Value, WasmError> {
-        unimplemented!()
+    ) -> WasmResult<Value> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_table_set(
@@ -332,8 +346,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _table_index: u32,
         _value: Value,
         _index: Value,
-    ) -> Result<(), WasmError> {
-        unimplemented!()
+    ) -> WasmResult<()> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_table_copy(
@@ -346,8 +360,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _dst: Value,
         _src: Value,
         _len: Value,
-    ) -> Result<(), WasmError> {
-        unimplemented!()
+    ) -> WasmResult<()> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_table_fill(
@@ -357,8 +371,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _dst: Value,
         _val: Value,
         _len: Value,
-    ) -> Result<(), WasmError> {
-        unimplemented!()
+    ) -> WasmResult<()> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_table_init(
@@ -370,20 +384,16 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _dst: Value,
         _src: Value,
         _len: Value,
-    ) -> Result<(), WasmError> {
-        unimplemented!()
+    ) -> WasmResult<()> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_elem_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> Result<(), WasmError> {
-        unimplemented!()
+        Self::bulk_memory_unsupported()
     }
 
-    fn translate_ref_func(
-        &mut self,
-        _pos: FuncCursor,
-        _func_index: u32,
-    ) -> Result<Value, WasmError> {
-        unimplemented!()
+    fn translate_ref_func(&mut self, _pos: FuncCursor, _func_index: u32) -> WasmResult<Value> {
+        Self::reference_types_unsupported()
     }
 
     fn translate_custom_global_get(

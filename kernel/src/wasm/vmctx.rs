@@ -63,20 +63,23 @@ pub struct VmContextContainer {
 
 impl VmTableElement {
     /// Offset of the field `address`.
-    pub const fn address_offset() -> i32 {
-        0
+    #[inline]
+    pub fn address_offset() -> i32 {
+        offset_of!(Self, address) as i32
     }
 }
 
 impl VmTable {
     /// Offset of the field `base_address`.
-    pub const fn base_address_offset() -> i32 {
-        0
+    #[inline]
+    pub fn base_address_offset() -> i32 {
+        offset_of!(Self, base_address) as i32
     }
 
     /// Offset of the field `amount_items`.
-    pub const fn amount_items_offset() -> i32 {
-        size_of::<VirtAddr>() as i32
+    #[inline]
+    pub fn amount_items_offset() -> i32 {
+        offset_of!(Self, amount_items) as i32
     }
 }
 

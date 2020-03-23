@@ -1,5 +1,6 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
+use crate::wasm::runtime::RuntimeFunctions;
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -38,6 +39,8 @@ pub struct TableElements {
 pub struct ModuleEnv<'data> {
     /// Passed target configuration.
     cfg: isa::TargetFrontendConfig,
+    /// Runtime functions.
+    pub runtime_functions: RuntimeFunctions,
     /// Starting function.
     pub start_func: Option<FuncIndex>,
     /// Vector of all signatures.
@@ -61,9 +64,12 @@ pub struct ModuleEnv<'data> {
 impl<'data> ModuleEnv<'data> {
     /// Creates a new module environment for the given configuration.
     pub fn new(cfg: TargetFrontendConfig) -> Self {
+        let runtime_functions = RuntimeFunctions::new(cfg);
+
         Self {
             cfg,
             start_func: None,
+            runtime_functions,
             signatures: Vec::new(),
             func_types: Vec::new(),
             func_bodies: Vec::new(),

@@ -1,6 +1,7 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
 use crate::wasm::module_env::ModuleEnv;
+use crate::wasm::runtime::{RuntimeFunctionData, RUNTIME_NAMESPACE};
 use crate::wasm::vmctx::{VmContext, VmTable, VmTableElement, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::vec::Vec;
 use core::mem::size_of;
@@ -8,9 +9,9 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::{
     types, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, Heap, HeapData, HeapStyle, Inst, SigRef, Table, Value,
+    GlobalValueData, Heap, HeapData, HeapStyle, Inst, InstBuilder, MemFlags, SigRef, Table,
+    TableData, Value,
 };
-use cranelift_codegen::ir::{InstBuilder, MemFlags, TableData};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_wasm::{
     FuncEnvironment, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex,
@@ -51,8 +52,25 @@ impl<'m, 'data> FuncEnv<'m, 'data> {
         call_args_with_vmctx
     }
 
+    /// Call a runtime function and return the result.
+    fn call_runtime_function(
+        pos: &mut FuncCursor,
+        runtime_func: &RuntimeFunctionData,
+        args: &[Value],
+    ) -> WasmResult<Value> {
+        // TODO: cache?
+        let signature = pos.func.import_signature(runtime_func.signature.clone());
+        let runtime_func_ref = pos.func.import_function(ExtFuncData {
+            name: ExternalName::user(RUNTIME_NAMESPACE, runtime_func.index),
+            signature,
+            colocated: false,
+        });
+        let inst = pos.ins().call(runtime_func_ref, args);
+        Ok(*pos.func.dfg.inst_results(inst).first().unwrap())
+    }
+
     /// Bulk memory operations unsupported error.
-    fn bulk_memory_unsupported() -> WasmResult<()> {
+    fn bulk_memory_unsupported<T>() -> WasmResult<T> {
         Err(WasmError::Unsupported(
             "bulk memory operations not supported yet".into(),
         ))
@@ -253,22 +271,39 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
     fn translate_memory_grow(
         &mut self,
-        _pos: FuncCursor,
-        _index: MemoryIndex,
+        mut pos: FuncCursor,
+        index: MemoryIndex,
         _heap: Heap,
-        _val: Value,
-    ) -> Result<Value, WasmError> {
-        unimplemented!()
+        val: Value,
+    ) -> WasmResult<Value> {
+        // TODO: do we need to verify the index?
+        let index = pos
+            .ins()
+            .iconst(types::I32, Imm64::new(index.as_u32() as i64));
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        Self::call_runtime_function(
+            &mut pos,
+            &self.module_env.runtime_functions.memory_grow,
+            &[vmctx, index, val],
+        )
     }
 
     fn translate_memory_size(
         &mut self,
-        pos: FuncCursor,
+        mut pos: FuncCursor,
         index: MemoryIndex,
-        heap: Heap,
-    ) -> Result<Value, WasmError> {
-        println!("{:?} {:?} {:?}", pos.func, index, heap);
-        unimplemented!()
+        _heap: Heap,
+    ) -> WasmResult<Value> {
+        // TODO: do we need to verify the index?
+        let index = pos
+            .ins()
+            .iconst(types::I32, Imm64::new(index.as_u32() as i64));
+        let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
+        Self::call_runtime_function(
+            &mut pos,
+            &self.module_env.runtime_functions.memory_size,
+            &[vmctx, index],
+        )
     }
 
     fn translate_memory_copy(
@@ -279,7 +314,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _dst: Value,
         _src: Value,
         _len: Value,
-    ) -> Result<(), WasmError> {
+    ) -> WasmResult<()> {
         Self::bulk_memory_unsupported()
     }
 
@@ -291,7 +326,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _dst: Value,
         _val: Value,
         _len: Value,
-    ) -> Result<(), WasmError> {
+    ) -> WasmResult<()> {
         Self::bulk_memory_unsupported()
     }
 
@@ -304,11 +339,11 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _dst: Value,
         _src: Value,
         _len: Value,
-    ) -> Result<(), WasmError> {
+    ) -> WasmResult<()> {
         Self::bulk_memory_unsupported()
     }
 
-    fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> Result<(), WasmError> {
+    fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
         Self::bulk_memory_unsupported()
     }
 

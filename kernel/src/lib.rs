@@ -111,7 +111,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
             )
             .expect("mapping modules");
     }
-    
+
     interrupts::enable();
     interrupts::setup_timer();
 

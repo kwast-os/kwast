@@ -33,7 +33,7 @@ volatile = "^0.2.6"
 bit_field = "^0.10.0"
 bitflags = "^1.2.1"
 multiboot2 = "^0.8.1"
-lazy_static = { version = "^1.3.0", features = ["spin_no_std"] }
+lazy_static = { version = "^1.4.0", features = ["spin_no_std"] }
 hashbrown = "^0.7.0"
 memoffset = "0.5"
 cranelift-wasm = { git = "https://github.com/kwast-os/cranelift", branch = "0.59.0", default-features = false, features = ["core"] }

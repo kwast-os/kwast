@@ -106,11 +106,10 @@ impl Scheduler {
         }
 
         // Decide which thread to run next.
-        let (old_thread, next_stack) = {
+        let old_thread = {
             let mut next_thread = self.next_thread();
-            let next_stack = next_thread.stack.get_current_location();
             swap(&mut self.current_thread, &mut next_thread);
-            (next_thread, next_stack)
+            next_thread
         };
 
         match switch_reason {
@@ -129,7 +128,7 @@ impl Scheduler {
             }
         }
 
-        next_stack
+        self.current_thread.stack.get_current_location()
     }
 }
 

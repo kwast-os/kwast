@@ -111,6 +111,9 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
             )
             .expect("mapping modules");
     }
+    
+    interrupts::enable();
+    interrupts::setup_timer();
 
     // Handle boot modules.
     for module in boot_modules {
@@ -119,8 +122,6 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         });
     }
 
-    interrupts::enable();
-    interrupts::setup_timer();
     scheduler::switch_to_next(SwitchReason::RegularSwitch);
     loop {
         arch::halt();

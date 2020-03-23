@@ -299,8 +299,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         _offset: usize,
         _data: &'data [u8],
     ) -> WasmResult<()> {
-        //unimplemented!()
-        // TODO
-        Ok(())
+        println!("{:?} {:?} {:?} {:?}", _memory_index, _base, _offset, _data);
+        unimplemented!()
     }
 }

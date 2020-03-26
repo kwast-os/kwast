@@ -10,10 +10,6 @@ use crate::tasking::scheduler;
 use crate::tasking::scheduler::{with_core_scheduler, SwitchReason};
 use core::intrinsics::unlikely;
 
-extern "C" {
-    static KERNEL_END_PTR: usize;
-}
-
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
 #[repr(C)]

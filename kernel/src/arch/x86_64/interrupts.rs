@@ -8,7 +8,6 @@ use crate::arch::x86_64::paging::PageFaultError;
 use crate::arch::x86_64::port::write_port8;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::{with_core_scheduler, SwitchReason};
-use core::intrinsics::unlikely;
 
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
@@ -277,6 +276,8 @@ extern "x86-interrupt" fn exc_pf(_frame: &mut ISRStackFrame, _err: PageFaultErro
     unsafe {
         asm!("movq %cr2, $0" : "=r" (addr));
     }
+
+    // panic!("Page fault: {:#?}, {:?}, CR2: {:?}", _frame, _err, addr);
 
     crate::mm::page_fault(addr);
 }

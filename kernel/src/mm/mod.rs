@@ -19,7 +19,6 @@ pub unsafe fn init(reserved_end: VirtAddr) {
 /// Page fault handler.
 pub fn page_fault(fault_addr: VirtAddr) {
     // TODO: when to panic the kernel?
-    //panic!("Page fault: {:#?}, {:?}, CR2: {:?}", _frame, _err, addr);
 
     let failed =
         !with_core_scheduler(|scheduler| scheduler.get_current_thread().page_fault(fault_addr));

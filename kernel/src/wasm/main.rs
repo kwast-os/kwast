@@ -13,7 +13,7 @@ use crate::tasking::scheduler;
 use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler, SwitchReason};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
-use crate::wasm::module_env::{Export, FunctionBody, FunctionImport, ModuleEnv, TableElements};
+use crate::wasm::module_env::{Export, FunctionBody, FunctionImport, ModuleEnv, TableElements, DataInitializer};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
 use crate::wasm::runtime::{RUNTIME_MEMORY_GROW_IDX, RUNTIME_MEMORY_SIZE_IDX};
 use crate::wasm::table::Table;
@@ -23,7 +23,7 @@ use crate::wasm::vmctx::{
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::ptr::write_unaligned;
+use core::ptr::{write_unaligned, copy_nonoverlapping};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
 use cranelift_codegen::isa::TargetIsa;
 use hashbrown::HashMap;
@@ -71,10 +71,10 @@ fn wasi_environ_get(_vmctx: &VmContext, environ_ptr: u32, environ_buf: u32) -> u
     0
 }
 
-fn wasi_fd_write(_vmctx: &VmContext) -> (u16, u32) {
+fn wasi_fd_write(_vmctx: &VmContext, fd: u32, iovs_ptr: u32, iovs_len: u32, nwritten: u32) -> u16 {
     // TODO
-    println!("fd_write");
-    (0, 0)
+    println!("fd_write {} {} {} {}", fd, iovs_ptr, iovs_len, nwritten);
+    0
 }
 
 fn wasi_proc_exit(_vmctx: &VmContext, exitcode: u32) {
@@ -99,6 +99,7 @@ struct CompileResult<'data> {
     contexts: Box<[Context]>,
     start_func: Option<FuncIndex>,
     memories: Box<[Memory]>,
+    data_initializers: Box<[DataInitializer<'data>]>,
     function_imports: Box<[FunctionImport]>,
     tables: Box<[cranelift_wasm::Table]>,
     table_elements: Box<[TableElements]>,
@@ -159,12 +160,14 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         let heap_vma = {
             let mem = self.compile_result.memories[0];
-
             let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
 
-            let maximum = mem
-                .maximum
-                .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
+            // TODO: func_env assumes 4GiB is available, also makes it so that we can't construct
+            //       a pointer outside (See issue #10 also)
+            //let maximum = mem
+            //    .maximum
+            //    .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
+            let maximum = HEAP_SIZE;
 
             if minimum as u64 > HEAP_SIZE || maximum > HEAP_SIZE {
                 return Err(Error::MemoryError(MemoryError::InvalidRange));
@@ -232,7 +235,11 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                         _ => unreachable!(),
                     },
                     RelocationTarget::LibCall(_libcall) => unimplemented!(),
-                    RelocationTarget::JumpTable(_jt) => unimplemented!(),
+                    RelocationTarget::JumpTable(jt) => {
+                        let ctx = &self.compile_result.contexts[idx];
+                        let offset = ctx.func.jt_offsets.get(jt).expect("jump table should exist");
+                        self.func_offsets[idx - defined_function_offset] + *offset as usize // TODO: is this correct?
+                    },
                 };
 
                 // Relocate!
@@ -253,6 +260,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                             write_unaligned(reloc_addr as *mut u64, delta as u64);
                         }
                     }
+                    Reloc::X86PCRelRodata4 => { /* ignore */ }
                     _ => unimplemented!(),
                 }
             }
@@ -310,7 +318,6 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         code_vma: &MappedVma,
         heap_vma: &LazilyMappedVma,
     ) -> VmContextContainer {
-        // TODO: run data initializers
         // TODO: split this function
 
         // Create the vm context.
@@ -389,6 +396,27 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                             address: self.get_func_address(code_vma, *func_idx),
                         },
                     );
+                }
+            }
+
+            // Run data initializers
+            {
+                // TODO: bounds check? must not go beyond minimum? Otherwise the init would be odd (also "ensure mapped" would be weird)
+
+                for initializer in self.compile_result.data_initializers.iter() {
+                    assert_eq!(initializer.memory_index.as_u32(), 0);
+                    // TODO: support this
+                    assert!(initializer.base.is_none());
+
+                    // TODO: doesn't work because it's not mapped atm
+                    //       Solution: "ensure mapped" method
+
+                    let offset = heap_vma.address() + initializer.offset;
+                    println!("Copy {:?} to {:?} length {}", initializer.data.as_ptr(), offset.as_mut::<u8>(), initializer.data.len());
+                    let offset = heap_vma.address() + initializer.offset;
+                    unsafe {
+                        copy_nonoverlapping(initializer.data.as_ptr(), offset.as_mut::<u8>(), initializer.data.len());
+                    }
                 }
             }
 
@@ -479,6 +507,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         isa,
         contexts: contexts.into_boxed_slice(),
         memories: env.memories.into_boxed_slice(),
+        data_initializers: env.data_initializers.into_boxed_slice(),
         start_func: env.start_func, // TODO: or should we get the start func here?
         function_imports: env.function_imports.into_boxed_slice(),
         tables: env.tables.into_boxed_slice(),

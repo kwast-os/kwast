@@ -87,6 +87,9 @@ impl Vma {
 
     /// Convert to a lazily mapped Vma.
     pub fn map_lazily(self, allocated_size: usize, flags: EntryFlags) -> LazilyMappedVma {
+        // TODO: move me? & validate
+        ActiveMapping::get().map_range(self.start, allocated_size, flags).unwrap();
+
         LazilyMappedVma {
             vma: self,
             flags,

@@ -45,11 +45,12 @@ pub struct TableElements {
 }
 
 /// Memory data initializer.
+#[derive(Debug)]
 pub struct DataInitializer<'a> {
-    memory_index: MemoryIndex,
-    base: Option<GlobalIndex>,
-    offset: usize,
-    data: &'a [u8],
+    pub memory_index: MemoryIndex,
+    pub base: Option<GlobalIndex>,
+    pub offset: usize,
+    pub data: &'a [u8],
 }
 
 /// The module environment.

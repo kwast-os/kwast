@@ -69,17 +69,16 @@ impl binemit::RelocSink for RelocSink {
     }
 
     fn reloc_constant(&mut self, _: u32, _: Reloc, _: u32) {
-        // Not necessary unless we split the code and rodata.
+        // Not necessary atm because our code and rodata is not split.
     }
 
-    fn reloc_jt(&mut self, _code_offset: u32, _reloc: Reloc, _jt: JumpTable) {
-        println!("{} {:?} {:?}", _code_offset, _reloc, _jt);
-        /*self.relocations.push(Relocation {
+    fn reloc_jt(&mut self, code_offset: u32, reloc: Reloc, jt: JumpTable) {
+        println!("{:?}", reloc);
+        self.relocations.push(Relocation {
             code_offset,
             reloc,
             target: RelocationTarget::JumpTable(jt),
             addend: 0,
-        });*/
-        // TODO: investigate: is this necessary?
+        });
     }
 }

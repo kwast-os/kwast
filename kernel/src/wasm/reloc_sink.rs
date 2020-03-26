@@ -1,5 +1,6 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
+use crate::wasm::runtime::RUNTIME_NAMESPACE;
 use alloc::vec::Vec;
 use cranelift_codegen::binemit::{self, Reloc};
 use cranelift_codegen::ir::{ExternalName, JumpTable, LibCall};
@@ -10,6 +11,8 @@ use cranelift_wasm::FuncIndex;
 pub enum RelocationTarget {
     /// Relocation is for a user-defined function.
     UserFunction(FuncIndex),
+    /// Runtime function.
+    RuntimeFunction(u32),
     /// Relocation is for a lib-defined function.
     LibCall(LibCall),
     /// Relocation is for a jump table.
@@ -26,7 +29,6 @@ pub struct Relocation {
 }
 
 /// Relocation sink, stores relocations for code.
-#[derive(Debug)]
 pub struct RelocSink {
     pub relocations: Vec<Relocation>,
 }
@@ -45,13 +47,17 @@ impl binemit::RelocSink for RelocSink {
     }
 
     fn reloc_external(&mut self, code_offset: u32, reloc: Reloc, name: &ExternalName, addend: i64) {
-        let reloc_type = if let ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 0);
-            RelocationTarget::UserFunction(FuncIndex::from_u32(index))
-        } else if let ExternalName::LibCall(libcall) = *name {
-            RelocationTarget::LibCall(libcall)
-        } else {
-            panic!("unknown relocation type")
+        let reloc_type = match *name {
+            ExternalName::User {
+                namespace: 0,
+                index,
+            } => RelocationTarget::UserFunction(FuncIndex::from_u32(index)),
+            ExternalName::User {
+                namespace: RUNTIME_NAMESPACE,
+                index,
+            } => RelocationTarget::RuntimeFunction(index),
+            ExternalName::LibCall(libcall) => RelocationTarget::LibCall(libcall),
+            _ => unreachable!(),
         };
 
         self.relocations.push(Relocation {
@@ -67,6 +73,7 @@ impl binemit::RelocSink for RelocSink {
     }
 
     fn reloc_jt(&mut self, _code_offset: u32, _reloc: Reloc, _jt: JumpTable) {
+        println!("{} {:?} {:?}", _code_offset, _reloc, _jt);
         /*self.relocations.push(Relocation {
             code_offset,
             reloc,
@@ -74,6 +81,5 @@ impl binemit::RelocSink for RelocSink {
             addend: 0,
         });*/
         // TODO: investigate: is this necessary?
-        unimplemented!()
     }
 }

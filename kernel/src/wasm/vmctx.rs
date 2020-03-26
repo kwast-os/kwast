@@ -8,6 +8,8 @@ use core::mem::{align_of, size_of};
 use core::slice;
 use cranelift_wasm::{Global, GlobalInit, TableIndex};
 
+pub const WASM_PAGE_SIZE: usize = 64 * 1024;
+
 pub const HEAP_SIZE: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
 
 pub const HEAP_GUARD_SIZE: u64 = PAGE_SIZE as u64;

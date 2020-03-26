@@ -10,6 +10,10 @@ use crate::tasking::scheduler;
 use crate::tasking::scheduler::{with_core_scheduler, SwitchReason};
 use core::intrinsics::unlikely;
 
+extern "C" {
+    static KERNEL_END_PTR: usize;
+}
+
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
 #[repr(C)]
@@ -278,15 +282,7 @@ extern "x86-interrupt" fn exc_pf(_frame: &mut ISRStackFrame, _err: PageFaultErro
         asm!("movq %cr2, $0" : "=r" (addr));
     }
 
-    // TODO: when to panic the kernel?
-    panic!("Page fault: {:#?}, {:?}, CR2: {:?}", _frame, _err, addr);
-
-    let failed = !with_core_scheduler(|scheduler| scheduler.get_current_thread().page_fault(addr));
-
-    if unlikely(failed) {
-        // Failed, kill thread.
-        scheduler::switch_to_next(SwitchReason::Exit);
-    }
+    crate::mm::page_fault(addr);
 }
 
 extern "x86-interrupt" fn exc_fp(frame: &mut ISRStackFrame) {

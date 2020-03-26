@@ -11,8 +11,6 @@ pub struct Table {
 impl Table {
     /// Creates a new table.
     pub fn new(table: &cranelift_wasm::Table) -> Self {
-        println!("New table {}", table.minimum as usize);
-
         let vec = match table.ty {
             TableElementType::Func => vec![VmTableElement::null(); table.minimum as usize], // TODO: placeholder function
             TableElementType::Val(_) => unimplemented!("other type than anyfunc"),
@@ -23,7 +21,6 @@ impl Table {
 
     /// Sets a table element.
     pub fn set(&mut self, offset: usize, value: VmTableElement) {
-        println!("Set {} {:?}", offset, value);
         self.vec[offset] = value;
     }
 

@@ -13,6 +13,7 @@ ISO_IMAGE    = build/img.iso
 ASM_SOURCES  = $(wildcard src/arch/$(ARCH)/*.s)
 ASM_OBJECTS  = $(patsubst src/arch/$(ARCH)/%.s, build/arch/$(ARCH)/%.o, $(ASM_SOURCES))
 #INITRD_FILES = global_test.wasm indirect_call.wasm
+#INITRD_FILES = memory_size_grow.wasm 
 INITRD_FILES = hello.wasm 
 
 LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
@@ -40,6 +41,8 @@ iso: initrd $(KERNEL)
 initrd: $(INITRD_FILES)
 	@mkdir -p $(ISO_FILES)/boot/grub
 	@tar -cf $(ISO_FILES)/boot/initrd.tar -C ../wasm_samples $(INITRD_FILES)
+
+memory_size_grow.wasm: 
 
 hello.wasm: 
 

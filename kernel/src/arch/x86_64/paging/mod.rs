@@ -5,7 +5,7 @@ use super::address::{PhysAddr, VirtAddr};
 use self::entry::Entry;
 pub use self::entry::EntryFlags;
 use self::table::{Level4, Table};
-use crate::mm::mapper::{MappingResult, MemoryError, MemoryMapper};
+use crate::mm::mapper::{MemoryError, MemoryMapper, MemoryResult};
 use crate::mm::pmm::with_pmm;
 use core::intrinsics::unlikely;
 
@@ -107,7 +107,7 @@ impl MemoryMapper for ActiveMapping {
         }
     }
 
-    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult {
+    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MemoryResult {
         let mut e = self.get_4k_entry_may_create(vaddr)?;
 
         with_pmm(|pmm| {
@@ -123,7 +123,7 @@ impl MemoryMapper for ActiveMapping {
         self.unmap_single_internal(vaddr, true)
     }
 
-    fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
+    fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MemoryResult {
         debug_assert!(paddr.is_page_aligned());
         self.get_4k_entry_may_create(vaddr)?.set(paddr, flags);
         Ok(())
@@ -140,7 +140,7 @@ impl MemoryMapper for ActiveMapping {
         mut paddr: PhysAddr,
         size: usize,
         flags: EntryFlags,
-    ) -> MappingResult {
+    ) -> MemoryResult {
         debug_assert!(vaddr.is_page_aligned());
         debug_assert!(paddr.is_page_aligned());
 
@@ -160,7 +160,7 @@ impl MemoryMapper for ActiveMapping {
         Ok(())
     }
 
-    fn map_range(&mut self, mut vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MappingResult {
+    fn map_range(&mut self, mut vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MemoryResult {
         debug_assert!(vaddr.is_page_aligned());
 
         let start_vaddr = vaddr;
@@ -201,7 +201,7 @@ impl MemoryMapper for ActiveMapping {
         mut vaddr: VirtAddr,
         size: usize,
         flags: EntryFlags,
-    ) -> MappingResult {
+    ) -> MemoryResult {
         debug_assert!(vaddr.is_page_aligned());
 
         for _ in (0..size).step_by(PAGE_SIZE) {
@@ -275,7 +275,7 @@ impl ActiveMapping {
     }
 
     /// Maps a 2MiB page.
-    pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult {
+    pub fn map_2m(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MemoryResult {
         debug_assert!(paddr.is_2m_aligned());
         self.get_2m_entry(vaddr)?
             .set(paddr, flags | EntryFlags::HUGE_PAGE);

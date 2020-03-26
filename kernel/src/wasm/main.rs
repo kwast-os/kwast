@@ -2,30 +2,68 @@
 
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{CodegenError, Context};
-use cranelift_wasm::{translate_module, Global};
+use cranelift_wasm::{translate_module, Global, Memory, MemoryIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
-use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler};
+use crate::tasking::scheduler;
+use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler, SwitchReason};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
-use crate::wasm::module_env::{FunctionBody, FunctionImport, ModuleEnv, TableElements};
+use crate::wasm::module_env::{Export, FunctionBody, FunctionImport, ModuleEnv, TableElements};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
+use crate::wasm::runtime::{RUNTIME_MEMORY_GROW_IDX, RUNTIME_MEMORY_SIZE_IDX};
 use crate::wasm::table::Table;
 use crate::wasm::vmctx::{
     VmContext, VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE,
-    HEAP_SIZE,
+    HEAP_SIZE, WASM_PAGE_SIZE,
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::write_unaligned;
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
 use cranelift_codegen::isa::TargetIsa;
+use hashbrown::HashMap;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
+
+// TODO: move me
+fn runtime_memory_size(_vmctx: &VmContext, idx: MemoryIndex) -> u32 {
+    assert_eq!(idx.as_u32(), 0);
+    let heap_size = with_core_scheduler(|s| s.get_current_thread().heap_size());
+    (heap_size / WASM_PAGE_SIZE) as u32
+}
+
+// TODO: move me
+fn runtime_memory_grow(_vmctx: &VmContext, idx: MemoryIndex, wasm_pages: u32) -> u32 {
+    assert_eq!(idx.as_u32(), 0);
+    with_core_scheduler(|s| s.get_current_thread().heap_grow(wasm_pages))
+}
+
+fn wasi_environ_sizes_get(_vmctx: &VmContext) -> (u16, u32, u32) {
+    // TODO: ???
+    println!("environ_sizes_get");
+    (0, 0, 0)
+}
+
+fn wasi_environ_get(_vmctx: &VmContext) -> u16 {
+    // TODO
+    0
+}
+
+fn wasi_fd_write(_vmctx: &VmContext) -> (u16, u32) {
+    // TODO
+    println!("fd_write");
+    (0, 0)
+}
+
+fn wasi_proc_exit(_vmctx: &VmContext, exitcode: u32) {
+    println!("proc_exit: {}", exitcode);
+    scheduler::switch_to_next(SwitchReason::Exit);
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -39,32 +77,39 @@ pub enum Error {
     NoStart,
 }
 
-struct CompileResult {
+struct CompileResult<'data> {
     isa: Box<dyn TargetIsa>,
-    contexts: Vec<Context>,
+    contexts: Box<[Context]>,
     start_func: Option<FuncIndex>,
-    function_imports: Vec<FunctionImport>,
-    tables: Vec<cranelift_wasm::Table>,
-    table_elements: Vec<TableElements>,
-    globals: Vec<Global>,
+    memories: Box<[Memory]>,
+    function_imports: Box<[FunctionImport]>,
+    tables: Box<[cranelift_wasm::Table]>,
+    table_elements: Box<[TableElements]>,
+    globals: Box<[Global]>,
+    exports: HashMap<&'data str, Export>,
     total_size: usize,
 }
 
-struct Instantiation<'a> {
-    compile_result: &'a CompileResult,
+struct Instantiation<'r, 'data> {
+    compile_result: &'r CompileResult<'data>,
     func_offsets: Vec<usize>,
 }
 
-impl CompileResult {
+impl<'data> CompileResult<'data> {
     /// Compile result to instantiation.
     pub fn instantiate(&self) -> Instantiation {
         Instantiation::new(self)
     }
+
+    /// Gets an export by its name.
+    pub fn get_export(&self, name: &str) -> Option<&Export> {
+        self.exports.get(name)
+    }
 }
 
-impl<'a> Instantiation<'a> {
+impl<'r, 'data> Instantiation<'r, 'data> {
     /// Creates a new instantiation.
-    fn new(compile_result: &'a CompileResult) -> Self {
+    fn new(compile_result: &'r CompileResult<'data>) -> Self {
         let capacity = compile_result.contexts.len();
 
         Self {
@@ -96,8 +141,15 @@ impl<'a> Instantiation<'a> {
         };
 
         let heap_vma = {
-            // TODO: can max size be limited by wasm somehow?
-            let len = HEAP_SIZE + HEAP_GUARD_SIZE;
+            let maximum = self.compile_result.memories[0]
+                .maximum
+                .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
+
+            if maximum > HEAP_SIZE {
+                return Err(Error::MemoryError(MemoryError::InvalidRange));
+            }
+
+            let len = maximum + HEAP_GUARD_SIZE;
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
             Vma::create(len as usize)
                 .and_then(|x| Ok(x.map_lazily(flags)))
@@ -109,7 +161,7 @@ impl<'a> Instantiation<'a> {
         let mut reloc_sinks: Vec<RelocSink> = Vec::with_capacity(capacity);
         let mut offset: usize = 0;
 
-        for context in &self.compile_result.contexts {
+        for context in self.compile_result.contexts.iter() {
             let mut reloc_sink = RelocSink::new();
             let mut trap_sink = NullTrapSink {};
             let mut null_stackmap_sink = NullStackmapSink {};
@@ -137,7 +189,6 @@ impl<'a> Instantiation<'a> {
 
     /// Emit and link.
     pub fn emit_and_link(&mut self) -> Result<Thread, Error> {
-        let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
         let defined_function_offset = self.defined_function_offset();
 
         let (code_vma, heap_vma, reloc_sinks) = self.emit()?;
@@ -154,6 +205,11 @@ impl<'a> Instantiation<'a> {
                     RelocationTarget::UserFunction(target_idx) => {
                         self.func_offsets[target_idx.as_u32() as usize - defined_function_offset]
                     }
+                    RelocationTarget::RuntimeFunction(idx) => match idx {
+                        RUNTIME_MEMORY_GROW_IDX => runtime_memory_grow as usize,
+                        RUNTIME_MEMORY_SIZE_IDX => runtime_memory_size as usize,
+                        _ => unreachable!(),
+                    },
                     RelocationTarget::LibCall(_libcall) => unimplemented!(),
                     RelocationTarget::JumpTable(_jt) => unimplemented!(),
                 };
@@ -182,7 +238,7 @@ impl<'a> Instantiation<'a> {
         }
 
         // Debug code: print the bytes of the code section.
-        self.print_code_as_hex(&code_vma);
+        // self.print_code_as_hex(&code_vma);
 
         // Now the code is written, change it to read-only & executable.
         {
@@ -192,6 +248,16 @@ impl<'a> Instantiation<'a> {
                 .change_flags_range(code_vma.address(), code_vma.size(), flags)
                 .map_err(Error::MemoryError)?;
         };
+
+        // Determine start function. If it's not given, search for "_start" as specified by WASI.
+        let start_func = self
+            .compile_result
+            .start_func
+            .or_else(|| match self.compile_result.get_export("_start") {
+                Some(Export::Function(idx)) => Some(*idx),
+                _ => None,
+            })
+            .ok_or(Error::NoStart)?;
 
         let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma);
 
@@ -223,6 +289,9 @@ impl<'a> Instantiation<'a> {
         code_vma: &MappedVma,
         heap_vma: &LazilyMappedVma,
     ) -> VmContextContainer {
+        // TODO: run data initializers
+        // TODO: split this function
+
         // Create the vm context.
         let mut vmctx_container = {
             // Initialize table vectors.
@@ -247,27 +316,45 @@ impl<'a> Instantiation<'a> {
         {
             // Safety: we are the only ones who have access to this slice right now.
             let function_imports = unsafe { vmctx_container.function_imports_as_mut_slice() };
+
             for (i, import) in self.compile_result.function_imports.iter().enumerate() {
                 println!("{} {:?}", i, import);
 
                 // TODO: improve this
-                match import.module.as_str() {
+                function_imports[i] = match import.module.as_str() {
                     "os" => {
                         // TODO: hardcoded to a fixed function atm
-                        function_imports[i] = VmFunctionImportEntry {
+                        VmFunctionImportEntry {
                             address: VirtAddr::new(test_func as usize),
-                        };
+                        }
+                    }
+                    "wasi_snapshot_preview1" => {
                         // TODO
+                        match import.field.as_str() {
+                            "environ_sizes_get" => VmFunctionImportEntry {
+                                address: VirtAddr::new(wasi_environ_sizes_get as usize),
+                            },
+                            "fd_write" => VmFunctionImportEntry {
+                                address: VirtAddr::new(wasi_fd_write as usize),
+                            },
+                            "environ_get" => VmFunctionImportEntry {
+                                address: VirtAddr::new(wasi_environ_get as usize),
+                            },
+                            "proc_exit" => VmFunctionImportEntry {
+                                address: VirtAddr::new(wasi_proc_exit as usize),
+                            },
+                            _ => unimplemented!(),
+                        }
                     }
                     _ => unimplemented!(),
-                }
+                };
             }
         }
 
         // Create tables.
         {
             // Fill in the tables.
-            for elements in &self.compile_result.table_elements {
+            for elements in self.compile_result.table_elements.iter() {
                 // TODO: support this and verify bounds?
                 assert!(elements.base.is_none(), "not implemented yet");
 
@@ -369,12 +456,14 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
 
     Ok(CompileResult {
         isa,
-        contexts,
-        start_func: env.start_func,
-        function_imports: env.function_imports,
-        tables: env.tables,
-        table_elements: env.table_elements,
-        globals: env.globals,
+        contexts: contexts.into_boxed_slice(),
+        memories: env.memories.into_boxed_slice(),
+        start_func: env.start_func, // TODO: or should we get the start func here?
+        function_imports: env.function_imports.into_boxed_slice(),
+        tables: env.tables.into_boxed_slice(),
+        table_elements: env.table_elements.into_boxed_slice(),
+        globals: env.globals.into_boxed_slice(),
+        exports: env.exports,
         total_size,
     })
 }

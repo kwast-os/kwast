@@ -276,7 +276,6 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         _heap: Heap,
         val: Value,
     ) -> WasmResult<Value> {
-        // TODO: do we need to verify the index?
         let index = pos
             .ins()
             .iconst(types::I32, Imm64::new(index.as_u32() as i64));
@@ -294,7 +293,6 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         index: MemoryIndex,
         _heap: Heap,
     ) -> WasmResult<Value> {
-        // TODO: do we need to verify the index?
         let index = pos
             .ins()
             .iconst(types::I32, Imm64::new(index.as_u32() as i64));

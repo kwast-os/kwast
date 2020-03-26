@@ -10,13 +10,13 @@ pub trait MemoryMapper {
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr>;
 
     /// Gets a single physical page and maps it to a given virtual address.
-    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MappingResult;
+    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MemoryResult;
 
     /// Unmaps a single page and frees the corresponding physical frame.
     fn free_and_unmap_single(&mut self, vaddr: VirtAddr);
 
     /// Maps a single page.
-    fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MappingResult;
+    fn map_single(&mut self, vaddr: VirtAddr, paddr: PhysAddr, flags: EntryFlags) -> MemoryResult;
 
     /// Unmaps a single page.
     fn unmap_single(&mut self, vaddr: VirtAddr);
@@ -28,10 +28,10 @@ pub trait MemoryMapper {
         paddr: PhysAddr,
         size: usize,
         flags: EntryFlags,
-    ) -> MappingResult;
+    ) -> MemoryResult;
 
     /// Maps a range.
-    fn map_range(&mut self, vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MappingResult;
+    fn map_range(&mut self, vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MemoryResult;
 
     /// Unmaps a range.
     fn unmap_range(&mut self, vaddr: VirtAddr, size: usize);
@@ -45,13 +45,13 @@ pub trait MemoryMapper {
         vaddr: VirtAddr,
         size: usize,
         flags: EntryFlags,
-    ) -> MappingResult;
+    ) -> MemoryResult;
 }
 
-/// Map result.
-pub type MappingResult = Result<(), MemoryError>;
+/// Memory request result.
+pub type MemoryResult = Result<(), MemoryError>;
 
-/// Error during mapping request.
+/// Error during memory request.
 #[derive(Debug)]
 pub enum MemoryError {
     /// Out of physical memory.

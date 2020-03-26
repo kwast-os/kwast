@@ -12,19 +12,27 @@ use cranelift_wasm::{
     PassiveDataIndex, PassiveElemIndex, SignatureIndex, Table, TableIndex, TargetEnvironment,
     WasmError, WasmResult,
 };
+use hashbrown::HashMap;
 
 pub struct FunctionBody<'data> {
     pub body: &'data [u8],
     pub offset: usize,
 }
 
+/// Export.
+pub enum Export {
+    /// Function export.
+    Function(FuncIndex),
+}
+
+/// Function import.
 #[derive(Debug)]
 pub struct FunctionImport {
     pub module: String,
     pub field: String,
 }
 
-#[derive(Debug)]
+/// Table elements.
 pub struct TableElements {
     /// Index of the table where these elements belong to.
     pub index: TableIndex,
@@ -36,6 +44,15 @@ pub struct TableElements {
     pub elements: Box<[FuncIndex]>,
 }
 
+/// Memory data initializer.
+pub struct DataInitializer<'a> {
+    memory_index: MemoryIndex,
+    base: Option<GlobalIndex>,
+    offset: usize,
+    data: &'a [u8],
+}
+
+/// The module environment.
 pub struct ModuleEnv<'data> {
     /// Passed target configuration.
     cfg: isa::TargetFrontendConfig,
@@ -50,7 +67,7 @@ pub struct ModuleEnv<'data> {
     /// Function Wasm body contents.
     pub func_bodies: Vec<FunctionBody<'data>>,
     /// Memories.
-    memories: Vec<Memory>,
+    pub memories: Vec<Memory>,
     /// Keep track of the imported functions.
     pub function_imports: Vec<FunctionImport>,
     /// Tables.
@@ -59,6 +76,10 @@ pub struct ModuleEnv<'data> {
     pub table_elements: Vec<TableElements>,
     /// Globals.
     pub globals: Vec<Global>,
+    /// Data initializers.
+    pub data_initializers: Vec<DataInitializer<'data>>,
+    /// All exports.
+    pub exports: HashMap<&'data str, Export>,
 }
 
 impl<'data> ModuleEnv<'data> {
@@ -78,6 +99,8 @@ impl<'data> ModuleEnv<'data> {
             tables: Vec::new(),
             table_elements: Vec::new(),
             globals: Vec::new(),
+            data_initializers: Vec::new(),
+            exports: HashMap::new(),
         }
     }
 
@@ -204,8 +227,8 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
-    fn declare_func_export(&mut self, _func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
-        println!("declare func export: {}", name);
+    fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+        self.exports.insert(name, Export::Function(func_index));
         Ok(())
     }
 
@@ -292,14 +315,24 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
+    fn reserve_data_initializers(&mut self, num: u32) -> WasmResult<()> {
+        self.data_initializers.reserve_exact(num as usize);
+        Ok(())
+    }
+
     fn declare_data_initialization(
         &mut self,
-        _memory_index: MemoryIndex,
-        _base: Option<GlobalIndex>,
-        _offset: usize,
-        _data: &'data [u8],
+        memory_index: MemoryIndex,
+        base: Option<GlobalIndex>,
+        offset: usize,
+        data: &'data [u8],
     ) -> WasmResult<()> {
-        println!("{:?} {:?} {:?} {:?}", _memory_index, _base, _offset, _data);
-        unimplemented!()
+        self.data_initializers.push(DataInitializer {
+            memory_index,
+            base,
+            offset,
+            data,
+        });
+        Ok(())
     }
 }

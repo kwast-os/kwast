@@ -6,6 +6,7 @@ use crate::mm::avl_interval_tree::AVLIntervalTree;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::sync::spinlock::Spinlock;
 use core::intrinsics::{likely, unlikely};
+use core::ptr::write_bytes;
 
 /// Virtual memory allocator.
 pub struct VMAAllocator {
@@ -45,7 +46,7 @@ pub struct LazilyMappedVma {
     /// The flags to use when mapping the memory.
     flags: EntryFlags,
     /// The size of the real mapped part.
-    mapped_size: usize,
+    allocated_size: usize,
 }
 
 impl Vma {
@@ -89,7 +90,7 @@ impl Vma {
         LazilyMappedVma {
             vma: self,
             flags,
-            mapped_size: 0,
+            allocated_size: 0,
         }
     }
 
@@ -136,7 +137,45 @@ impl LazilyMappedVma {
         Self {
             vma: Vma::dummy(),
             flags: EntryFlags::empty(),
-            mapped_size: 0,
+            allocated_size: 0,
+        }
+    }
+
+    /// Expands the allocated size.
+    /// Returns the old size on success, an error on failure.
+    pub fn expand(&mut self, amount: usize) -> Result<usize, MemoryError> {
+        let old_size = self.allocated_size;
+        let new_size = old_size + amount;
+
+        if new_size > self.vma.size {
+            Err(MemoryError::InvalidRange)
+        } else {
+            self.allocated_size = new_size;
+            Ok(old_size)
+        }
+    }
+
+    /// Try handle a page fault.
+    pub fn try_handle_page_fault(&mut self, fault_addr: VirtAddr) -> bool {
+        if likely(self.is_contained(fault_addr)) {
+            let mut mapping = ActiveMapping::get();
+            let flags = self.flags();
+            let map_addr = fault_addr.align_down();
+
+            // After the mapping is successful, we need to clear the memory to avoid information leaks.
+            if mapping.get_and_map_single(map_addr, flags).is_ok() {
+                let ptr: *mut u8 = map_addr.as_mut();
+                // Safe because valid pointer and valid size.
+                unsafe {
+                    write_bytes(ptr, 0, PAGE_SIZE);
+                }
+
+                true
+            } else {
+                false
+            }
+        } else {
+            false
         }
     }
 
@@ -155,7 +194,7 @@ impl MappableVma for LazilyMappedVma {
 
     #[inline]
     fn size(&self) -> usize {
-        self.mapped_size
+        self.allocated_size
     }
 }
 

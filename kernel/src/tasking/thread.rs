@@ -1,15 +1,12 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
-use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::LazilyMappedVma;
-use crate::mm::vma_allocator::MappableVma;
-use crate::mm::vma_allocator::{MappedVma, Vma};
-use crate::wasm::vmctx::VmContextContainer;
-use bitflags::_core::intrinsics::write_bytes;
+use crate::arch::paging::{EntryFlags, PAGE_SIZE};
+use crate::mm::mapper::MemoryError;
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
+use crate::sync::spinlock::Spinlock;
+use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::cell::Cell;
-use core::intrinsics::likely;
 
 /// The stack of a thread.
 #[derive(Debug)]
@@ -33,7 +30,7 @@ impl ThreadId {
 
 pub struct Thread {
     pub stack: Stack,
-    heap: LazilyMappedVma,
+    heap: Spinlock<LazilyMappedVma>, // TODO: rw lock, or something lighter, since this is only an issue with shared heaps
     _code: MappedVma,
     id: ThreadId,
     _vmctx_container: Option<VmContextContainer>,
@@ -67,7 +64,7 @@ impl Thread {
     ) -> Self {
         Self {
             stack,
-            heap,
+            heap: Spinlock::new(heap),
             _code: code,
             id: ThreadId::new(),
             _vmctx_container: vmctx_container,
@@ -79,31 +76,22 @@ impl Thread {
         self.id
     }
 
+    /// Gets the current heap size in WebAssembly pages.
+    pub fn heap_size(&self) -> usize {
+        self.heap.lock().size()
+    }
+
+    /// Grows the heap by `wasm_pages` WebAssembly pages.
+    pub fn heap_grow(&self, wasm_pages: u32) -> u32 {
+        self.heap
+            .lock()
+            .expand((wasm_pages as usize) * WASM_PAGE_SIZE)
+            .map_or(core::u32::MAX, |x| (x / WASM_PAGE_SIZE) as u32)
+    }
+
     /// Handle a page fault for this thread. Returns true if handled successfully.
     pub fn page_fault(&self, fault_addr: VirtAddr) -> bool {
-        // Optimize for the likely case.
-        if likely(self.heap.is_contained(fault_addr)) {
-            let mut mapping = ActiveMapping::get();
-            let flags = self.heap.flags();
-
-            // After the mapping is successful, we need to clear the memory to avoid information leaks.
-            if mapping
-                .get_and_map_single(fault_addr.align_down(), flags)
-                .is_ok()
-            {
-                let ptr: *mut u8 = fault_addr.as_mut();
-                // Safe because valid pointer and valid size.
-                unsafe {
-                    write_bytes(ptr, 0, PAGE_SIZE);
-                }
-
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
+        self.heap.lock().try_handle_page_fault(fault_addr)
     }
 }
 

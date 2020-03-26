@@ -86,11 +86,11 @@ impl Vma {
     }
 
     /// Convert to a lazily mapped Vma.
-    pub fn map_lazily(self, flags: EntryFlags) -> LazilyMappedVma {
+    pub fn map_lazily(self, allocated_size: usize, flags: EntryFlags) -> LazilyMappedVma {
         LazilyMappedVma {
             vma: self,
             flags,
-            allocated_size: 0,
+            allocated_size,
         }
     }
 

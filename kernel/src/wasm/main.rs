@@ -43,14 +43,31 @@ fn runtime_memory_grow(_vmctx: &VmContext, idx: MemoryIndex, wasm_pages: u32) ->
     with_core_scheduler(|s| s.get_current_thread().heap_grow(wasm_pages))
 }
 
-fn wasi_environ_sizes_get(_vmctx: &VmContext) -> (u16, u32, u32) {
-    // TODO: ???
-    println!("environ_sizes_get");
-    (0, 0, 0)
+fn wasi_environ_sizes_get(vmctx: &VmContext, environ_count_ptr: u32, environ_size_ptr: u32) -> u16 {
+    println!(
+        "environ_sizes_get {:#x} {:#x}",
+        environ_count_ptr, environ_size_ptr
+    );
+
+    // TODO: make a convenient method for this
+    let environ_count_ptr: *mut u32 = (vmctx.heap_ptr + environ_count_ptr as usize).as_mut();
+    let environ_size_ptr: *mut u32 = (vmctx.heap_ptr + environ_size_ptr as usize).as_mut();
+
+    unsafe {
+        // TODO: dummy values atm
+        *environ_count_ptr = 0;
+        *environ_size_ptr = 4;
+    }
+
+    println!("hi");
+
+    // TODO
+    0
 }
 
-fn wasi_environ_get(_vmctx: &VmContext) -> u16 {
+fn wasi_environ_get(_vmctx: &VmContext, environ_ptr: u32, environ_buf: u32) -> u16 {
     // TODO
+    println!("wasi_environ_get {} {}", environ_ptr, environ_buf);
     0
 }
 
@@ -141,18 +158,22 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         };
 
         let heap_vma = {
-            let maximum = self.compile_result.memories[0]
+            let mem = self.compile_result.memories[0];
+
+            let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
+
+            let maximum = mem
                 .maximum
                 .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
 
-            if maximum > HEAP_SIZE {
+            if minimum as u64 > HEAP_SIZE || maximum > HEAP_SIZE {
                 return Err(Error::MemoryError(MemoryError::InvalidRange));
             }
 
             let len = maximum + HEAP_GUARD_SIZE;
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
             Vma::create(len as usize)
-                .and_then(|x| Ok(x.map_lazily(flags)))
+                .and_then(|x| Ok(x.map_lazily(minimum, flags)))
                 .map_err(Error::MemoryError)?
         };
 

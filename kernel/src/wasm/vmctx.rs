@@ -50,7 +50,10 @@ pub struct VmFunctionImportEntry {
 /// -----------------------------
 ///
 #[repr(C, align(16))]
-pub struct VmContext {}
+pub struct VmContext {
+    // Note: Variable size struct, heap pointer provided for convenience.
+    pub heap_ptr: VirtAddr,
+}
 
 // All globals have the same size right now.
 // TODO: make sure not all globals take the same amount of bytes
@@ -96,8 +99,8 @@ impl VmTableElement {
 
 impl VmContext {
     /// Heap offset in the context.
-    pub const fn heap_offset() -> i32 {
-        0
+    pub fn heap_offset() -> i32 {
+        offset_of!(VmContext, heap_ptr) as i32
     }
 
     /// Heap offset field size.
@@ -106,43 +109,39 @@ impl VmContext {
     }
 
     /// Offset of the globals.
-    pub const fn globals_offset() -> i32 {
+    pub fn globals_offset() -> i32 {
         Self::heap_offset() + Self::heap_offset_field_size()
     }
 
     /// Offset of a global entry.
-    pub const fn global_entry_offset(index: u32) -> isize {
+    pub fn global_entry_offset(index: u32) -> isize {
         Self::globals_offset() as isize + (size_of::<VmGlobal>() * index as usize) as isize
     }
 
     /// Offset of imported functions.
-    pub const fn imported_funcs_offset(num_globals: u32) -> isize {
+    pub fn imported_funcs_offset(num_globals: u32) -> isize {
         Self::global_entry_offset(num_globals)
     }
 
     /// Offset of an imported function entry.
-    pub const fn imported_func_entry_offset(num_globals: u32, index: u32) -> isize {
+    pub fn imported_func_entry_offset(num_globals: u32, index: u32) -> isize {
         Self::imported_funcs_offset(num_globals) as isize
             + (size_of::<VmFunctionImportEntry>() * index as usize) as isize
     }
 
     /// Offset of the tables.
-    pub const fn tables_offset(num_globals: u32, num_imported_funcs: u32) -> isize {
+    pub fn tables_offset(num_globals: u32, num_imported_funcs: u32) -> isize {
         Self::imported_func_entry_offset(num_globals, num_imported_funcs)
     }
 
     /// Offset of a table.
-    pub const fn table_entry_offset(
-        num_globals: u32,
-        num_imported_funcs: u32,
-        index: u32,
-    ) -> isize {
+    pub fn table_entry_offset(num_globals: u32, num_imported_funcs: u32, index: u32) -> isize {
         Self::tables_offset(num_globals, num_imported_funcs)
             + (index as usize * size_of::<VmTable>()) as isize
     }
 
     /// Calculates the size of the context.
-    pub const fn size(num_globals: u32, num_imported_funcs: u32, num_tables: u32) -> usize {
+    pub fn size(num_globals: u32, num_imported_funcs: u32, num_tables: u32) -> usize {
         Self::table_entry_offset(num_globals, num_imported_funcs, num_tables) as usize
     }
 }

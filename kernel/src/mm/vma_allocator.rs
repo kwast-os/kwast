@@ -60,6 +60,8 @@ impl Vma {
 
     /// Creates a new Vma of the requested size.
     pub fn create(size: usize) -> Result<Self, MemoryError> {
+        debug_assert!(size % PAGE_SIZE == 0);
+
         with_vma_allocator(|allocator| allocator.alloc_region(size))
             .map(|start| Self { start, size })
             .ok_or(MemoryError::NoMoreVMA)
@@ -91,6 +93,8 @@ impl Vma {
         allocated_size: usize,
         flags: EntryFlags,
     ) -> Result<LazilyMappedVma, MemoryError> {
+        debug_assert!(allocated_size % PAGE_SIZE == 0);
+
         if allocated_size > self.size {
             Err(MemoryError::InvalidRange)
         } else {

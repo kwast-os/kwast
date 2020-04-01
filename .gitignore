@@ -1,7 +1,7 @@
-/*/.idea/
+/**/.idea/
 
 /kernel/build
-/*/target/
+/**/target/
 **/*.rs.bk
 
 *.tar.xz

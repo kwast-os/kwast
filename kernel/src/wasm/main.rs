@@ -13,7 +13,9 @@ use crate::tasking::scheduler;
 use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler, SwitchReason};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
-use crate::wasm::module_env::{Export, FunctionBody, FunctionImport, ModuleEnv, TableElements, DataInitializer};
+use crate::wasm::module_env::{
+    DataInitializer, Export, FunctionBody, FunctionImport, ModuleEnv, TableElements,
+};
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
 use crate::wasm::runtime::{RUNTIME_MEMORY_GROW_IDX, RUNTIME_MEMORY_SIZE_IDX};
 use crate::wasm::table::Table;
@@ -23,10 +25,9 @@ use crate::wasm::vmctx::{
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::ptr::{write_unaligned, copy_nonoverlapping};
+use core::ptr::{copy_nonoverlapping, write_unaligned};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
 use cranelift_codegen::isa::TargetIsa;
-use hashbrown::HashMap;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
 
@@ -77,9 +78,10 @@ fn wasi_fd_write(_vmctx: &VmContext, fd: u32, iovs_ptr: u32, iovs_len: u32, nwri
     0
 }
 
-fn wasi_proc_exit(_vmctx: &VmContext, exitcode: u32) {
+fn wasi_proc_exit(_vmctx: &VmContext, exitcode: u32) -> ! {
     println!("proc_exit: {}", exitcode);
     scheduler::switch_to_next(SwitchReason::Exit);
+    unreachable!()
 }
 
 #[derive(Debug)]
@@ -104,7 +106,6 @@ struct CompileResult<'data> {
     tables: Box<[cranelift_wasm::Table]>,
     table_elements: Box<[TableElements]>,
     globals: Box<[Global]>,
-    exports: HashMap<&'data str, Export>,
     total_size: usize,
 }
 
@@ -117,11 +118,6 @@ impl<'data> CompileResult<'data> {
     /// Compile result to instantiation.
     pub fn instantiate(&self) -> Instantiation {
         Instantiation::new(self)
-    }
-
-    /// Gets an export by its name.
-    pub fn get_export(&self, name: &str) -> Option<&Export> {
-        self.exports.get(name)
     }
 }
 
@@ -237,9 +233,14 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                     RelocationTarget::LibCall(_libcall) => unimplemented!(),
                     RelocationTarget::JumpTable(jt) => {
                         let ctx = &self.compile_result.contexts[idx];
-                        let offset = ctx.func.jt_offsets.get(jt).expect("jump table should exist");
-                        self.func_offsets[idx - defined_function_offset] + *offset as usize // TODO: is this correct?
-                    },
+                        let offset = ctx
+                            .func
+                            .jt_offsets
+                            .get(jt)
+                            .expect("jump table should exist");
+                        // TODO: is this correct?
+                        self.func_offsets[idx - defined_function_offset] + *offset as usize
+                    }
                 };
 
                 // Relocate!
@@ -279,14 +280,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         };
 
         // Determine start function. If it's not given, search for "_start" as specified by WASI.
-        let start_func = self
-            .compile_result
-            .start_func
-            .or_else(|| match self.compile_result.get_export("_start") {
-                Some(Export::Function(idx)) => Some(*idx),
-                _ => None,
-            })
-            .ok_or(Error::NoStart)?;
+        let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
 
         let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma);
 
@@ -412,10 +406,19 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                     //       Solution: "ensure mapped" method
 
                     let offset = heap_vma.address() + initializer.offset;
-                    println!("Copy {:?} to {:?} length {}", initializer.data.as_ptr(), offset.as_mut::<u8>(), initializer.data.len());
+                    println!(
+                        "Copy {:?} to {:?} length {}",
+                        initializer.data.as_ptr(),
+                        offset.as_mut::<u8>(),
+                        initializer.data.len()
+                    );
                     let offset = heap_vma.address() + initializer.offset;
                     unsafe {
-                        copy_nonoverlapping(initializer.data.as_ptr(), offset.as_mut::<u8>(), initializer.data.len());
+                        copy_nonoverlapping(
+                            initializer.data.as_ptr(),
+                            offset.as_mut::<u8>(),
+                            initializer.data.len(),
+                        );
                     }
                 }
             }
@@ -503,17 +506,21 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         contexts.push(ctx);
     }
 
+    let start_func = env.start_func.or_else(|| match env.exports.get("_start") {
+        Some(Export::Function(idx)) => Some(*idx),
+        _ => None,
+    });
+
     Ok(CompileResult {
         isa,
         contexts: contexts.into_boxed_slice(),
         memories: env.memories.into_boxed_slice(),
         data_initializers: env.data_initializers.into_boxed_slice(),
-        start_func: env.start_func, // TODO: or should we get the start func here?
+        start_func,
         function_imports: env.function_imports.into_boxed_slice(),
         tables: env.tables.into_boxed_slice(),
         table_elements: env.table_elements.into_boxed_slice(),
         globals: env.globals.into_boxed_slice(),
-        exports: env.exports,
         total_size,
     })
 }

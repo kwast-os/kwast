@@ -29,6 +29,7 @@ opt-level = 3
 panic = "abort"
 
 [dependencies]
+wasm-call = { path = "../lib/wasm-call" }
 volatile = "^0.2.6"
 bit_field = "^0.10.0"
 bitflags = "^1.2.1"

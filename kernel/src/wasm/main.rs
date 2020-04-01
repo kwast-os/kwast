@@ -133,9 +133,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
             let len = maximum + HEAP_GUARD_SIZE;
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            // TODO: make better
             Vma::create(len as usize)
-                .and_then(|x| Ok(x.map_lazily(minimum, flags)))
+                .and_then(|x| x.map_lazily(minimum, flags))
                 .map_err(Error::MemoryError)?
         };
 

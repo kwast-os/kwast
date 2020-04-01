@@ -86,16 +86,21 @@ impl Vma {
     }
 
     /// Convert to a lazily mapped Vma.
-    pub fn map_lazily(self, allocated_size: usize, flags: EntryFlags) -> LazilyMappedVma {
-        // TODO: move me? & validate
-        ActiveMapping::get()
-            .map_range(self.start, allocated_size, flags)
-            .unwrap();
+    pub fn map_lazily(
+        self,
+        allocated_size: usize,
+        flags: EntryFlags,
+    ) -> Result<LazilyMappedVma, MemoryError> {
+        if allocated_size >= self.size {
+            Err(MemoryError::InvalidRange)
+        } else {
+            ActiveMapping::get().map_range(self.start, allocated_size, flags)?;
 
-        LazilyMappedVma {
-            vma: self,
-            flags,
-            allocated_size,
+            Ok(LazilyMappedVma {
+                vma: self,
+                flags,
+                allocated_size,
+            })
         }
     }
 

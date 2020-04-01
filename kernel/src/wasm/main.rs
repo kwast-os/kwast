@@ -9,8 +9,7 @@ use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
-use crate::tasking::scheduler;
-use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler, SwitchReason};
+use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{
@@ -23,6 +22,7 @@ use crate::wasm::vmctx::{
     VmContext, VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE,
     HEAP_SIZE, WASM_PAGE_SIZE,
 };
+use crate::wasm::wasi::get_address_for_wasi;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::{copy_nonoverlapping, write_unaligned};
@@ -44,46 +44,6 @@ fn runtime_memory_grow(_vmctx: &VmContext, idx: MemoryIndex, wasm_pages: u32) ->
     with_core_scheduler(|s| s.get_current_thread().heap_grow(wasm_pages))
 }
 
-fn wasi_environ_sizes_get(vmctx: &VmContext, environ_count_ptr: u32, environ_size_ptr: u32) -> u16 {
-    println!(
-        "environ_sizes_get {:#x} {:#x}",
-        environ_count_ptr, environ_size_ptr
-    );
-
-    // TODO: make a convenient method for this
-    let environ_count_ptr: *mut u32 = (vmctx.heap_ptr + environ_count_ptr as usize).as_mut();
-    let environ_size_ptr: *mut u32 = (vmctx.heap_ptr + environ_size_ptr as usize).as_mut();
-
-    unsafe {
-        // TODO: dummy values atm
-        *environ_count_ptr = 0;
-        *environ_size_ptr = 4;
-    }
-
-    println!("hi");
-
-    // TODO
-    0
-}
-
-fn wasi_environ_get(_vmctx: &VmContext, environ_ptr: u32, environ_buf: u32) -> u16 {
-    // TODO
-    println!("wasi_environ_get {} {}", environ_ptr, environ_buf);
-    0
-}
-
-fn wasi_fd_write(_vmctx: &VmContext, fd: u32, iovs_ptr: u32, iovs_len: u32, nwritten: u32) -> u16 {
-    // TODO
-    println!("fd_write {} {} {} {}", fd, iovs_ptr, iovs_len, nwritten);
-    0
-}
-
-fn wasi_proc_exit(_vmctx: &VmContext, exitcode: u32) -> ! {
-    println!("proc_exit: {}", exitcode);
-    scheduler::switch_to_next(SwitchReason::Exit);
-    unreachable!()
-}
-
 #[derive(Debug)]
 pub enum Error {
     /// WebAssembly translation error.
@@ -94,6 +54,8 @@ pub enum Error {
     MemoryError(MemoryError),
     /// No start specified.
     NoStart,
+    /// Missing import
+    MissingImport,
 }
 
 struct CompileResult<'data> {
@@ -282,7 +244,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         // Determine start function. If it's not given, search for "_start" as specified by WASI.
         let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
 
-        let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma);
+        let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma)?;
 
         Ok(Thread::create(
             self.get_func_address(&code_vma, start_func),
@@ -311,7 +273,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         &self,
         code_vma: &MappedVma,
         heap_vma: &LazilyMappedVma,
-    ) -> VmContextContainer {
+    ) -> Result<VmContextContainer, Error> {
         // TODO: split this function
 
         // Create the vm context.
@@ -350,24 +312,9 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                             address: VirtAddr::new(test_func as usize),
                         }
                     }
-                    "wasi_snapshot_preview1" => {
-                        // TODO
-                        match import.field.as_str() {
-                            "environ_sizes_get" => VmFunctionImportEntry {
-                                address: VirtAddr::new(wasi_environ_sizes_get as usize),
-                            },
-                            "fd_write" => VmFunctionImportEntry {
-                                address: VirtAddr::new(wasi_fd_write as usize),
-                            },
-                            "environ_get" => VmFunctionImportEntry {
-                                address: VirtAddr::new(wasi_environ_get as usize),
-                            },
-                            "proc_exit" => VmFunctionImportEntry {
-                                address: VirtAddr::new(wasi_proc_exit as usize),
-                            },
-                            _ => unimplemented!(),
-                        }
-                    }
+                    "wasi_snapshot_preview1" => VmFunctionImportEntry {
+                        address: get_address_for_wasi(&import.field).ok_or(Error::MissingImport)?,
+                    },
                     _ => unimplemented!(),
                 };
             }
@@ -436,7 +383,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             }
         }
 
-        vmctx_container
+        Ok(vmctx_container)
     }
 }
 

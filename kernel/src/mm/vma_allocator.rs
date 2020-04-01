@@ -91,7 +91,7 @@ impl Vma {
         allocated_size: usize,
         flags: EntryFlags,
     ) -> Result<LazilyMappedVma, MemoryError> {
-        if allocated_size >= self.size {
+        if allocated_size > self.size {
             Err(MemoryError::InvalidRange)
         } else {
             ActiveMapping::get().map_range(self.start, allocated_size, flags)?;

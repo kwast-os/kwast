@@ -43,6 +43,7 @@ impl Writer {
     fn write_char(&mut self, c: u8) {
         match c {
             b'\n' => self.new_line(),
+            b'\r' => self.x = 0,
             char => {
                 if self.x == VGA_WIDTH {
                     self.new_line();

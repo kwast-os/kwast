@@ -138,7 +138,7 @@ impl AbiFunctions for VmContext {
         let buf_len = iovs.get().buf_len;
 
         print!("Got: ");
-        for i in 0..buf_len {
+        for _ in 0..buf_len {
             print!("{}", buf.deref(&self)?.get() as char);
 
             // HACK HACK HACK

@@ -133,6 +133,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
             let len = maximum + HEAP_GUARD_SIZE;
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+            // TODO: make better
             Vma::create(len as usize)
                 .and_then(|x| Ok(x.map_lazily(minimum, flags)))
                 .map_err(Error::MemoryError)?
@@ -349,9 +350,6 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                     // TODO: support this
                     assert!(initializer.base.is_none());
 
-                    // TODO: doesn't work because it's not mapped atm
-                    //       Solution: "ensure mapped" method
-
                     let offset = heap_vma.address() + initializer.offset;
                     println!(
                         "Copy {:?} to {:?} length {}",
@@ -431,7 +429,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         ctx.func.signature =
             env.get_sig_from_func(FuncIndex::from_u32((idx + defined_function_offset) as u32));
 
-        println!("{:?}", idx);
+        print!("\r compiling {:?}", idx);
 
         let FunctionBody { body, offset } = env.func_bodies[idx];
 
@@ -452,6 +450,8 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         total_size += info.total_size as usize;
         contexts.push(ctx);
     }
+
+    println!();
 
     let start_func = env.start_func.or_else(|| match env.exports.get("_start") {
         Some(Export::Function(idx)) => Some(*idx),

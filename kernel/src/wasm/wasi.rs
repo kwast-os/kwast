@@ -170,7 +170,7 @@ pub enum Errno {
 
 /// WebAssembly pointer type to use in ABI functions.
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 struct WasmPtr<T> {
     offset: u32,
     _phantom: PhantomData<T>,
@@ -187,7 +187,7 @@ impl<T> WasmPtr<T> {
 
         if self.offset & (alignment - 1) != 0
             || self.offset as usize + size_of::<T>()
-                >= with_core_scheduler(|s| s.get_current_thread().heap_size())
+                > with_core_scheduler(|s| s.get_current_thread().heap_size())
         {
             Err(Errno::Fault)
         } else {

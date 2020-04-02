@@ -1,9 +1,10 @@
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::SwitchReason;
+use crate::tasking::scheduler::{with_core_scheduler, SwitchReason};
 use crate::wasm::vmctx::VmContext;
 use core::cell::Cell;
 use core::marker::PhantomData;
+use core::mem::{align_of, size_of};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 
@@ -55,9 +56,119 @@ pub enum Errno {
     Exist,
     /// Bad address.
     Fault,
-    // TODO: more
+    /// File too large.
+    FBig,
+    /// Host is unreachable.
+    HostUnreach,
+    /// Identifier removed.
+    Idrm,
+    /// Illegal byte sequence.
+    Ilseq,
+    /// Operation in progress.
+    Inprogress,
+    /// Interrupted function.
+    Intr,
+    /// Invalid argument.
+    Inval,
+    /// I/O error.
+    Io,
+    /// Socket is connected.
+    IsConn,
+    /// Is a directory.
+    Isdir,
+    /// Too many levels of symbolic links.
+    Loop,
+    /// File descriptor value too large.
+    MFile,
+    /// Too many links.
+    Mlink,
+    /// Message too large.
+    MsgSize,
+    /// Reserved.
+    Multihop,
+    /// Filename too long.
+    NameTooLong,
+    /// Network is down.
+    NetDown,
+    /// Connection aborted by network.
+    NetReset,
+    /// Network unreachable.
+    NetUnreach,
+    /// Too many files open in system.
+    NFile,
+    /// No buffer space available.
+    NoBufs,
+    /// No such device.
+    NoDev,
+    /// No such file or directory.
+    NoEnt,
+    /// Executable file format error.
+    NoExec,
+    /// No locks available.
+    NoLck,
+    /// Reserved.
+    NoLink,
+    /// Not enough space.
+    NoMem,
+    /// No message of the desired type.
+    NoMsg,
+    /// Protocol not available.
+    NoProtoopt,
+    /// No space left on device.
+    NoSpc,
+    /// Function not supported.
+    NoSys,
+    /// The socket is not connected.
+    NotConn,
+    /// Not a directory or a symbolic link to a directory.
+    NotDir,
+    /// Directory not empty.
+    NotEmpty,
+    /// State not recoverable.
+    NotRecoverable,
+    /// Not a socket.
+    NotSock,
+    /// Not supported, or operation not supported on socket.
+    NotSup,
+    /// Inappropriate I/O control operation.
+    NoTty,
+    /// No such device or address.
+    Nxio,
+    /// Value too large to be stored in data type.
+    Overflow,
+    /// Previous owner died.
+    Ownerdead,
+    /// Operation not permitted.
+    Perm,
+    /// Broken pipe.
+    Pipe,
+    /// Protocol error.
+    Proto,
+    /// Protocol not supported.
+    Protonosupport,
+    /// Protocol wrong type for socket.
+    Prototype,
+    /// Result too large.
+    Range,
+    /// Read-only file system.
+    Rofs,
+    /// Invalid seek.
+    Spipe,
+    /// No such process.
+    Srch,
+    /// Reserved.
+    Stale,
+    /// Connection timed out.
+    TimedOut,
+    /// Text file busy.
+    Txtbsy,
+    /// Cross-device link.
+    Xdev,
+    /// Extension: Capabilities insufficient.
+    NotCapable,
 }
 
+/// WebAssembly pointer type to use in ABI functions.
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone)]
 struct WasmPtr<T> {
@@ -66,26 +177,39 @@ struct WasmPtr<T> {
 }
 
 impl<T> WasmPtr<T> {
-    // TODO: docs
+    /// Dereferences a WebAssembly pointer, does checks for alignment and bounds.
+    /// Returns Ok(address) on success and Err(Errno) on fail.
     pub fn deref<'c>(&self, ctx: &VmContext) -> WasmResult<&'c Cell<T>> {
-        // TODO: bounds check
-        // TODO: alignment check?
+        let alignment = align_of::<T>() as u32;
 
-        unsafe {
-            let addr = ctx.heap_ptr.as_const::<u8>().add(self.offset as usize);
-            Ok(&*(addr as *const Cell<T>))
+        // Assume: power of two alignment, so we can do a cheap alignment check below.
+        debug_assert!(alignment & (alignment - 1) == 0);
+
+        if self.offset & (alignment - 1) != 0
+            || self.offset as usize + size_of::<T>()
+                >= with_core_scheduler(|s| s.get_current_thread().heap_size())
+        {
+            Err(Errno::Fault)
+        } else {
+            // Safety: pointer is correctly aligned and points to real data.
+            unsafe {
+                let addr = ctx.heap_ptr.as_const::<u8>().add(self.offset as usize);
+                Ok(&*(addr as *const Cell<T>))
+            }
         }
     }
 }
 
+/// Size type.
 type Size = u32;
 
+/// File descriptor.
 type Fd = u32;
 
+/// Exit code for process.
 type ExitCode = u32;
 
 type WasmResult<T> = Result<T, Errno>;
-
 type WasmStatus = WasmResult<()>;
 
 #[repr(C)]

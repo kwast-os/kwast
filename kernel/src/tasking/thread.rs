@@ -76,7 +76,7 @@ impl Thread {
         self.id
     }
 
-    /// Gets the current heap size in WebAssembly pages.
+    /// Gets the current allocated heap size in WebAssembly pages.
     pub fn heap_size(&self) -> usize {
         self.heap.lock().size()
     }

@@ -2,6 +2,7 @@
 
 use crate::wasm::module_env::ModuleEnv;
 use crate::wasm::runtime::{RuntimeFunctionData, RUNTIME_NAMESPACE};
+use crate::wasm::runtime::{RUNTIME_MEMORY_GROW_DATA, RUNTIME_MEMORY_SIZE_DATA};
 use crate::wasm::vmctx::{VmContext, VmTable, VmTableElement, HEAP_GUARD_SIZE, HEAP_SIZE};
 use alloc::vec::Vec;
 use core::mem::size_of;
@@ -297,11 +298,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             .ins()
             .iconst(types::I32, Imm64::new(index.as_u32() as i64));
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        Self::call_runtime_function(
-            &mut pos,
-            &self.module_env.runtime_functions.memory_grow,
-            &[vmctx, index, val],
-        )
+        Self::call_runtime_function(&mut pos, &RUNTIME_MEMORY_GROW_DATA, &[vmctx, index, val])
     }
 
     fn translate_memory_size(
@@ -314,11 +311,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             .ins()
             .iconst(types::I32, Imm64::new(index.as_u32() as i64));
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-        Self::call_runtime_function(
-            &mut pos,
-            &self.module_env.runtime_functions.memory_size,
-            &[vmctx, index],
-        )
+        Self::call_runtime_function(&mut pos, &RUNTIME_MEMORY_SIZE_DATA, &[vmctx, index])
     }
 
     fn translate_memory_copy(

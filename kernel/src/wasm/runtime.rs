@@ -1,5 +1,6 @@
+use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
-use cranelift_codegen::isa::TargetFrontendConfig;
+use lazy_static::lazy_static;
 
 /// Runtime namespace for `ExternalName`.
 pub const RUNTIME_NAMESPACE: u32 = 1;
@@ -12,44 +13,29 @@ pub struct RuntimeFunctionData {
     pub signature: Signature,
 }
 
-/// Runtime functions container.
-pub struct RuntimeFunctions {
-    pub memory_grow: RuntimeFunctionData,
-    pub memory_size: RuntimeFunctionData,
-}
+lazy_static! {
+    pub static ref RUNTIME_MEMORY_GROW_DATA: RuntimeFunctionData = RuntimeFunctionData {
+        index: RUNTIME_MEMORY_GROW_IDX,
+        signature: Signature {
+            params: vec![
+                AbiParam::special(WASM_VMCTX_TYPE, ArgumentPurpose::VMContext),
+                AbiParam::new(types::I32), // Memory index
+                AbiParam::new(types::I32), // Pages
+            ],
+            returns: vec![AbiParam::new(types::I32)],
+            call_conv: WASM_CALL_CONV,
+        },
+    };
 
-// TODO: lazy static this instead of per module
-impl RuntimeFunctions {
-    /// Creates a new instance of the runtime function data.
-    pub fn new(cfg: TargetFrontendConfig) -> Self {
-        let memory_grow = RuntimeFunctionData {
-            index: RUNTIME_MEMORY_GROW_IDX,
-            signature: Signature {
-                params: vec![
-                    AbiParam::special(cfg.pointer_type(), ArgumentPurpose::VMContext),
-                    AbiParam::new(types::I32), // Memory index
-                    AbiParam::new(types::I32), // Pages
-                ],
-                returns: vec![AbiParam::new(types::I32)],
-                call_conv: cfg.default_call_conv,
-            },
-        };
-
-        let memory_size = RuntimeFunctionData {
-            index: RUNTIME_MEMORY_SIZE_IDX,
-            signature: Signature {
-                params: vec![
-                    AbiParam::special(cfg.pointer_type(), ArgumentPurpose::VMContext),
-                    AbiParam::new(types::I32), // Memory index
-                ],
-                returns: vec![AbiParam::new(types::I32)],
-                call_conv: cfg.default_call_conv,
-            },
-        };
-
-        Self {
-            memory_grow,
-            memory_size,
-        }
-    }
+    pub static ref RUNTIME_MEMORY_SIZE_DATA: RuntimeFunctionData = RuntimeFunctionData {
+        index: RUNTIME_MEMORY_SIZE_IDX,
+        signature: Signature {
+            params: vec![
+                AbiParam::special(WASM_VMCTX_TYPE, ArgumentPurpose::VMContext),
+                AbiParam::new(types::I32), // Memory index
+            ],
+            returns: vec![AbiParam::new(types::I32)],
+            call_conv: WASM_CALL_CONV,
+        },
+    };
 }

@@ -39,13 +39,19 @@ impl Parse for AbiFunctions {
 impl Parse for AbiFunction {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
+        let name = input.parse()?;
+        let _colon_token = input.parse()?;
+        let _paren_token = parenthesized!(content in input);
+        let params = content.parse_terminated(AbiFunctionParam::parse)?;
+        let _rarrow_token = input.parse()?;
+        let return_type = input.parse()?;
         Ok(Self {
-            name: input.parse()?,
-            _colon_token: input.parse()?,
-            _paren_token: parenthesized!(content in input),
-            params: content.parse_terminated(AbiFunctionParam::parse)?,
-            _rarrow_token: input.parse()?,
-            return_type: input.parse()?,
+            name,
+            _colon_token,
+            _paren_token,
+            params,
+            _rarrow_token,
+            return_type,
         })
     }
 }
@@ -64,9 +70,9 @@ impl ToTokens for AbiFunctionParam {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
         let ty = &self.ty;
-        let _ = quote! {
+        (quote! {
             #name: #ty
-        }
+        })
         .to_tokens(tokens);
     }
 }
@@ -94,19 +100,23 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
                     _ => {
                         emit_error!(return_type, "unexpected return type");
                         false
-                    },
+                    }
                 }
-            },
+            }
             Type::Tuple(t) => {
-                if t.elems.len() != 0 {
+                if !t.elems.is_empty() {
                     emit_error!(t, "unexpected tuple");
                 }
                 false
             }
             _ => {
-                emit_error!(return_type, "unexpected return type  aaaa {:?}", return_type.to_token_stream());
+                emit_error!(
+                    return_type,
+                    "unexpected return type  aaaa {:?}",
+                    return_type.to_token_stream()
+                );
                 false
-            },
+            }
         };
 
         let trait_return_type = if errno_return {

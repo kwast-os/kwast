@@ -293,7 +293,7 @@ impl AbiFunctions for VmContext {
         Ok(())
     }
 
-    fn proc_exit(&self, exit_code: ExitCode) -> () {
+    fn proc_exit(&self, exit_code: ExitCode) {
         // TODO: exit code
         println!("proc_exit: exit code {}", exit_code);
         scheduler::switch_to_next(SwitchReason::Exit);

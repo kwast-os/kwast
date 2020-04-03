@@ -26,6 +26,8 @@ pub mod serial;
 
 extern "C" {
     static KERNEL_END_PTR: usize;
+    static STACK_BOTTOM: usize;
+    static INTERRUPT_STACK_BOTTOM: usize;
 }
 
 /// Per-CPU data for the bootstrap processor.
@@ -156,7 +158,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
                 paging_flags |= EntryFlags::NX;
             }
 
-            //println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
+            // println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
 
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping
@@ -169,8 +171,19 @@ pub extern "C" fn entry(mboot_addr: usize) {
         }
     }
 
+    // Init PMM
     with_pmm(|pmm| pmm.init(&mboot_struct, PhysAddr::new(reserved_end)));
 
+    // Setup guard pages for stack
+    unsafe {
+        let stack_bottom = VirtAddr::new(&STACK_BOTTOM as *const _ as usize);
+        let interrupt_stack_bottom = VirtAddr::new(&INTERRUPT_STACK_BOTTOM as *const _ as usize);
+        let mut mapping = ActiveMapping::get();
+        mapping.free_and_unmap_single(stack_bottom);
+        mapping.free_and_unmap_single(interrupt_stack_bottom);
+    }
+
+    // Run kernel main
     let reserved_end = VirtAddr::new(reserved_end).align_up();
     crate::kernel_run(reserved_end, boot_modules);
 }

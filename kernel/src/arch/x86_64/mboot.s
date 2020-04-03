@@ -73,7 +73,7 @@ start:
     jne halt
 
     cld
-    mov $stack_top, %esp
+    mov $STACK_TOP, %esp
 
     // Map kernel code & data PMLs
     movl $(boot_pml3 + 0x3), boot_pml4 + 0 * 8
@@ -188,7 +188,7 @@ tss:
 .quad 0                    // rsp1
 .quad 0                    // rsp2
 .quad 0                    // reserved1
-.quad interrupt_stack_top  // ist1
+.quad INTERRUPT_STACK_TOP  // ist1
 .quad 0                    // ist2
 .quad 0                    // ist3
 .quad 0                    // ist4
@@ -201,7 +201,11 @@ tss:
 tss_end:
 
 .section .bss, "aw", @nobits
-.skip 16384
-stack_top:
-.skip 16384
-interrupt_stack_top:
+.global STACK_BOTTOM
+STACK_BOTTOM:
+.skip 32768
+STACK_TOP:
+.global INTERRUPT_STACK_BOTTOM
+INTERRUPT_STACK_BOTTOM:
+.skip 32768
+INTERRUPT_STACK_TOP:

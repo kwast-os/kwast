@@ -2,7 +2,7 @@ export PATH := $(PATH):$(shell realpath ./toolchain/opt/cross/bin)
 
 ARCH ?= x86_64
 BUILD ?= debug
-CARGOFLAGS ?=
+KERNEL_CARGOFLAGS ?=
 QEMUFLAGS ?=
 
 RUST_OBJECT  = kernel/target/$(ARCH)-kwast/$(BUILD)/libkernel.a
@@ -19,8 +19,10 @@ AS          = $(ARCH)-elf-as
 
 QEMUFLAGS  += -m 512 --enable-kvm -cpu max --serial mon:stdio
 
+USER_CARGOFLAGS =
 ifeq ($(BUILD), release)
-CARGOFLAGS += --release
+KERNEL_CARGOFLAGS += --release
+USER_CARGOFLAGS += --release
 endif
 
 .PHONY: all clean run rust iso initrd dirs
@@ -40,15 +42,15 @@ iso: dirs initrd $(KERNEL)
 
 initrd: dirs
 	@echo Building userspace
-	@cd userspace; cargo build $(CARGOFLAGS)
+	@cd userspace; cargo build $(USER_CARGOFLAGS)
 	@echo Creating archive
-	@cd userspace/target/wasm32-wasi/$(BUILD); tar -cf ../../../../$(ISO_FILES)/boot/initrd.tar *.wasm
+	@cd userspace/target/wasm32-wasi/$(BUILD); (wasm-strip *.wasm || echo "wasm-strip is not installed. This is not a fatal error. You will have bigger binary files."); tar -cf ../../../../$(ISO_FILES)/boot/initrd.tar *.wasm;
 
 run: iso
 	@qemu-system-$(ARCH) -cdrom $(ISO_IMAGE) $(QEMUFLAGS)
 
 rust:
-	@cd kernel; RUST_TARGET_PATH=$(shell pwd) cargo xbuild --target $(ARCH)-kwast.json $(CARGOFLAGS)
+	@cd kernel; RUST_TARGET_PATH=$(shell pwd) cargo xbuild --target $(ARCH)-kwast.json $(KERNEL_CARGOFLAGS)
 
 $(KERNEL): rust $(RUST_OBJECT) $(ASM_OBJECTS) $(LD_SCRIPT)
 	@$(LD) $(LDFLAGS) -o $(KERNEL) $(ASM_OBJECTS) $(RUST_OBJECT)

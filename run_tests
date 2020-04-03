@@ -2,7 +2,7 @@
 
 run_test() {
 	printf "\033[1;33mRunning test $1\033[0m\n"
-	make iso CARGOFLAGS="--features integration-test,$1"
+	make iso KERNEL_CARGOFLAGS="--features integration-test,$1"
 
 	if [ $? -ne 0 ]; then
 		printf "\033[1;31mCompile failed\033[0m\n"

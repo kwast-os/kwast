@@ -38,6 +38,7 @@ These instructions help you get started with building the source and getting it 
 * grub-mkrescue (you might also need to install xorriso)
 * qemu-system-x86_64
 * Rust and Cargo
+* Optionally wasm-strip (from [wabt](https://github.com/WebAssembly/wabt)), which reduces the binary size
 
 ### Setting up a toolchain
 

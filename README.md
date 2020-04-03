@@ -21,8 +21,9 @@ An additional idea is to allow to use optional hardware protection domains in th
 
 ## <a name="current_status"> Current status </a>
 
-Currently, it runs very basic WebAssembly code in a basic multitasked environment.
+Currently, it runs basic WebAssembly code in a basic multitasked environment.
 The heap uses a slab allocator design, and the virtual memory areas are managed by an AVL tree.
+For the ABI, I started with implementing [WASI](https://github.com/WebAssembly/WASI).
 
 Here's a screenshot of three instances of a test program calling a syscall.
 ![Screenshot](docs/screenshot.png "Three threads calling a syscall")
@@ -45,6 +46,7 @@ You can setup your toolchain using the following steps:
 # (Inside the project root folder.)
 # You'll need to get the rust nightly and install cargo-xbuild:
 rustup component add rust-src
+rustup target add wasm32-wasi
 cargo install cargo-xbuild
 
 # You'll also need a cross-compile binutils, I wrote a bash script that builds this for you.

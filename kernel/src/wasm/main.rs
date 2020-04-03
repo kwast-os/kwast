@@ -302,20 +302,13 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             let function_imports = unsafe { vmctx_container.function_imports_as_mut_slice() };
 
             for (i, import) in self.compile_result.function_imports.iter().enumerate() {
-                println!("{} {:?}", i, import);
+                // println!("{} {:?}", i, import);
 
-                // TODO: improve this
                 function_imports[i] = match import.module.as_str() {
-                    "os" => {
-                        // TODO: hardcoded to a fixed function atm
-                        VmFunctionImportEntry {
-                            address: VirtAddr::new(test_func as usize),
-                        }
-                    }
                     "wasi_snapshot_preview1" => VmFunctionImportEntry {
                         address: get_address_for_wasi(&import.field).ok_or(Error::MissingImport)?,
                     },
-                    _ => unimplemented!(),
+                    _ => unimplemented!(), // TODO
                 };
             }
         }
@@ -395,12 +388,6 @@ pub fn run(buffer: &[u8]) -> Result<(), Error> {
     add_and_schedule_thread(thread);
 
     Ok(())
-}
-
-fn test_func(_vmctx: *const VmContext, param: i32) {
-    let id = with_core_scheduler(|scheduler| scheduler.get_current_thread().id());
-    println!("{:?}    os hello {} {:#p}", id, param, _vmctx);
-    //arch::halt();
 }
 
 /// Compiles a WebAssembly buffer.

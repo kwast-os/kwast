@@ -5,6 +5,7 @@ use crate::wasm::vmctx::VmContext;
 use core::cell::Cell;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
+use core::slice;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 
@@ -177,26 +178,39 @@ struct WasmPtr<T> {
 }
 
 impl<T> WasmPtr<T> {
-    /// Dereferences a WebAssembly pointer, does checks for alignment and bounds.
-    /// Returns Ok(address) on success and Err(Errno) on fail.
-    pub fn deref<'c>(&self, ctx: &VmContext) -> WasmResult<&'c Cell<T>> {
+    /// Internal helper function to get a real pointer or an error from a WasmPtr.
+    fn get_ptr_and_verify(&self, ctx: &VmContext, size: usize) -> WasmResult<*const u8> {
         let alignment = align_of::<T>() as u32;
-
-        // Assume: power of two alignment, so we can do a cheap alignment check below.
-        debug_assert!(alignment & (alignment - 1) == 0);
-
-        if self.offset & (alignment - 1) != 0
-            || self.offset as usize + size_of::<T>()
+        if self.offset % alignment != 0
+            || self.offset as usize + size
                 > with_core_scheduler(|s| s.get_current_thread().heap_size())
         {
             Err(Errno::Fault)
         } else {
             // Safety: pointer is correctly aligned and points to real data.
-            unsafe {
-                let addr = ctx.heap_ptr.as_const::<u8>().add(self.offset as usize);
-                Ok(&*(addr as *const Cell<T>))
-            }
+            unsafe { Ok(ctx.heap_ptr.as_const::<u8>().add(self.offset as usize)) }
         }
+    }
+
+    /// Gets a cell from a Wasm pointer, does checks for alignment and bounds.
+    /// Returns Ok(Cell) on success and Err(Errno) on fail.
+    pub fn cell<'c>(&self, ctx: &VmContext) -> WasmResult<&'c Cell<T>> {
+        // Safety: pointer is correctly aligned and points to real data.
+        self.get_ptr_and_verify(ctx, size_of::<T>())
+            .map(|p| unsafe { &*(p as *const Cell<T>) })
+    }
+
+    /// Gets a slice of cells from a Wasm pointer, does checks for alignment and bounds.
+    /// Returns Ok(slice) on success and Err(Errno) on fail.
+    pub fn slice<'s>(&self, ctx: &VmContext, len: u32) -> WasmResult<&'s [Cell<T>]> {
+        let len = len as usize;
+
+        // Safety: pointer is correctly aligned and points to real data.
+        self.get_ptr_and_verify(
+            ctx,
+            (size_of::<T>() + (size_of::<T>() % align_of::<T>())) * len,
+        )
+        .map(|p| unsafe { slice::from_raw_parts(p as *const Cell<T>, len) })
     }
 }
 
@@ -233,8 +247,8 @@ impl AbiFunctions for VmContext {
         environ_buf_size: WasmPtr<Size>,
     ) -> WasmStatus {
         println!("environ_sizes_get");
-        environc.deref(self)?.set(0);
-        environ_buf_size.deref(self)?.set(0);
+        environc.cell(self)?.set(0);
+        environ_buf_size.cell(self)?.set(0);
         Ok(())
     }
 
@@ -253,31 +267,34 @@ impl AbiFunctions for VmContext {
     ) -> WasmStatus {
         println!("fd_write {} iovs_len={}", fd, iovs_len);
 
-        // TODO: it's actually an array
-        let iovs = iovs.deref(self)?;
-        println!("{:?} {}", iovs.get().buf, iovs.get().buf_len);
+        let iovs = iovs.slice(self, iovs_len)?;
 
-        // HACK HACK HACK
-        let mut buf = iovs.get().buf;
-        let buf_len = iovs.get().buf_len;
+        // TODO: overflow?
+        let mut written = 0;
 
-        print!("Got: ");
-        for _ in 0..buf_len {
-            print!("{}", buf.deref(&self)?.get() as char);
+        for iov in iovs {
+            let iov = iov.get();
 
-            // HACK HACK HACK
-            buf.offset += 1;
+            let buf = iov.buf.slice(self, iov.buf_len)?;
+
+            // TODO: just prints to stdout for now
+            print!("Got: ");
+            for b in buf {
+                print!("{}", b.get() as char);
+            }
+            println!();
+
+            written += iov.buf_len;
         }
-        println!();
 
-        nwritten.deref(&self)?.set(buf_len);
+        nwritten.cell(&self)?.set(written);
 
         Ok(())
     }
 
     fn proc_exit(&self, exit_code: ExitCode) -> WasmStatus {
         // TODO: exit code
-        println!("exit code {}", exit_code);
+        println!("proc_exit: exit code {}", exit_code);
         scheduler::switch_to_next(SwitchReason::Exit);
         unreachable!("thread exit")
     }

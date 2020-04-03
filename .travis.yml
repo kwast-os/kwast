@@ -1,5 +1,5 @@
 language: rust
-dist: xenial
+dist: bionic
 rust:
   - nightly
 addons:
@@ -13,8 +13,9 @@ cache:
     - toolchain
 before_install:
   - rustup component add rust-src
+  - rustup target add wasm32-wasi
   - cargo install cargo-xbuild
 install:
   - cd toolchain && ./setup_cross_binutils.sh && cd ..
 script:
-  - cd kernel && ./run_tests && cd ..
+  - ./run_tests

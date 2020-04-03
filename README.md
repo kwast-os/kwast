@@ -25,8 +25,8 @@ Currently, it runs basic WebAssembly code in a basic multitasked environment.
 The heap uses a slab allocator design, and the virtual memory areas are managed by an AVL tree.
 For the ABI, I started with implementing [WASI](https://github.com/WebAssembly/WASI).
 
-Here's a screenshot of three instances of a test program calling a syscall.
-![Screenshot](docs/screenshot.png "Three threads calling a syscall")
+Here's a screenshot of a WASI compiled Rust program ([userspace/wasm-test](userspace/wasm-test)).
+![Screenshot](docs/screenshot.png "A simple Rust program")
 
 ## <a name="getting_started"> Getting started </a>
 

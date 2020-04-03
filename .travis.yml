@@ -7,7 +7,7 @@ addons:
     packages:
       - qemu
       - xorriso
-      - grub
+      - grub2-common
 cache:
   - apt
   - directories:

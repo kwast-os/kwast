@@ -1,5 +1,5 @@
 language: rust
-dist: bionic
+dist: xenial
 rust:
   - nightly
 addons:
@@ -7,7 +7,6 @@ addons:
     packages:
       - qemu
       - xorriso
-      - grub2-common
 cache:
   - apt
   - directories:

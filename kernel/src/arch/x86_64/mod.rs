@@ -209,11 +209,11 @@ fn set_per_cpu_data(ptr: *mut CpuData) {
 
 /// Gets the per-CPU data.
 #[inline(always)]
-pub fn get_per_cpu_data() -> &'static mut CpuData {
+pub fn get_per_cpu_data() -> &'static CpuData {
     unsafe {
         let value: *mut CpuData;
         asm!("mov %gs:0, $0" : "=r" (value));
-        &mut *value
+        &*value
     }
 }
 

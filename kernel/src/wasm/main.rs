@@ -22,12 +22,16 @@ use crate::wasm::vmctx::{
     VmContext, VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE,
     HEAP_SIZE, WASM_PAGE_SIZE,
 };
-use crate::wasm::wasi::get_address_for_wasi;
+use crate::wasm::wasi::get_address_for_wasi_and_validate_sig;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::{copy_nonoverlapping, write_unaligned};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::ir::{types, Signature, Type};
+use cranelift_codegen::isa::{CallConv, TargetIsa};
+
+pub const WASM_VMCTX_TYPE: Type = types::I64;
+pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
 
@@ -63,6 +67,7 @@ struct CompileResult<'data> {
     contexts: Box<[Context]>,
     start_func: Option<FuncIndex>,
     func_sigs: Box<[SignatureIndex]>,
+    signatures: Box<[Signature]>,
     memories: Box<[Memory]>,
     data_initializers: Box<[DataInitializer<'data>]>,
     function_imports: Box<[FunctionImport]>,
@@ -303,11 +308,15 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             let function_imports = unsafe { vmctx_container.function_imports_as_mut_slice() };
 
             for (i, import) in self.compile_result.function_imports.iter().enumerate() {
-                // println!("{} {:?}", i, import);
+                println!("{} {:?}", i, import);
+
+                let sig_idx = self.compile_result.func_sigs[i];
+                let sig = &self.compile_result.signatures[sig_idx.as_u32() as usize];
 
                 function_imports[i] = match import.module.as_str() {
                     "wasi_snapshot_preview1" => VmFunctionImportEntry {
-                        address: get_address_for_wasi(&import.field).ok_or(Error::MissingImport)?,
+                        address: get_address_for_wasi_and_validate_sig(&import.field, sig)
+                            .ok_or(Error::MissingImport)?,
                     },
                     _ => unimplemented!(), // TODO
                 };
@@ -458,5 +467,6 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         table_elements: env.table_elements.into_boxed_slice(),
         globals: env.globals.into_boxed_slice(),
         total_size,
+        signatures: env.signatures.into_boxed_slice(),
     })
 }

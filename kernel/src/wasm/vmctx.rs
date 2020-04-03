@@ -222,7 +222,6 @@ impl VmContextContainer {
         };
 
         for (table, vm_table) in self.tables.iter().zip(vm_tables.iter_mut()) {
-            println!("Written {:?}", table.as_vm_table());
             *vm_table = table.as_vm_table();
         }
     }

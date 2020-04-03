@@ -73,7 +73,6 @@ impl binemit::RelocSink for RelocSink {
     }
 
     fn reloc_jt(&mut self, code_offset: u32, reloc: Reloc, jt: JumpTable) {
-        println!("{:?}", reloc);
         self.relocations.push(Relocation {
             code_offset,
             reloc,

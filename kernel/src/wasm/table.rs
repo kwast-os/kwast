@@ -12,7 +12,7 @@ impl Table {
     /// Creates a new table.
     pub fn new(table: &cranelift_wasm::Table) -> Self {
         let vec = match table.ty {
-            TableElementType::Func => vec![VmTableElement::null(); table.minimum as usize], // TODO: placeholder function
+            TableElementType::Func => vec![VmTableElement::null(); table.minimum as usize],
             TableElementType::Val(_) => unimplemented!("other type than anyfunc"),
         };
 

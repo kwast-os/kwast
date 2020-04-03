@@ -259,8 +259,6 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         let call_args_with_vmctx = Self::translate_signature(vmctx, call_args);
 
         if self.module_env.is_imported_func(callee_index) {
-            // TODO: we should verify the signature
-
             let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
 
             // Get callee address from vmctx.

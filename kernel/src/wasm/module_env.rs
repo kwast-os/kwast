@@ -62,7 +62,7 @@ pub struct ModuleEnv<'data> {
     /// Starting function.
     pub start_func: Option<FuncIndex>,
     /// Vector of all signatures.
-    signatures: Vec<Signature>,
+    pub signatures: Vec<Signature>,
     /// Function signatures.
     pub func_sigs: Vec<SignatureIndex>,
     /// Function Wasm body contents.

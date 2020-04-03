@@ -84,18 +84,59 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
         let name = func.name.to_token_stream();
         let return_type = func.return_type;
         let params = func.params.iter();
+        let mut translated_types = Vec::new();
+
+        let errno_return = match &return_type {
+            Type::Path(p) => {
+                assert_eq!(p.path.segments.len(), 1);
+                match p.path.segments[0].ident.to_string().as_str() {
+                    "Errno" => true,
+                    _ => {
+                        emit_error!(return_type, "unexpected return type");
+                        false
+                    },
+                }
+            },
+            Type::Tuple(t) => {
+                if t.elems.len() != 0 {
+                    emit_error!(t, "unexpected tuple");
+                }
+                false
+            }
+            _ => {
+                emit_error!(return_type, "unexpected return type  aaaa {:?}", return_type.to_token_stream());
+                false
+            },
+        };
+
+        let trait_return_type = if errno_return {
+            quote! { WasmStatus }
+        } else {
+            quote! { () }
+        };
 
         trait_funcs.push(quote! {
-            #name(&self, #(#params),*) -> WasmStatus
+            #name(&self, #(#params),*) -> #trait_return_type
         });
 
         for param in &func.params {
-            match &param.ty {
-                Type::Reference(_) | Type::Ptr(_) => {
+            translated_types.push(match &param.ty {
+                Type::Slice(_) | Type::Reference(_) | Type::Ptr(_) => {
                     emit_error!(param, "use the wasm pointer type");
+                    quote! {} // Just here for the compiler
                 }
-                _ => {}
-            };
+                Type::Path(p) => {
+                    assert_eq!(p.path.segments.len(), 1);
+                    match p.path.segments[0].ident.to_string().as_str() {
+                        "i64" | "u64" => quote! { types::I64 },
+                        "u32" | "i32" | "Fd" | "ExitCode" | "WasmPtr" => quote! { types::I32 },
+                        "i16" | "u16" => quote! { types::I16 },
+                        "i8" | "u8" => quote! { types::I8 },
+                        _ => unimplemented!(),
+                    }
+                }
+                _ => unimplemented!(),
+            });
         }
 
         // Glue code generation
@@ -103,13 +144,32 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
         let member_func_name = &func.name;
         let param_names = func.params.iter().map(|p| &p.name);
         let params = func.params.iter();
-        glue_functions.push(quote! {
-            extern "C" fn #glue_name(vmctx: &VmContext, #(#params),*) -> #return_type {
-                if let Err(e) = vmctx.#member_func_name(#(#param_names),*) {
+
+        let function_body_call = quote! {
+            vmctx.#member_func_name(#(#param_names),*)
+        };
+
+        let function_body = if errno_return {
+            quote! {
+                if let Err(e) = #function_body_call {
                     e
                 } else {
                     Errno::Success
                 }
+            }
+        } else {
+            function_body_call
+        };
+
+        let sig_returns = if errno_return {
+            quote! { AbiParam::new(types::I32) }
+        } else {
+            quote! {}
+        };
+
+        glue_functions.push(quote! {
+            extern "C" fn #glue_name(vmctx: &VmContext, #(#params),*) -> #return_type {
+                #function_body
             }
         });
 
@@ -119,7 +179,11 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
             member_func_name.span(),
         );
         map_entries.push(quote! {
-            map.insert(#key, #glue_name as usize);
+            map.insert(#key, (VirtAddr::new(#glue_name as usize), Signature {
+                params: vec![AbiParam::special(WASM_VMCTX_TYPE, ArgumentPurpose::VMContext), #(AbiParam::new(#translated_types)),*],
+                returns: vec![#sig_returns],
+                call_conv: WASM_CALL_CONV,
+            }));
         });
     }
 
@@ -133,7 +197,7 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
         #(#glue_functions)*
 
         lazy_static! {
-            static ref ABI_MAP: HashMap<&'static str, usize> = {
+            static ref ABI_MAP: HashMap<&'static str, (VirtAddr, Signature)> = {
                 let mut map = HashMap::with_capacity(#map_capacity);
                 #(#map_entries)*
                 map

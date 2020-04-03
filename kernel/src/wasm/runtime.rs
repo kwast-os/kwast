@@ -18,6 +18,7 @@ pub struct RuntimeFunctions {
     pub memory_size: RuntimeFunctionData,
 }
 
+// TODO: lazy static this instead of per module
 impl RuntimeFunctions {
     /// Creates a new instance of the runtime function data.
     pub fn new(cfg: TargetFrontendConfig) -> Self {

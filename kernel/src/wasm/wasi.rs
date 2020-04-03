@@ -1,11 +1,12 @@
 use crate::arch::address::VirtAddr;
-use crate::tasking::scheduler;
-use crate::tasking::scheduler::{with_core_scheduler, SwitchReason};
+use crate::tasking::scheduler::{self, with_core_scheduler, SwitchReason};
+use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::VmContext;
 use core::cell::Cell;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
 use core::slice;
+use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 
@@ -237,7 +238,7 @@ abi_functions! {
     environ_sizes_get: (environc: WasmPtr<Size>, environ_buf_size: WasmPtr<Size>) -> Errno,
     environ_get: (environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> Errno,
     fd_write: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: u32, nwritten: WasmPtr<u32>) -> Errno,
-    proc_exit: (exit_code: ExitCode) -> Errno,
+    proc_exit: (exit_code: ExitCode) -> (),
 }
 
 impl AbiFunctions for VmContext {
@@ -292,7 +293,7 @@ impl AbiFunctions for VmContext {
         Ok(())
     }
 
-    fn proc_exit(&self, exit_code: ExitCode) -> WasmStatus {
+    fn proc_exit(&self, exit_code: ExitCode) -> () {
         // TODO: exit code
         println!("proc_exit: exit code {}", exit_code);
         scheduler::switch_to_next(SwitchReason::Exit);
@@ -300,7 +301,16 @@ impl AbiFunctions for VmContext {
     }
 }
 
-/// Gets the address for a wasi syscall.
-pub fn get_address_for_wasi(name: &str) -> Option<VirtAddr> {
-    ABI_MAP.get(name).map(|e| VirtAddr::new(*e))
+/// Gets the address for a wasi syscall and validate signature.
+pub fn get_address_for_wasi_and_validate_sig(name: &str, sig: &Signature) -> Option<VirtAddr> {
+    let (addr, reference_sig) = ABI_MAP.get(name)?;
+
+    println!("{:?}", reference_sig);
+    println!("{:?}", sig);
+
+    if reference_sig != sig {
+        None
+    } else {
+        Some(*addr)
+    }
 }

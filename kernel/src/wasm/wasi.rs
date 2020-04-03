@@ -280,12 +280,12 @@ impl AbiFunctions for VmContext {
 
     fn fd_write(
         &self,
-        fd: Fd,
+        _fd: Fd,
         iovs: WasmPtr<CioVec>,
         iovs_len: u32,
         nwritten: WasmPtr<u32>,
     ) -> WasmStatus {
-        println!("fd_write {} iovs_len={}", fd, iovs_len);
+        // println!("fd_write {} iovs_len={}", fd, iovs_len);
 
         let iovs = iovs.slice(self, iovs_len)?;
 
@@ -298,11 +298,9 @@ impl AbiFunctions for VmContext {
             let buf = iov.buf.slice(self, iov.buf_len)?;
 
             // TODO: just prints to stdout for now
-            print!("Got: ");
             for b in buf {
                 print!("{}", b.get() as char);
             }
-            println!();
 
             written += iov.buf_len;
         }

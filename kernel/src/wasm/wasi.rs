@@ -234,10 +234,29 @@ struct CioVec {
     pub buf_len: u32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct PreStatDir {
+    pr_name_len: Size,
+}
+
+#[repr(C)]
+union PreStatInner {
+    dir: PreStatDir,
+}
+
+#[repr(C)]
+struct PreStat {
+    tag: u32,
+    inner: PreStatInner,
+}
+
 abi_functions! {
     environ_sizes_get: (environc: WasmPtr<Size>, environ_buf_size: WasmPtr<Size>) -> Errno,
     environ_get: (environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> Errno,
-    fd_write: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: u32, nwritten: WasmPtr<u32>) -> Errno,
+    fd_write: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: Size, nwritten: WasmPtr<u32>) -> Errno,
+    fd_prestat_get: (fd: Fd, prestat: WasmPtr<PreStat>) -> Errno,
+    fd_prestat_dir_name: (fd: Fd, path: WasmPtr<u8>, path_len: Size) -> Errno,
     proc_exit: (exit_code: ExitCode) -> (),
 }
 
@@ -290,6 +309,23 @@ impl AbiFunctions for VmContext {
 
         nwritten.cell(&self)?.set(written);
 
+        Ok(())
+    }
+
+    fn fd_prestat_get(&self, _fd: Fd, _prestat: WasmPtr<PreStat>) -> WasmStatus {
+        // TODO
+        //prestat.cell(self)?.set(PreStat {
+        //    tag: 0,
+        //    inner: PreStatInner {
+        //        dir: PreStatDir { pr_name_len: 0 },
+        //    },
+        //});
+        Err(Errno::BadF)
+    }
+
+    fn fd_prestat_dir_name(&self, fd: Fd, _path: WasmPtr<u8>, path_len: Size) -> WasmStatus {
+        println!("fd_prestat_dir_name {} {}", fd, path_len);
+        // TODO
         Ok(())
     }
 

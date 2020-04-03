@@ -139,7 +139,7 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
                     assert_eq!(p.path.segments.len(), 1);
                     match p.path.segments[0].ident.to_string().as_str() {
                         "i64" | "u64" => quote! { types::I64 },
-                        "u32" | "i32" | "Fd" | "ExitCode" | "WasmPtr" => quote! { types::I32 },
+                        "u32" | "i32" | "Fd" | "ExitCode" | "WasmPtr" | "Size" => quote! { types::I32 },
                         "i16" | "u16" => quote! { types::I16 },
                         "i8" | "u8" => quote! { types::I8 },
                         _ => unimplemented!(),

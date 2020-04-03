@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "wasm-test",
+]
+
+[profile.release]
+lto = true
+opt-level = 3

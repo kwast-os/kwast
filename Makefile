@@ -12,7 +12,6 @@ ISO_FILES    = build/iso
 ISO_IMAGE    = build/img.iso
 ASM_SOURCES  = $(wildcard kernel/src/arch/$(ARCH)/*.s)
 ASM_OBJECTS  = $(patsubst kernel/src/arch/$(ARCH)/%.s, build/arch/$(ARCH)/%.o, $(ASM_SOURCES))
-INITRD_FILES = hello.wasm 
 
 LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
 LD          = $(ARCH)-elf-ld
@@ -24,23 +23,26 @@ ifeq ($(BUILD), release)
 CARGOFLAGS += --release
 endif
 
-.PHONY: all clean run rust iso initrd
+.PHONY: all clean run rust iso initrd dirs
 
 all: $(KERNEL)
 
 clean:
 	@rm -r build/
 
-iso: initrd $(KERNEL)
+dirs:
+	@mkdir -p $(ISO_FILES)/boot/grub
+
+iso: dirs initrd $(KERNEL)
 	@cp kernel/src/arch/$(ARCH)/grub.cfg $(ISO_FILES)/boot/grub
 	@cp $(KERNEL) $(ISO_FILES)/boot/kernel
 	@grub-mkrescue -o $(ISO_IMAGE) $(ISO_FILES) 2> /dev/null || (echo "grub-mkrescue failed, do you have the necessary dependencies?" && exit 1)
 
-initrd: $(INITRD_FILES)
-	@mkdir -p $(ISO_FILES)/boot/grub
-	@tar -cf $(ISO_FILES)/boot/initrd.tar -C wasm_samples $(INITRD_FILES)
-
-hello.wasm:
+initrd: dirs
+	@echo Building userspace
+	@cd userspace; cargo build $(CARGOFLAGS)
+	@echo Creating archive
+	@cd userspace/target/wasm32-wasi/$(BUILD); tar -cf ../../../../$(ISO_FILES)/boot/initrd.tar *.wasm
 
 run: iso
 	@qemu-system-$(ARCH) -cdrom $(ISO_IMAGE) $(QEMUFLAGS)

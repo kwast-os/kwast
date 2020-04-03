@@ -305,9 +305,6 @@ impl AbiFunctions for VmContext {
 pub fn get_address_for_wasi_and_validate_sig(name: &str, sig: &Signature) -> Option<VirtAddr> {
     let (addr, reference_sig) = ABI_MAP.get(name)?;
 
-    println!("{:?}", reference_sig);
-    println!("{:?}", sig);
-
     if reference_sig != sig {
         None
     } else {

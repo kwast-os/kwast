@@ -1,6 +1,6 @@
 /**/.idea/
 
-/kernel/build
+/build
 /**/target/
 **/*.rs.bk
 

@@ -2,7 +2,7 @@
 
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{CodegenError, Context};
-use cranelift_wasm::{translate_module, Global, Memory, MemoryIndex};
+use cranelift_wasm::{translate_module, Global, Memory, MemoryIndex, SignatureIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
@@ -62,6 +62,7 @@ struct CompileResult<'data> {
     isa: Box<dyn TargetIsa>,
     contexts: Box<[Context]>,
     start_func: Option<FuncIndex>,
+    func_sigs: Box<[SignatureIndex]>,
     memories: Box<[Memory]>,
     data_initializers: Box<[DataInitializer<'data>]>,
     function_imports: Box<[FunctionImport]>,
@@ -326,9 +327,10 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                 for (i, func_idx) in elements.elements.iter().enumerate() {
                     table.set(
                         i + offset,
-                        VmTableElement {
-                            address: self.get_func_address(code_vma, *func_idx),
-                        },
+                        VmTableElement::new(
+                            self.get_func_address(code_vma, *func_idx),
+                            self.compile_result.func_sigs[func_idx.as_u32() as usize],
+                        ),
                     );
                 }
             }
@@ -448,6 +450,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         isa,
         contexts: contexts.into_boxed_slice(),
         memories: env.memories.into_boxed_slice(),
+        func_sigs: env.func_sigs.into_boxed_slice(),
         data_initializers: env.data_initializers.into_boxed_slice(),
         start_func,
         function_imports: env.function_imports.into_boxed_slice(),

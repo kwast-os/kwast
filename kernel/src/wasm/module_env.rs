@@ -63,8 +63,8 @@ pub struct ModuleEnv<'data> {
     pub start_func: Option<FuncIndex>,
     /// Vector of all signatures.
     signatures: Vec<Signature>,
-    /// Function types.
-    func_types: Vec<SignatureIndex>,
+    /// Function signatures.
+    pub func_sigs: Vec<SignatureIndex>,
     /// Function Wasm body contents.
     pub func_bodies: Vec<FunctionBody<'data>>,
     /// Memories.
@@ -93,7 +93,7 @@ impl<'data> ModuleEnv<'data> {
             start_func: None,
             runtime_functions,
             signatures: Vec::new(),
-            func_types: Vec::new(),
+            func_sigs: Vec::new(),
             func_bodies: Vec::new(),
             memories: Vec::new(),
             function_imports: Vec::new(),
@@ -107,7 +107,7 @@ impl<'data> ModuleEnv<'data> {
 
     /// Gets the signature of the given function.
     pub fn get_sig_from_func(&self, index: FuncIndex) -> Signature {
-        let sig_index = self.func_types[index.as_u32() as usize];
+        let sig_index = self.func_sigs[index.as_u32() as usize];
         self.signatures[sig_index.as_u32() as usize].clone()
     }
 
@@ -150,7 +150,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         module: &'data str,
         field: &'data str,
     ) -> WasmResult<()> {
-        self.func_types.push(sig_index);
+        self.func_sigs.push(sig_index);
         self.function_imports.push(FunctionImport {
             module: String::from(module),
             field: String::from(field),
@@ -186,12 +186,12 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
     }
 
     fn reserve_func_types(&mut self, num: u32) -> WasmResult<()> {
-        self.func_types.reserve_exact(num as usize);
+        self.func_sigs.reserve_exact(num as usize);
         Ok(())
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
-        self.func_types.push(sig_index);
+        self.func_sigs.push(sig_index);
         Ok(())
     }
 

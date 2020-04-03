@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::mem::{align_of, size_of};
 use core::slice;
-use cranelift_wasm::{Global, GlobalInit, TableIndex};
+use cranelift_wasm::{Global, GlobalInit, SignatureIndex, TableIndex};
 
 pub const WASM_PAGE_SIZE: usize = 64 * 1024;
 
@@ -29,6 +29,7 @@ pub struct VmTable {
 #[derive(Debug, Copy, Clone)]
 pub struct VmTableElement {
     pub address: VirtAddr,
+    pub sig_idx: u64,
 }
 
 #[repr(C)]
@@ -72,6 +73,12 @@ impl VmTableElement {
     pub fn address_offset() -> i32 {
         offset_of!(Self, address) as i32
     }
+
+    /// Offset of the field `sig_idx`.
+    #[inline]
+    pub fn sig_idx_offset() -> i32 {
+        offset_of!(Self, sig_idx) as i32
+    }
 }
 
 impl VmTable {
@@ -89,10 +96,19 @@ impl VmTable {
 }
 
 impl VmTableElement {
-    // Null.
-    pub const fn null() -> Self {
+    /// Null.
+    pub fn null() -> Self {
         Self {
             address: VirtAddr::null(),
+            sig_idx: core::u64::MAX, // Important: check func_env
+        }
+    }
+
+    /// Creates a new table element.
+    pub fn new(address: VirtAddr, sig_idx: SignatureIndex) -> Self {
+        Self {
+            address,
+            sig_idx: sig_idx.as_u32() as u64,
         }
     }
 }

@@ -6,11 +6,12 @@ use crate::wasm::vmctx::{VmContext, VmTable, VmTableElement, HEAP_GUARD_SIZE, HE
 use alloc::vec::Vec;
 use core::mem::size_of;
 use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::{
     types, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, GlobalValue,
     GlobalValueData, Heap, HeapData, HeapStyle, Inst, InstBuilder, MemFlags, SigRef, Table,
-    TableData, Value,
+    TableData, TrapCode, Value,
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_wasm::{
@@ -203,13 +204,11 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         mut pos: FuncCursor,
         _table_index: TableIndex,
         table: Table,
-        _sig_index: SignatureIndex,
+        sig_idx: SignatureIndex,
         sig_ref: SigRef,
         callee: Value,
         call_args: &[Value],
     ) -> Result<Inst, WasmError> {
-        // TODO: we should verify the signature and make sure the address is not null
-
         let table_entry_addr = pos.ins().table_addr(self.pointer_type(), table, callee, 0);
 
         let func_addr = pos.ins().load(
@@ -219,9 +218,29 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
             VmTableElement::address_offset(),
         );
 
+        let current_sig_idx = pos.ins().load(
+            self.pointer_type(),
+            MemFlags::trusted(),
+            table_entry_addr,
+            VmTableElement::sig_idx_offset(),
+        );
+
         let vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
 
         let call_args_with_vmctx = Self::translate_signature(vmctx, call_args);
+
+        // Check for valid signature, otherwise trap.
+        // The signature indices are actually 32-bit and we have a reserved value of 64-bit
+        // of all one-bits in the case of an empty entry.
+        // That means in case of an empty entry, this check will always fail, so will always trap.
+        // That means we don't have to check for the null address of the empty entry,
+        // because the signature check will fail anyway.
+        let valid = pos.ins().icmp_imm(
+            IntCC::Equal,
+            current_sig_idx,
+            Imm64::new(sig_idx.as_u32() as i64),
+        );
+        pos.ins().trapz(valid, TrapCode::BadSignature);
 
         Ok(pos
             .ins()

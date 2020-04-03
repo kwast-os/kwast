@@ -44,7 +44,7 @@ initrd: dirs
 	@echo Building userspace
 	@cd userspace; cargo build $(USER_CARGOFLAGS)
 	@echo Creating archive
-	@cd userspace/target/wasm32-wasi/$(BUILD); (wasm-strip *.wasm || echo "wasm-strip is not installed. This is not a fatal error. You will have bigger binary files."); tar -cf ../../../../$(ISO_FILES)/boot/initrd.tar *.wasm;
+	@cd userspace/target/wasm32-wasi/$(BUILD); (wasm-strip *.wasm || echo "wasm-strip is not installed. This is not a fatal error. Installing wasm-strip will result in smaller binary files."); tar -cf ../../../../$(ISO_FILES)/boot/initrd.tar *.wasm;
 
 run: iso
 	@qemu-system-$(ARCH) -cdrom $(ISO_IMAGE) $(QEMUFLAGS)

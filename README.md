@@ -61,9 +61,11 @@ Now you're ready to build and run the project!
 There's currently a Makefile in the `kernel` folder. The **Makefile** there provides some rules:
 
 ```bash
-cd kernel # If not already there
+# (Inside the project root folder.)
 make run # Builds iso and start a QEMU virtual machine
-make iso # Only builds the iso
+
+# If you don't want to run, but only build a bootable ISO:
+make iso
 
 # You can make a release build using:
 make iso BUILD=release # (or run)

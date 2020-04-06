@@ -200,7 +200,7 @@ fn setup_simd() {
     cr4 |= (1 << 9) | (1 << 10);
 
     // Check for XSAVE support etc.
-    if let Some(state) = cpuid.get_extended_state_info() {
+    let simd_save_size = if let Some(state) = cpuid.get_extended_state_info() {
         // Enable XSAVE
         cr4 |= 1 << 18;
 
@@ -211,15 +211,20 @@ fn setup_simd() {
         }
 
         unsafe {
+            cr4_write(cr4);
             xsetbv(0, xcr0);
         }
 
-        println!("{}", state.xsave_size());
-    }
+        state.xsave_size()
+    } else {
+        unsafe {
+            cr4_write(cr4);
+        }
 
-    unsafe {
-        cr4_write(cr4);
-    }
+        512
+    };
+
+    println!("{}", simd_save_size);
 }
 
 /// Inits the VMA regions. May only be called once per VMA allocator.

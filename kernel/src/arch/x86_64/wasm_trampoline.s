@@ -8,8 +8,5 @@ wasm_trampoline:
     // The stack is page aligned right now, so also 16 byte like it should for the System V ABI.
     movq %rbp, %rdi
     callq *%rbx
-
-    // Exit
-    movl $1, %edi
-    call _switch_to_next
+    // Applications should call exit
     ud2

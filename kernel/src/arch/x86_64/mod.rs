@@ -184,15 +184,42 @@ pub extern "C" fn entry(mboot_addr: usize) {
         mapping.free_and_unmap_single(interrupt_stack_bottom);
     }
 
-    // TODO
-    {
-        let cpuid = CpuId::new();
-        println!("{:?}", cpuid.get_extended_state_info());
-    }
+    setup_simd();
 
     // Run kernel main
     let reserved_end = VirtAddr::new(reserved_end).align_up();
     crate::kernel_run(reserved_end, boot_modules);
+}
+
+/// Sets up SIMD.
+fn setup_simd() {
+    let cpuid = CpuId::new();
+
+    // Set OSFXSR and OSXMMEXCPT bits, at least SSE2 is available
+    let mut cr4 = cr4_read();
+    cr4 |= (1 << 9) | (1 << 10);
+
+    // Check for XSAVE support etc.
+    if let Some(state) = cpuid.get_extended_state_info() {
+        // Enable XSAVE
+        cr4 |= 1 << 18;
+
+        // XCR0 will have x87 and SSE states for sure
+        let mut xcr0 = (1 << 0) | (1 << 1);
+        if state.xcr0_supports_avx_256() {
+            xcr0 |= 1 << 2;
+        }
+
+        unsafe {
+            xsetbv(0, xcr0);
+        }
+
+        println!("{}", state.xsave_size());
+    }
+
+    unsafe {
+        cr4_write(cr4);
+    }
 }
 
 /// Inits the VMA regions. May only be called once per VMA allocator.
@@ -238,9 +265,29 @@ pub fn get_per_cpu_data() -> &'static CpuData {
 }
 
 /// Write Model Specific Register.
-#[inline]
 unsafe fn wrmsr(reg: u32, value: u64) {
     let lo = value as u32;
     let hi = (value >> 32) as u32;
     asm!("wrmsr" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
+}
+
+/// Read CR4
+fn cr4_read() -> u64 {
+    unsafe {
+        let value: u64;
+        asm!("mov %cr4, $0" : "=r" (value));
+        value
+    }
+}
+
+/// Write new CR4
+unsafe fn cr4_write(value: u64) {
+    asm!("mov $0, %cr4" :: "r" (value) : "memory" : "volatile");
+}
+
+/// Write extended control register.
+unsafe fn xsetbv(reg: u32, value: u64) {
+    let lo = value as u32;
+    let hi = (value >> 32) as u32;
+    asm!("xsetbv" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
 }

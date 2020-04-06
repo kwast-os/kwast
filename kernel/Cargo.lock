@@ -177,6 +177,7 @@ dependencies = [
  "lazy_static",
  "memoffset",
  "multiboot2",
+ "raw-cpuid",
  "volatile",
  "wasm-call",
 ]

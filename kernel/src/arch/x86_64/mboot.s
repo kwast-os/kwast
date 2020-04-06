@@ -111,6 +111,13 @@ start:
     mov $0x0277, %ecx
     wrmsr
 
+    // Enable the FPU
+    mov %cr0, %eax
+    and $(~(1 << 1)), %ax
+    or $(1 << 1), %ax
+    mov %eax, %cr0
+    fninit
+
     // Enable: PSE, PAE
     mov %cr4, %eax
     orl $(1 << 4 | 1 << 5), %eax

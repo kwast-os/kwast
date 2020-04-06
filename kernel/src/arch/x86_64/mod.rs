@@ -9,6 +9,7 @@ use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::with_vma_allocator;
 use crate::util::boot_module::{BootModule, BootModuleProvider, Range};
 use multiboot2::{BootInformation, ElfSectionFlags, ModuleIter};
+use raw_cpuid::CpuId;
 
 #[macro_use]
 pub mod macros;
@@ -181,6 +182,12 @@ pub extern "C" fn entry(mboot_addr: usize) {
         let mut mapping = ActiveMapping::get();
         mapping.free_and_unmap_single(stack_bottom);
         mapping.free_and_unmap_single(interrupt_stack_bottom);
+    }
+
+    // TODO
+    {
+        let cpuid = CpuId::new();
+        println!("{:?}", cpuid.get_extended_state_info());
     }
 
     // Run kernel main

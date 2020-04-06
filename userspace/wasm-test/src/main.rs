@@ -12,4 +12,15 @@ fn main() {
     println!("Hello, world! This is a Rust program compiled with the wasm32-wasi toolchain.");
     println!("The .wasm file (this program) was put in an initrd and this is now executing.");
     println!("{}: {:?}", n, other_function(n));
+
+    // Bad way to calculate PI, but just as a test for floating point
+    let mut nom = 1.0;
+    let mut denom = 1.0;
+    let mut res = 0.0;
+    loop {
+        println!("{} {}", 4.0 * res, denom);
+        res += nom / denom;
+        denom += 2.0;
+        nom *= -1.0;
+    }
 }

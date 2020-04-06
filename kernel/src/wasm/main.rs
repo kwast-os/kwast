@@ -247,7 +247,6 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                 .map_err(Error::MemoryError)?;
         };
 
-        // Determine start function. If it's not given, search for "_start" as specified by WASI.
         let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
 
         let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma)?;
@@ -452,6 +451,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
 
     println!();
 
+    // Determine start function. If it's not given, search for "_start" as specified by WASI.
     let start_func = env.start_func.or_else(|| match env.exports.get("_start") {
         Some(Export::Function(idx)) => Some(*idx),
         _ => None,

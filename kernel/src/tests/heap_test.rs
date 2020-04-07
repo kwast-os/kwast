@@ -90,7 +90,8 @@ pub fn test_main() {
     b.reserve(20);
     assert_eq!(b.as_ptr(), unsafe { c.as_ptr().offset(-32) });
 
-    // Test partial & free: exhaust the 512-byte cache.
+    // Test partial & free: exhaust the 512-byte cache,
+    // then start a new slab, then check what the heap picks.
     drop(a);
     drop(c);
     let mut a: Vec<i8> = Vec::new();

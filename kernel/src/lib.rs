@@ -61,6 +61,7 @@ pub fn kernel_run(reserved_end: VirtAddr, _boot_modules: impl BootModuleProvider
     // May only be called once.
     unsafe {
         mm::init(reserved_end);
+        arch::late_init();
         tasking::scheduler::init();
     }
 

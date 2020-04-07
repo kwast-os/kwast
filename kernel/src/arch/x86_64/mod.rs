@@ -1,15 +1,14 @@
 use core::cmp::max;
 
-use crate::arch::address::VirtAddr;
+use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::cpu_data::CpuData;
-use crate::arch::x86_64::address::PhysAddr;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
+use crate::arch::x86_64::simd::setup_simd;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::with_vma_allocator;
 use crate::util::boot_module::{BootModule, BootModuleProvider, Range};
 use multiboot2::{BootInformation, ElfSectionFlags, ModuleIter};
-use raw_cpuid::CpuId;
 
 #[macro_use]
 pub mod macros;
@@ -18,6 +17,7 @@ pub mod atomic;
 pub mod interrupts;
 pub mod paging;
 pub mod port;
+pub mod simd;
 pub mod tasking;
 pub mod vga_text;
 
@@ -33,35 +33,6 @@ extern "C" {
 
 /// Per-CPU data for the bootstrap processor.
 static mut PER_CPU_DATA_BSP: CpuData = CpuData::new();
-
-/*#[repr(C, packed)]
-struct TSS {
-    reserved0: u32,
-    rsp: [VirtAddr; 3],
-    reserved1: u64,
-    ist: [VirtAddr; 7],
-    reserved2: u64,
-    reserved3: u16,
-    io_map_base: u16,
-}
-
-impl TSS {
-    const fn new() -> Self {
-        Self {
-            reserved0: 0,
-            rsp: [VirtAddr::null(); 3],
-            reserved1: 0,
-            ist: [VirtAddr::null(); 7],
-            reserved2: 0,
-            reserved3: 0,
-            io_map_base: 0,
-        }
-    }
-
-    fn set_ist(&mut self, n: usize, addr: VirtAddr) {
-        self.ist[n] = addr;
-    }
-}*/
 
 struct ArchBootModuleProvider<'a> {
     module_iter: ModuleIter<'a>,
@@ -184,51 +155,18 @@ pub extern "C" fn entry(mboot_addr: usize) {
         mapping.free_and_unmap_single(interrupt_stack_bottom);
     }
 
-    setup_simd();
-
     // Run kernel main
     let reserved_end = VirtAddr::new(reserved_end).align_up();
     crate::kernel_run(reserved_end, boot_modules);
 }
 
-/// Sets up SIMD.
-fn setup_simd() {
-    let cpuid = CpuId::new();
-
-    // Set OSFXSR and OSXMMEXCPT bits, at least SSE2 is available
-    let mut cr4 = cr4_read();
-    cr4 |= (1 << 9) | (1 << 10);
-
-    // Check for XSAVE support etc.
-    let simd_save_size = if let Some(state) = cpuid.get_extended_state_info() {
-        // Enable XSAVE
-        cr4 |= 1 << 18;
-
-        // XCR0 will have x87 and SSE states for sure
-        let mut xcr0 = (1 << 0) | (1 << 1);
-        if state.xcr0_supports_avx_256() {
-            xcr0 |= 1 << 2;
-        }
-
-        unsafe {
-            cr4_write(cr4);
-            xsetbv(0, xcr0);
-        }
-
-        state.xsave_size()
-    } else {
-        unsafe {
-            cr4_write(cr4);
-        }
-
-        512
-    };
-
-    println!("{}", simd_save_size);
+/// Late init.
+pub fn late_init() {
+    setup_simd();
 }
 
 /// Inits the VMA regions. May only be called once per VMA allocator.
-pub unsafe fn init_vma_regions(start: VirtAddr) {
+pub fn init_vma_regions(start: VirtAddr) {
     with_vma_allocator(|vma| {
         vma.insert_region(start, 0x8000_00000000 - start.as_usize());
         vma.insert_region(

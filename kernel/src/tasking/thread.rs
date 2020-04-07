@@ -2,10 +2,12 @@ use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{EntryFlags, PAGE_SIZE};
+use crate::arch::simd::create_simd_save_region;
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
 use crate::sync::spinlock::Spinlock;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
+use alloc::boxed::Box;
 use core::cell::Cell;
 
 /// The stack of a thread.
@@ -34,11 +36,13 @@ pub struct Thread {
     _code: MappedVma,
     id: ThreadId,
     _vmctx_container: Option<VmContextContainer>,
+    simd_state: Box<[u8]>,
 }
 
 impl Thread {
     /// Creates a thread.
-    pub fn create(
+    /// Unsafe because it's possible to set an entry point.
+    pub unsafe fn create(
         entry: VirtAddr,
         code: MappedVma,
         heap: LazilyMappedVma,
@@ -49,14 +53,12 @@ impl Thread {
         let stack_guard_size: usize = PAGE_SIZE;
         let mut stack = Stack::create(stack_size, stack_guard_size)?;
         // Safe because enough size on the stack and stack allocated at a known good location.
-        unsafe {
-            stack.prepare_trampoline(entry, vmctx_container.ptr());
-            Ok(Self::new(stack, code, heap, Some(vmctx_container)))
-        }
+        stack.prepare_trampoline(entry, vmctx_container.ptr());
+        Ok(Self::new(stack, code, heap, Some(vmctx_container)))
     }
 
     /// Creates a new thread from given parameters.
-    pub unsafe fn new(
+    pub fn new(
         stack: Stack,
         code: MappedVma,
         heap: LazilyMappedVma,
@@ -68,6 +70,7 @@ impl Thread {
             _code: code,
             id: ThreadId::new(),
             _vmctx_container: vmctx_container,
+            simd_state: create_simd_save_region(),
         }
     }
 

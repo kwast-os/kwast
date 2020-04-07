@@ -251,12 +251,14 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma)?;
 
-        Ok(Thread::create(
-            self.get_func_address(&code_vma, start_func),
-            code_vma,
-            heap_vma,
-            vmctx_container,
-        )
+        Ok(unsafe {
+            Thread::create(
+                self.get_func_address(&code_vma, start_func),
+                code_vma,
+                heap_vma,
+                vmctx_container,
+            )
+        }
         .map_err(Error::MemoryError)?)
     }
 

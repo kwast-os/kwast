@@ -3,8 +3,7 @@ use alloc::collections::VecDeque;
 use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
-use crate::mm::vma_allocator::LazilyMappedVma;
-use crate::mm::vma_allocator::MappedVma;
+use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma};
 use crate::sync::spinlock::Spinlock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
@@ -25,7 +24,7 @@ pub struct SchedulerCommon {
 
 /// Per-core scheduler.
 pub struct Scheduler {
-    // TODO: handle this so we can add without locking, currently this is no issue because you can only schedule on the current cpu
+    // TODO: handle this so we can add without locking the whole scheduler, currently this is no issue because you can only schedule on the current cpu
     run_queue: VecDeque<Arc<Thread>>,
     garbage: Option<ThreadId>,
     current_thread: Arc<Thread>,
@@ -54,15 +53,13 @@ impl SchedulerCommon {
 impl Scheduler {
     /// New scheduler.
     fn new() -> Self {
-        // This will be overwritten on the first context switch with valid data.
-        let idle_thread = Arc::new(unsafe {
-            Thread::new(
-                Stack::new(MappedVma::dummy()),
-                MappedVma::dummy(),
-                LazilyMappedVma::dummy(),
-                None,
-            )
-        });
+        // This will be overwritten on the first context switch with data from the current running code.
+        let idle_thread = Arc::new(Thread::new(
+            Stack::new(MappedVma::dummy()),
+            MappedVma::dummy(),
+            LazilyMappedVma::dummy(),
+            None,
+        ));
 
         with_common(|common| common.add_thread(idle_thread.clone()));
 

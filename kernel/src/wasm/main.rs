@@ -2,25 +2,27 @@
 
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{CodegenError, Context};
-use cranelift_wasm::{translate_module, Global, Memory, MemoryIndex, SignatureIndex};
+use cranelift_wasm::{translate_module, Global, Memory, SignatureIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
-use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler};
+use crate::tasking::scheduler::add_and_schedule_thread;
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{
     DataInitializer, Export, FunctionBody, FunctionImport, ModuleEnv, TableElements,
 };
 use crate::wasm::reloc_sink::{RelocSink, RelocationTarget};
-use crate::wasm::runtime::{RUNTIME_MEMORY_GROW_IDX, RUNTIME_MEMORY_SIZE_IDX};
+use crate::wasm::runtime::{
+    runtime_memory_grow, runtime_memory_size, RUNTIME_MEMORY_GROW_IDX, RUNTIME_MEMORY_SIZE_IDX,
+};
 use crate::wasm::table::Table;
 use crate::wasm::vmctx::{
-    VmContext, VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE,
-    HEAP_SIZE, WASM_PAGE_SIZE,
+    VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE, HEAP_SIZE,
+    WASM_PAGE_SIZE,
 };
 use crate::wasm::wasi::get_address_for_wasi_and_validate_sig;
 use alloc::boxed::Box;
@@ -34,19 +36,6 @@ pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
-
-// TODO: move me
-fn runtime_memory_size(_vmctx: &VmContext, idx: MemoryIndex) -> u32 {
-    assert_eq!(idx.as_u32(), 0);
-    let heap_size = with_core_scheduler(|s| s.get_current_thread().heap_size());
-    (heap_size / WASM_PAGE_SIZE) as u32
-}
-
-// TODO: move me
-fn runtime_memory_grow(_vmctx: &VmContext, idx: MemoryIndex, wasm_pages: u32) -> u32 {
-    assert_eq!(idx.as_u32(), 0);
-    with_core_scheduler(|s| s.get_current_thread().heap_grow(wasm_pages))
-}
 
 #[derive(Debug)]
 pub enum Error {

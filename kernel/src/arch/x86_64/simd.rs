@@ -84,12 +84,15 @@ pub fn setup_simd() {
             if state.has_xsaves_xrstors() {
                 SIMD_SAVE_ROUTINE = simd_routine_xsaves;
                 SIMD_RESTORE_ROUTINE = simd_routine_xrstors;
+                println!("Use xsaves");
             } else if state.has_xsaveopt() {
                 SIMD_SAVE_ROUTINE = simd_routine_xsaveopt;
                 SIMD_RESTORE_ROUTINE = simd_routine_xrstor;
+                println!("Use xsaveopt");
             } else {
                 SIMD_SAVE_ROUTINE = simd_routine_xsave;
                 SIMD_RESTORE_ROUTINE = simd_routine_xrstor;
+                println!("Use xsave");
             };
         }
     } else {
@@ -99,6 +102,7 @@ pub fn setup_simd() {
             SIMD_SAVE_ALIGN = 16;
             SIMD_SAVE_ROUTINE = simd_routine_fxsave;
             SIMD_RESTORE_ROUTINE = simd_routine_fxrstor;
+            println!("Use fxsave");
         }
     }
 

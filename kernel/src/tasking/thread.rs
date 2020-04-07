@@ -2,12 +2,11 @@ use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{EntryFlags, PAGE_SIZE};
-use crate::arch::simd::create_simd_save_region;
+use crate::arch::simd::SimdState;
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
 use crate::sync::spinlock::Spinlock;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
-use alloc::boxed::Box;
 use core::cell::Cell;
 
 /// The stack of a thread.
@@ -36,7 +35,7 @@ pub struct Thread {
     _code: MappedVma,
     id: ThreadId,
     _vmctx_container: Option<VmContextContainer>,
-    simd_state: Box<[u8]>,
+    simd_state: SimdState,
 }
 
 impl Thread {
@@ -70,7 +69,7 @@ impl Thread {
             _code: code,
             id: ThreadId::new(),
             _vmctx_container: vmctx_container,
-            simd_state: create_simd_save_region(),
+            simd_state: SimdState::new(),
         }
     }
 
@@ -93,8 +92,21 @@ impl Thread {
     }
 
     /// Handle a page fault for this thread. Returns true if handled successfully.
+    #[inline]
     pub fn page_fault(&self, fault_addr: VirtAddr) -> bool {
         self.heap.lock().try_handle_page_fault(fault_addr)
+    }
+
+    /// Save SIMD state.
+    #[inline]
+    pub fn save_simd(&self) {
+        self.simd_state.save();
+    }
+
+    /// Restore SIMD state.
+    #[inline]
+    pub fn restore_simd(&self) {
+        self.simd_state.restore();
     }
 }
 

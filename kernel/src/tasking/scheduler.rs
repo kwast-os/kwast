@@ -112,6 +112,7 @@ impl Scheduler {
         match switch_reason {
             // Regular switch.
             SwitchReason::RegularSwitch => {
+                old_thread.save_simd();
                 old_thread.stack.set_current_location(old_stack);
 
                 if !Arc::ptr_eq(&old_thread, &self.idle_thread) {
@@ -125,6 +126,7 @@ impl Scheduler {
             }
         }
 
+        self.current_thread.restore_simd();
         self.current_thread.stack.get_current_location()
     }
 }

@@ -1,9 +1,7 @@
 use crate::arch::x86_64::{cr4_read, cr4_write, xsetbv};
-use alloc::alloc::{alloc, handle_alloc_error};
-use alloc::boxed::Box;
+use alloc::alloc::{alloc, dealloc, handle_alloc_error};
 use core::alloc::Layout;
 use core::ptr::{copy_nonoverlapping, null};
-use core::slice;
 use raw_cpuid::CpuId;
 
 /// SIMD save routine.
@@ -17,6 +15,43 @@ static mut SIMD_SAVE_ALIGN: u32 = 64;
 
 /// SIMD initial state.
 static mut SIMD_INIT: *const u8 = null();
+
+/// SIMD state
+#[repr(transparent)]
+pub struct SimdState {
+    ptr: *mut u8,
+}
+
+impl SimdState {
+    /// Create SIMD save region.
+    pub fn new() -> Self {
+        let ptr = alloc_simd_save_region();
+        unsafe {
+            copy_nonoverlapping(SIMD_INIT, ptr, SIMD_SAVE_SIZE as usize);
+            Self { ptr }
+        }
+    }
+
+    /// Save SIMD region.
+    #[inline]
+    pub fn save(&self) {
+        unsafe { SIMD_SAVE_ROUTINE(self.ptr) }
+    }
+
+    /// Restore SIMD region.
+    #[inline]
+    pub fn restore(&self) {
+        // TODO
+    }
+}
+
+impl Drop for SimdState {
+    fn drop(&mut self) {
+        unsafe {
+            dealloc(self.ptr, simd_layout());
+        }
+    }
+}
 
 /// Sets up SIMD.
 pub fn setup_simd() {
@@ -63,37 +98,25 @@ pub fn setup_simd() {
     // Setup initial state
     unsafe {
         let region = alloc_simd_save_region();
-        simd_save(region);
+        SIMD_SAVE_ROUTINE(region);
         SIMD_INIT = region;
     }
 }
 
-/// Save simd region.
-#[inline]
-pub unsafe fn simd_save(region: *mut u8) {
-    SIMD_SAVE_ROUTINE(region)
+/// Gets the SIMD layout.
+fn simd_layout() -> Layout {
+    unsafe { Layout::from_size_align(SIMD_SAVE_SIZE as usize, SIMD_SAVE_ALIGN as usize).unwrap() }
 }
 
 /// Allocate SIMD save region.
 pub fn alloc_simd_save_region() -> *mut u8 {
+    let layout = simd_layout();
     unsafe {
-        let layout =
-            Layout::from_size_align(SIMD_SAVE_SIZE as usize, SIMD_SAVE_ALIGN as usize).unwrap();
         let ptr = alloc(layout);
         if ptr.is_null() {
             handle_alloc_error(layout);
         }
-
         ptr
-    }
-}
-
-/// Create SIMD save region.
-pub fn create_simd_save_region() -> Box<[u8]> {
-    let region = alloc_simd_save_region();
-    unsafe {
-        copy_nonoverlapping(SIMD_INIT, region, SIMD_SAVE_SIZE as usize);
-        Box::from_raw(slice::from_raw_parts_mut(region, SIMD_SAVE_SIZE as usize))
     }
 }
 

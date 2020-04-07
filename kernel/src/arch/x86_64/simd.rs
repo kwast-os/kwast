@@ -5,7 +5,10 @@ use core::ptr::{copy_nonoverlapping, null};
 use raw_cpuid::CpuId;
 
 /// SIMD save routine.
-static mut SIMD_SAVE_ROUTINE: unsafe fn(region: *mut u8) -> () = invalid_simd_save_routine;
+static mut SIMD_SAVE_ROUTINE: unsafe fn(region: *mut u8) -> () = simd_invalid_routine;
+
+/// SIMD restore routine.
+static mut SIMD_RESTORE_ROUTINE: unsafe fn(region: *mut u8) -> () = simd_invalid_routine;
 
 /// SIMD save region size.
 static mut SIMD_SAVE_SIZE: u32 = 0;
@@ -41,7 +44,7 @@ impl SimdState {
     /// Restore SIMD region.
     #[inline]
     pub fn restore(&self) {
-        // TODO
+        unsafe { SIMD_RESTORE_ROUTINE(self.ptr) }
     }
 }
 
@@ -78,20 +81,24 @@ pub fn setup_simd() {
             cr4_write(cr4);
             xsetbv(0, xcr0);
             SIMD_SAVE_SIZE = cpuid.get_extended_state_info().unwrap().xsave_size();
-            SIMD_SAVE_ROUTINE = if state.has_xsaves_xrstors() {
-                simd_save_routine_xsaves
+            if state.has_xsaves_xrstors() {
+                SIMD_SAVE_ROUTINE = simd_routine_xsaves;
+                SIMD_RESTORE_ROUTINE = simd_routine_xrstors;
             } else if state.has_xsaveopt() {
-                simd_save_routine_xsaveopt
+                SIMD_SAVE_ROUTINE = simd_routine_xsaveopt;
+                SIMD_RESTORE_ROUTINE = simd_routine_xrstor;
             } else {
-                simd_save_routine_xsave
-            }
+                SIMD_SAVE_ROUTINE = simd_routine_xsave;
+                SIMD_RESTORE_ROUTINE = simd_routine_xrstor;
+            };
         }
     } else {
         unsafe {
             cr4_write(cr4);
             SIMD_SAVE_SIZE = 512;
             SIMD_SAVE_ALIGN = 16;
-            SIMD_SAVE_ROUTINE = simd_save_routine_fxsave;
+            SIMD_SAVE_ROUTINE = simd_routine_fxsave;
+            SIMD_RESTORE_ROUTINE = simd_routine_fxrstor;
         }
     }
 
@@ -121,26 +128,41 @@ pub fn alloc_simd_save_region() -> *mut u8 {
 }
 
 /// Invalid SIMD save routine.
-fn invalid_simd_save_routine(_region: *mut u8) {
+fn simd_invalid_routine(_region: *mut u8) {
     unreachable!("simd routine should be selected");
 }
 
 /// SIMD save routine using FXSAVE.
-unsafe fn simd_save_routine_fxsave(region: *mut u8) {
+unsafe fn simd_routine_fxsave(region: *mut u8) {
     asm!("fxsave ($0)" :: "r" (region) : "memory");
 }
 
 /// SIMD save routine using XSAVE.
-unsafe fn simd_save_routine_xsave(region: *mut u8) {
+unsafe fn simd_routine_xsave(region: *mut u8) {
     asm!("xsave ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }
 
 /// SIMD save routine using XSAVEOPT.
-unsafe fn simd_save_routine_xsaveopt(region: *mut u8) {
+unsafe fn simd_routine_xsaveopt(region: *mut u8) {
     asm!("xsaveopt ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }
 
 /// SIMD save routine using XSAVES.
-unsafe fn simd_save_routine_xsaves(region: *mut u8) {
+unsafe fn simd_routine_xsaves(region: *mut u8) {
     asm!("xsaves ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+}
+
+/// SIMD save routine using FXRSTOR.
+unsafe fn simd_routine_fxrstor(region: *mut u8) {
+    asm!("fxrstor ($0)" :: "r" (region) : "memory");
+}
+
+/// SIMD save routine using XRSTOR.
+unsafe fn simd_routine_xrstor(region: *mut u8) {
+    asm!("xrstor ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+}
+
+/// SIMD save routine using XRSTORS.
+unsafe fn simd_routine_xrstors(region: *mut u8) {
+    asm!("xrstors ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }

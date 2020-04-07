@@ -65,7 +65,9 @@ pub fn setup_simd() {
     cr4 |= (1 << 9) | (1 << 10);
 
     // Check for XSAVE support etc.
-    if let Some(state) = cpuid.get_extended_state_info() {
+    if cpuid.get_feature_info().unwrap().has_xsave() {
+        let state = cpuid.get_extended_state_info().unwrap();
+
         // Enable XSAVE
         cr4 |= 1 << 18;
 
@@ -81,6 +83,7 @@ pub fn setup_simd() {
             cr4_write(cr4);
             xsetbv(0, xcr0);
             SIMD_SAVE_SIZE = cpuid.get_extended_state_info().unwrap().xsave_size();
+            assert!(SIMD_SAVE_SIZE > 0);
             if state.has_xsaves_xrstors() {
                 SIMD_SAVE_ROUTINE = simd_routine_xsaves;
                 SIMD_RESTORE_ROUTINE = simd_routine_xrstors;

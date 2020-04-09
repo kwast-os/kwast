@@ -2,8 +2,8 @@
 
 use crate::wasm::runtime::RUNTIME_NAMESPACE;
 use alloc::vec::Vec;
-use cranelift_codegen::binemit::{self, Reloc};
-use cranelift_codegen::ir::{ExternalName, JumpTable, LibCall};
+use cranelift_codegen::binemit::{self, Addend, CodeOffset, Reloc};
+use cranelift_codegen::ir::{ExternalName, JumpTable, LibCall, SourceLoc};
 use cranelift_wasm::FuncIndex;
 
 /// Relocation target.
@@ -46,7 +46,14 @@ impl binemit::RelocSink for RelocSink {
         unimplemented!()
     }
 
-    fn reloc_external(&mut self, code_offset: u32, reloc: Reloc, name: &ExternalName, addend: i64) {
+    fn reloc_external(
+        &mut self,
+        code_offset: CodeOffset,
+        _source_loc: SourceLoc,
+        reloc: Reloc,
+        name: &ExternalName,
+        addend: Addend,
+    ) {
         let reloc_type = match *name {
             ExternalName::User {
                 namespace: 0,

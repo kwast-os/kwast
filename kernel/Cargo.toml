@@ -38,9 +38,9 @@ multiboot2 = "^0.8.1"
 lazy_static = { version = "^1.4.0", features = ["spin_no_std"] }
 hashbrown = "^0.7.0"
 memoffset = "0.5"
-cranelift-wasm = { git = "https://github.com/kwast-os/cranelift", branch = "0.59.0", default-features = false, features = ["core"] }
-cranelift-codegen = { git = "https://github.com/kwast-os/cranelift", branch = "0.59.0", default-features = false, features = ["core"] }
-cranelift-native = { git = "https://github.com/kwast-os/cranelift", branch = "0.59.0", default-features = false, features = ["core"] }
+cranelift-wasm = { git = "https://github.com/kwast-os/wasmtime", package="cranelift-wasm", branch = "0.62.0", default-features = false, features = ["core"] }
+cranelift-codegen = { git = "https://github.com/kwast-os/wasmtime", package="cranelift-codegen", branch = "0.62.0", default-features = false, features = ["core"] }
+cranelift-native = { git = "https://github.com/kwast-os/wasmtime", package="cranelift-native", branch = "0.62.0", default-features = false, features = ["core"] }
 
 [replace]
 "wasmparser:0.51.4" = { git = "https://github.com/kwast-os/wasmparser", "branch" = "0.51.4" }

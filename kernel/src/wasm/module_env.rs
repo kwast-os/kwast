@@ -7,9 +7,9 @@ use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Signature};
 use cranelift_codegen::isa;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_wasm::{
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleEnvironment, ModuleTranslationState,
-    PassiveDataIndex, PassiveElemIndex, SignatureIndex, Table, TableIndex, TargetEnvironment,
-    WasmError, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleEnvironment,
+    ModuleTranslationState, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmError,
+    WasmResult,
 };
 use hashbrown::HashMap;
 
@@ -283,7 +283,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
 
     fn declare_passive_element(
         &mut self,
-        _index: PassiveElemIndex,
+        _index: ElemIndex,
         _elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
         unimplemented!()
@@ -291,7 +291,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
 
     fn declare_passive_data(
         &mut self,
-        _data_index: PassiveDataIndex,
+        _data_index: DataIndex,
         _data: &'data [u8],
     ) -> WasmResult<()> {
         unimplemented!()

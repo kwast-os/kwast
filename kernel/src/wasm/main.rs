@@ -29,7 +29,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::{copy_nonoverlapping, write_unaligned};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
-use cranelift_codegen::ir::{types, Signature, Type, LibCall};
+use cranelift_codegen::ir::{types, LibCall, Signature, Type};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;

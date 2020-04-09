@@ -29,13 +29,19 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::{copy_nonoverlapping, write_unaligned};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
-use cranelift_codegen::ir::{types, Signature, Type};
+use cranelift_codegen::ir::{types, Signature, Type, LibCall};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
+
+extern "C" {
+    pub fn __rust_probestack();
+}
+
+static PROBESTACK: unsafe extern "C" fn() = __rust_probestack;
 
 #[derive(Debug)]
 pub enum Error {
@@ -187,7 +193,10 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                         RUNTIME_MEMORY_SIZE_IDX => runtime_memory_size as usize,
                         _ => unreachable!(),
                     },
-                    RelocationTarget::LibCall(_libcall) => unimplemented!(),
+                    RelocationTarget::LibCall(libcall) => match libcall {
+                        LibCall::Probestack => PROBESTACK as usize,
+                        _ => unimplemented!("{:?}", libcall),
+                    },
                     RelocationTarget::JumpTable(jt) => {
                         let ctx = &self.compile_result.contexts[idx];
                         let offset = ctx

@@ -49,7 +49,7 @@ impl Thread {
     ) -> Result<Thread, MemoryError> {
         // TODO
         let stack_size = 8 * PAGE_SIZE;
-        let stack_guard_size: usize = PAGE_SIZE;
+        let stack_guard_size: usize = 2 * PAGE_SIZE;
         let mut stack = Stack::create(stack_size, stack_guard_size)?;
         // Safe because enough size on the stack and stack allocated at a known good location.
         stack.prepare_trampoline(entry, vmctx_container.ptr());

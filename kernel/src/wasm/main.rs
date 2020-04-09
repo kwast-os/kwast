@@ -82,6 +82,12 @@ impl<'data> CompileResult<'data> {
     pub fn instantiate(&self) -> Instantiation {
         Instantiation::new(self)
     }
+
+    /// Gets the signature of a function.
+    pub fn get_sig(&self, func_idx: FuncIndex) -> &Signature {
+        let sig_idx = self.func_sigs[func_idx.as_u32() as usize];
+        &self.signatures[sig_idx.as_u32() as usize]
+    }
 }
 
 impl<'r, 'data> Instantiation<'r, 'data> {
@@ -309,8 +315,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             for (i, import) in self.compile_result.function_imports.iter().enumerate() {
                 println!("{} {:?}", i, import);
 
-                let sig_idx = self.compile_result.func_sigs[i];
-                let sig = &self.compile_result.signatures[sig_idx.as_u32() as usize];
+                let sig = self.compile_result.get_sig(FuncIndex::from_u32(i as u32));
 
                 function_imports[i] = match import.module.as_str() {
                     "wasi_snapshot_preview1" => VmFunctionImportEntry {
@@ -457,7 +462,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         _ => None,
     });
 
-    Ok(CompileResult {
+    let compile_result = CompileResult {
         isa,
         contexts: contexts.into_boxed_slice(),
         memories: env.memories.into_boxed_slice(),
@@ -470,5 +475,18 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         globals: env.globals.into_boxed_slice(),
         total_size,
         signatures: env.signatures.into_boxed_slice(),
-    })
+    };
+
+    // Check the signature of the start function.
+    // Must not take any arguments (which means arg length == 1 because vmctx)
+    // and not have return values.
+    if let Some(start_func) = start_func {
+        let sig = compile_result.get_sig(start_func);
+
+        if !sig.returns.is_empty() || sig.params.len() != 1 {
+            return Err(Error::NoStart);
+        }
+    }
+
+    Ok(compile_result)
 }

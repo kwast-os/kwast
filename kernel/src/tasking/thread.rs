@@ -53,7 +53,7 @@ impl Thread {
         heap: LazilyMappedVma,
         vmctx_container: VmContextContainer,
     ) -> Result<Thread, MemoryError> {
-        // TODO: lazily alocate in the future?
+        // TODO: lazily allocate in the future?
         let stack_guard_size: usize = AMOUNT_GUARD_PAGES * PAGE_SIZE;
         let mut stack = Stack::create(STACK_SIZE, stack_guard_size)?;
         // Safe because enough size on the stack and memory allocated at a known good location.

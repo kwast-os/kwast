@@ -7,6 +7,8 @@
 .type _switch_to_next, @function
 _switch_to_next:
     pushfq
+    cmpl $0, %gs:8 // Check if preempt_count != 0
+    jnz .flag
     pushq %rbx
     pushq %rbp
     pushq %r12
@@ -29,6 +31,11 @@ _switch_to_next:
     popq %r12
     popq %rbp
     popq %rbx
+    popfq
+
+    ret
+.flag:
+    movb $1, %gs:12
     popfq
 
     ret

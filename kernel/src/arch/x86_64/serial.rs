@@ -3,7 +3,7 @@ use core::fmt;
 use lazy_static::lazy_static;
 
 use super::port::{read_port8, write_port8};
-use crate::sync::spinlock::Spinlock;
+use crate::sync::spinlock::IrqSpinlock;
 
 struct SerialPort {
     /// IO Port.
@@ -11,7 +11,7 @@ struct SerialPort {
 }
 
 lazy_static! {
-    static ref PORT: Spinlock<SerialPort> = Spinlock::new(SerialPort::new(0x3F8));
+    static ref PORT: IrqSpinlock<SerialPort> = IrqSpinlock::new(SerialPort::new(0x3F8));
 }
 
 #[allow(dead_code)]

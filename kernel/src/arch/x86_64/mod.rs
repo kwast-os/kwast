@@ -234,3 +234,21 @@ unsafe fn xsetbv(reg: u32, value: u64) {
     let hi = (value >> 32) as u32;
     asm!("xsetbv" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
 }
+
+/// Enable preemption.
+#[inline(always)]
+pub fn preempt_enable() {
+    debug_assert_eq!(CpuData::preempt_count_offset(), 8);
+    unsafe {
+        asm!("decl %gs:8" ::: "memory" : "volatile");
+    }
+}
+
+/// Disable preemption.
+#[inline(always)]
+pub fn preempt_disable() {
+    debug_assert_eq!(CpuData::preempt_count_offset(), 8);
+    unsafe {
+        asm!("incl %gs:8" ::: "memory" : "volatile");
+    }
+}

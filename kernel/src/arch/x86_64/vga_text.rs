@@ -1,7 +1,7 @@
 use core::fmt;
 use core::ptr::Unique;
 
-use crate::sync::spinlock::Spinlock;
+use crate::sync::spinlock::IrqSpinlock;
 use volatile::Volatile;
 
 const VGA_WIDTH: usize = 80;
@@ -23,7 +23,7 @@ struct Writer {
     buffer: Unique<Buffer>,
 }
 
-static WRITER: Spinlock<Writer> = Spinlock::new(Writer {
+static WRITER: IrqSpinlock<Writer> = IrqSpinlock::new(Writer {
     x: 0,
     buffer: unsafe { Unique::new_unchecked(0xb8000 as *mut Buffer) },
 });

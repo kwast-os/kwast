@@ -35,6 +35,7 @@ volatile = "^0.2.6"
 bit_field = "^0.10.0"
 bitflags = "^1.2.1"
 multiboot2 = "^0.8.1"
+spin = "0.5"
 lazy_static = { version = "^1.4.0", features = ["spin_no_std"] }
 hashbrown = "^0.7.0"
 memoffset = "0.5"
@@ -44,3 +45,4 @@ cranelift-native = { git = "https://github.com/kwast-os/wasmtime", package="cran
 
 [replace]
 "wasmparser:0.51.4" = { git = "https://github.com/kwast-os/wasmparser", "branch" = "0.51.4" }
+"spin:0.5.2" = { git = "https://github.com/kwast-os/spin-rs" }

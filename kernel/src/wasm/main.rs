@@ -127,7 +127,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             let mem = self.compile_result.memories.get(0).unwrap_or(&Memory {
                 minimum: 0,
                 maximum: None,
-                shared: false
+                shared: false,
             });
             let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
 
@@ -358,11 +358,13 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                 // TODO: support this
                 assert!(initializer.base.is_none());
 
-                if initializer.offset >= heap_vma.size() - initializer.data.len() {
+                let offset = initializer.offset;
+
+                if offset > heap_vma.size() - initializer.data.len() {
                     return Err(Error::MemoryError(MemoryError::InvalidRange));
                 }
 
-                let offset = heap_vma.address() + initializer.offset;
+                let offset = heap_vma.address() + offset;
 
                 //println!(
                 //    "Copy {:?} to {:?} length {}",

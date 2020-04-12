@@ -1,6 +1,9 @@
 //! Wasi implementation
 //! See https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md
 
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::identity_op)]
+
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler::{self, with_core_scheduler, SwitchReason};
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
@@ -206,7 +209,7 @@ impl<T> WasmPtr<T> {
 
     /// Gets a slice of cells from a Wasm pointer, does checks for alignment and bounds.
     /// Returns Ok(slice) on success and Err(Errno) on fail.
-    pub fn slice<'s>(&self, ctx: &VmContext, len: u32) -> WasmResult<&'s [Cell<T>]> {
+    pub fn slice<'s>(&self, ctx: &VmContext, len: Size) -> WasmResult<&'s [Cell<T>]> {
         let len = len as usize;
 
         // Safety: pointer is correctly aligned and points to real data.
@@ -215,6 +218,15 @@ impl<T> WasmPtr<T> {
             (size_of::<T>() + (size_of::<T>() % align_of::<T>())) * len,
         )
         .map(|p| unsafe { slice::from_raw_parts(p as *const Cell<T>, len) })
+    }
+
+    /// Gets a string from a Wasm pointer, does checks for valid UTF-8 string.
+    /// Returns Ok(str) on success and Err(Errno) on fail.
+    pub fn str<'s>(&self, ctx: &VmContext, len: Size) -> WasmResult<&'s str> {
+        let len = len as usize;
+        self.get_ptr_and_verify(ctx, len)
+            .map(|p| unsafe { slice::from_raw_parts(p, len) })
+            .and_then(|p| core::str::from_utf8(p).map_err(|_| Errno::Inval))
     }
 }
 
@@ -309,7 +321,7 @@ union PreStatInner {
 
 #[repr(C)]
 struct PreStat {
-    tag: u32,
+    tag: u8,
     inner: PreStatInner,
 }
 
@@ -380,15 +392,20 @@ impl AbiFunctions for VmContext {
         Ok(())
     }
 
-    fn fd_prestat_get(&self, _fd: Fd, _prestat: WasmPtr<PreStat>) -> WasmStatus {
+    fn fd_prestat_get(&self, fd: Fd, prestat: WasmPtr<PreStat>) -> WasmStatus {
+        println!("{} {:?}", fd, prestat.offset);
         // TODO
-        //prestat.cell(self)?.set(PreStat {
-        //    tag: 0,
-        //    inner: PreStatInner {
-        //        dir: PreStatDir { pr_name_len: 0 },
-        //    },
-        //});
-        Err(Errno::BadF)
+        if fd == 3 {
+            prestat.cell(self)?.set(PreStat {
+                tag: 0,
+                inner: PreStatInner {
+                    dir: PreStatDir { pr_name_len: 1 },
+                },
+            });
+            Ok(())
+        } else {
+            Err(Errno::BadF)
+        }
     }
 
     fn fd_prestat_dir_name(&self, fd: Fd, _path: WasmPtr<u8>, path_len: Size) -> WasmStatus {
@@ -409,7 +426,9 @@ impl AbiFunctions for VmContext {
         fd_flags: FdFlags,
         fd: WasmPtr<Fd>,
     ) -> WasmStatus {
-        unimplemented!()
+        println!("path_open: {} {}", dir_fd, path.str(self, path_len)?);
+        // TODO
+        Err(Errno::Inval)
     }
 
     fn proc_exit(&self, exit_code: ExitCode) {

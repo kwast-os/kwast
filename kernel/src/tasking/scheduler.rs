@@ -4,7 +4,7 @@ use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma};
-use crate::sync::spinlock::Spinlock;
+use crate::sync::spinlock::RwLock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::sync::Arc;
@@ -61,7 +61,7 @@ impl Scheduler {
             None,
         ));
 
-        with_common(|common| common.add_thread(idle_thread.clone()));
+        with_common_write(|common| common.add_thread(idle_thread.clone()));
 
         Self {
             run_queue: VecDeque::new(),
@@ -98,7 +98,7 @@ impl Scheduler {
     ) -> VirtAddr {
         // Cleanup old thread.
         if let Some(garbage) = self.garbage {
-            with_common(|common| common.remove_thread(garbage));
+            with_common_write(|common| common.remove_thread(garbage));
             self.garbage = None;
         }
 
@@ -152,22 +152,29 @@ pub extern "C" fn next_thread_state(switch_reason: SwitchReason, old_stack: Virt
 // TODO: make this per core once we go multicore
 static mut SCHEDULER: Option<Scheduler> = None;
 
-// TODO: RwLock instead of Spinlock?
-static mut SCHEDULER_COMMON: Spinlock<Option<SchedulerCommon>> = Spinlock::new(None);
+static mut SCHEDULER_COMMON: RwLock<Option<SchedulerCommon>> = RwLock::new(None);
 
 /// Adds and schedules a thread.
 pub fn add_and_schedule_thread(thread: Thread) {
     let thread = Arc::new(thread);
-    with_common(|common| common.add_thread(thread.clone()));
+    with_common_write(|common| common.add_thread(thread.clone()));
     with_core_scheduler(|scheduler| scheduler.queue_thread(thread));
 }
 
-/// With common scheduler data.
-fn with_common<F, T>(f: F) -> T
+/// With common scheduler data. Writable.
+fn with_common_write<F, T>(f: F) -> T
 where
     F: FnOnce(&mut SchedulerCommon) -> T,
 {
-    unsafe { f(SCHEDULER_COMMON.lock().as_mut().unchecked_unwrap()) }
+    unsafe { f(SCHEDULER_COMMON.write().as_mut().unchecked_unwrap()) }
+}
+
+/// With common scheduler data. Read-only.
+fn with_common_read<F, T>(f: F) -> T
+where
+    F: FnOnce(&SchedulerCommon) -> T,
+{
+    unsafe { f(SCHEDULER_COMMON.read().as_ref().unchecked_unwrap()) }
 }
 
 /// Execute something using this core scheduler.
@@ -181,6 +188,6 @@ where
 /// Inits scheduler. May only be called once per core.
 pub unsafe fn init() {
     debug_assert!(SCHEDULER.is_none());
-    *SCHEDULER_COMMON.lock() = Some(SchedulerCommon::new());
+    *SCHEDULER_COMMON.write() = Some(SchedulerCommon::new());
     SCHEDULER = Some(Scheduler::new());
 }

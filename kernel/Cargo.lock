@@ -321,7 +321,7 @@ checksum = "05720e22615919e4734f6a99ceae50d00226c3c5aca406e102ebc33298214e0a"
 [[package]]
 name = "spin"
 version = "0.5.2"
-source = "git+https://github.com/kwast-os/spin-rs#879a9e83e9c413fa8f0c4bcf483946abb21ba57a"
+source = "git+https://github.com/kwast-os/spin-rs#fdf0e1e0f27a327b09c6e44e6f0cef0b624eb48d"
 
 [[package]]
 name = "spin"

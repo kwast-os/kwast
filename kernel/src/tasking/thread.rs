@@ -5,7 +5,7 @@ use crate::arch::paging::{EntryFlags, PAGE_SIZE};
 use crate::arch::simd::SimdState;
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
-use crate::sync::spinlock::Spinlock;
+use crate::sync::spinlock::{ RwLock};
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::cell::Cell;
 
@@ -37,7 +37,7 @@ impl ThreadId {
 
 pub struct Thread {
     pub stack: Stack,
-    heap: Spinlock<LazilyMappedVma>, // TODO: rw lock, or something lighter, since this is only an issue with shared heaps
+    heap: RwLock<LazilyMappedVma>, // TODO: Something lighter? since this is only an issue with shared heaps
     _code: MappedVma,
     id: ThreadId,
     _vmctx_container: Option<VmContextContainer>,
@@ -70,7 +70,7 @@ impl Thread {
     ) -> Self {
         Self {
             stack,
-            heap: Spinlock::new(heap),
+            heap: RwLock::new(heap),
             _code: code,
             id: ThreadId::new(),
             _vmctx_container: vmctx_container,
@@ -86,13 +86,13 @@ impl Thread {
 
     /// Gets the current allocated heap size in WebAssembly pages.
     pub fn heap_size(&self) -> usize {
-        self.heap.lock().size()
+        self.heap.read().size()
     }
 
     /// Grows the heap by `wasm_pages` WebAssembly pages.
     pub fn heap_grow(&self, wasm_pages: u32) -> u32 {
         self.heap
-            .lock()
+            .write()
             .expand((wasm_pages as usize) * WASM_PAGE_SIZE)
             .map_or(core::u32::MAX, |x| (x / WASM_PAGE_SIZE) as u32)
     }
@@ -100,7 +100,7 @@ impl Thread {
     /// Handle a page fault for this thread. Returns true if handled successfully.
     #[inline]
     pub fn page_fault(&self, fault_addr: VirtAddr) -> bool {
-        self.heap.lock().try_handle_page_fault(fault_addr)
+        self.heap.write().try_handle_page_fault(fault_addr)
     }
 
     /// Save SIMD state.

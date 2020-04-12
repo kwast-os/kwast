@@ -1,43 +1,48 @@
 use crate::arch::interrupts::{irq_restore, irq_save_and_stop, IrqState};
 use crate::arch::{get_per_cpu_data, preempt_disable, preempt_enable};
-use spin::{Mutex, SchedulerInfluence};
+use spin::{self, SchedulerInfluence};
 
-#[derive(Copy, Clone)]
 pub struct PreemptCounterInfluence {}
 
-#[derive(Copy, Clone)]
 pub struct IrqInfluence {
     state: IrqState,
 }
 
 impl SchedulerInfluence for PreemptCounterInfluence {
     #[inline(always)]
-    fn preempt_enable(&self) {
-        preempt_enable();
-        get_per_cpu_data().check_should_schedule();
-    }
-
-    #[inline(always)]
-    fn preempt_disable() -> Self {
+    fn activate() -> Self {
         preempt_disable();
         Self {}
     }
 }
 
-impl SchedulerInfluence for IrqInfluence {
-    fn preempt_enable(&self) {
-        irq_restore(self.state)
+impl Drop for PreemptCounterInfluence {
+    #[inline]
+    fn drop(&mut self) {
+        preempt_enable();
+        get_per_cpu_data().check_should_schedule();
     }
+}
 
-    fn preempt_disable() -> Self {
+impl SchedulerInfluence for IrqInfluence {
+    fn activate() -> Self {
         Self {
             state: irq_save_and_stop(),
         }
     }
 }
 
+impl Drop for IrqInfluence {
+    #[inline]
+    fn drop(&mut self) {
+        irq_restore(self.state);
+    }
+}
+
 // TODO: apply Hardware Lock Elision if supported
 
-pub type Spinlock<T> = Mutex<T, PreemptCounterInfluence>;
+pub type Spinlock<T> = spin::Mutex<T, PreemptCounterInfluence>;
 
-pub type IrqSpinlock<T> = Mutex<T, IrqInfluence>;
+pub type RwLock<T> = spin::RwLock<T, PreemptCounterInfluence>;
+
+pub type IrqSpinlock<T> = spin::Mutex<T, IrqInfluence>;

@@ -124,7 +124,11 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         };
 
         let heap_vma = {
-            let mem = self.compile_result.memories[0];
+            let mem = self.compile_result.memories.get(0).unwrap_or(&Memory {
+                minimum: 0,
+                maximum: None,
+                shared: false
+            });
             let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
 
             // TODO: func_env assumes 4GiB is available, also makes it so that we can't construct
@@ -203,16 +207,16 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                         LibCall::Probestack => PROBESTACK as usize,
                         _ => unimplemented!("{:?}", libcall),
                     },
-                    RelocationTarget::JumpTable(jt) => {
-                        let ctx = &self.compile_result.contexts[idx];
-                        let offset = ctx
-                            .func
-                            .jt_offsets
-                            .get(jt)
-                            .expect("jump table should exist");
-                        // TODO: is this correct?
-                        self.func_offsets[idx - defined_function_offset] + *offset as usize
-                    }
+                    // Not necessary unless we split rodata and code
+                    //RelocationTarget::JumpTable(jt) => {
+                    //    let ctx = &self.compile_result.contexts[idx];
+                    //    let offset = ctx
+                    //        .func
+                    //        .jt_offsets
+                    //        .get(jt)
+                    //        .expect("jump table should exist");
+                    //    self.func_offsets[idx] + *offset as usize
+                    //}
                 };
 
                 // Relocate!
@@ -234,7 +238,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                         }
                     }
                     Reloc::X86PCRelRodata4 => { /* ignore */ }
-                    _ => unimplemented!(),
+                    _ => unimplemented!("{:?}", relocation),
                 }
             }
         }
@@ -285,8 +289,6 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         code_vma: &MappedVma,
         heap_vma: &LazilyMappedVma,
     ) -> Result<VmContextContainer, Error> {
-        // TODO: split this function
-
         // Create the vm context.
         let mut vmctx_container = {
             // Initialize table vectors.
@@ -347,31 +349,31 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                     );
                 }
             }
+        }
 
-            // Run data initializers
-            {
-                // TODO: bounds check? must not go beyond minimum? Otherwise the init would be odd (also "ensure mapped" would be weird)
+        // Run data initializers
+        {
+            // TODO: bounds check? must not go beyond minimum? Otherwise the init would be odd (also "ensure mapped" would be weird)
 
-                for initializer in self.compile_result.data_initializers.iter() {
-                    assert_eq!(initializer.memory_index.as_u32(), 0);
-                    // TODO: support this
-                    assert!(initializer.base.is_none());
+            for initializer in self.compile_result.data_initializers.iter() {
+                assert_eq!(initializer.memory_index.as_u32(), 0);
+                // TODO: support this
+                assert!(initializer.base.is_none());
 
-                    let offset = heap_vma.address() + initializer.offset;
-                    println!(
-                        "Copy {:?} to {:?} length {}",
+                let offset = heap_vma.address() + initializer.offset;
+                println!(
+                    "Copy {:?} to {:?} length {}",
+                    initializer.data.as_ptr(),
+                    offset.as_mut::<u8>(),
+                    initializer.data.len()
+                );
+                let offset = heap_vma.address() + initializer.offset;
+                unsafe {
+                    copy_nonoverlapping(
                         initializer.data.as_ptr(),
                         offset.as_mut::<u8>(),
-                        initializer.data.len()
+                        initializer.data.len(),
                     );
-                    let offset = heap_vma.address() + initializer.offset;
-                    unsafe {
-                        copy_nonoverlapping(
-                            initializer.data.as_ptr(),
-                            offset.as_mut::<u8>(),
-                            initializer.data.len(),
-                        );
-                    }
                 }
             }
 
@@ -453,8 +455,6 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         total_size += info.total_size as usize;
         contexts.push(ctx);
     }
-
-    println!();
 
     // Determine start function. If it's not given, search for "_start" as specified by WASI.
     let start_func = env.start_func.or_else(|| match env.exports.get("_start") {

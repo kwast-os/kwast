@@ -15,8 +15,6 @@ pub enum RelocationTarget {
     RuntimeFunction(u32),
     /// Relocation is for a lib-defined function.
     LibCall(LibCall),
-    /// Relocation is for a jump table.
-    JumpTable(JumpTable),
 }
 
 /// A relocation entry for the function.
@@ -75,16 +73,19 @@ impl binemit::RelocSink for RelocSink {
         });
     }
 
+    #[inline]
     fn reloc_constant(&mut self, _: u32, _: Reloc, _: u32) {
         // Not necessary atm because our code and rodata is not split.
     }
 
-    fn reloc_jt(&mut self, code_offset: u32, reloc: Reloc, jt: JumpTable) {
-        self.relocations.push(Relocation {
-            code_offset,
-            reloc,
-            target: RelocationTarget::JumpTable(jt),
-            addend: 0,
-        });
+    #[inline]
+    fn reloc_jt(&mut self, _code_offset: u32, _reloc: Reloc, _jt: JumpTable) {
+        // Not necessary atm because our code and rodata is not split.
+        //self.relocations.push(Relocation {
+        //    code_offset,
+        //    reloc,
+        //    target: RelocationTarget::JumpTable(jt),
+        //    addend: 0,
+        //});
     }
 }

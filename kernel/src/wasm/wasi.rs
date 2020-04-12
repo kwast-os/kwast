@@ -1,7 +1,11 @@
+//! Wasi implementation
+//! See https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md
+
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler::{self, with_core_scheduler, SwitchReason};
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::VmContext;
+use bitflags::bitflags;
 use core::cell::Cell;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
@@ -10,7 +14,6 @@ use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 
-// See https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md
 #[repr(u16)]
 #[allow(dead_code)]
 pub enum Errno {
@@ -227,6 +230,65 @@ type ExitCode = u32;
 type WasmResult<T> = Result<T, Errno>;
 type WasmStatus = WasmResult<()>;
 
+bitflags! {
+    struct LookupFlags: u32 {
+        const SYMLINK_FOLLOW = 1 << 0;
+    }
+}
+
+bitflags! {
+    struct OFlags: u16 {
+        const CREAT = 1 << 0;
+        const DIRECTORY = 1 << 1;
+        const EXCL = 1 << 2;
+        const TRUNC = 1 << 3;
+    }
+}
+
+bitflags! {
+    struct FdFlags: u16 {
+        const APPEND = 1 << 0;
+        const DSYNC = 1 << 1;
+        const NONBLOCK = 1 << 2;
+        const RSYNC = 1 << 3;
+        const SYNC = 1 << 4;
+    }
+}
+
+bitflags! {
+    struct Rights: u64 {
+        const FD_DATASYNC = 1 << 0;
+        const FD_READ = 1 << 1;
+        const FD_SEEK = 1 << 2;
+        const FD_FDSTAT_SET_FLAGS = 1 << 3;
+        const FD_SYNC = 1 << 4;
+        const FD_TELL = 1 << 5;
+        const FD_WRITE = 1 << 6;
+        const FD_ADVISE = 1 << 7;
+        const FD_ALLOCATE = 1 << 8;
+        const PATH_CREATE_DIRECTORY = 1 << 9;
+        const PATH_CREATE_FILE = 1 << 10;
+        const PATH_LINK_SOURCE = 1 << 11;
+        const PATH_LINK_TARGET = 1 << 12;
+        const PATH_OPEN = 1 << 13;
+        const FD_READDIR = 1 << 14;
+        const PATH_READLINK = 1 << 15;
+        const PATH_RENAME_SOURCE = 1 << 16;
+        const PATH_RENAME_TARGET = 1 << 17;
+        const PATH_FILESTAT_GET = 1 << 18;
+        const PATH_FILESTAT_SET_SIZE = 1 << 19;
+        const PATH_FILESTAT_SET_TIMES = 1 << 20;
+        const FD_FILESTAT_GET = 1 << 21;
+        const FD_FILESTAT_SET_SIZE = 1 << 22;
+        const FD_FILESTAT_SET_TIMES = 1 << 23;
+        const PATH_SYMLINK = 1 << 24;
+        const PATH_REMOVE_DIRECTORY = 1 << 25;
+        const PATH_UNLINK_FILE = 1 << 26;
+        const POLL_FD_READWRITE = 1 << 27;
+        const SOCK_SHUTDOWN = 1 << 28;
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 struct CioVec {
@@ -254,12 +316,15 @@ struct PreStat {
 abi_functions! {
     environ_sizes_get: (environc: WasmPtr<Size>, environ_buf_size: WasmPtr<Size>) -> Errno,
     environ_get: (environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> Errno,
+    fd_close: (fd: Fd) -> Errno,
     fd_write: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: Size, nwritten: WasmPtr<u32>) -> Errno,
     fd_prestat_get: (fd: Fd, prestat: WasmPtr<PreStat>) -> Errno,
     fd_prestat_dir_name: (fd: Fd, path: WasmPtr<u8>, path_len: Size) -> Errno,
+    path_open: (dir_fd: Fd, dir_flags: LookupFlags, path: WasmPtr<u8>, path_len: Size, o_flags: OFlags, fs_rights_base: Rights, fs_rights_inheriting: Rights, fd_flags: FdFlags, fd: WasmPtr<Fd>) -> Errno,
     proc_exit: (exit_code: ExitCode) -> (),
 }
 
+// TODO: capabilities
 impl AbiFunctions for VmContext {
     fn environ_sizes_get(
         &self,
@@ -275,6 +340,11 @@ impl AbiFunctions for VmContext {
     fn environ_get(&self, _environ: WasmPtr<WasmPtr<u8>>, _environ_buf: WasmPtr<u8>) -> WasmStatus {
         // TODO
         println!("environ_get");
+        Ok(())
+    }
+
+    fn fd_close(&self, fd: Fd) -> WasmStatus {
+        println!("fd_close: {}", fd);
         Ok(())
     }
 
@@ -325,6 +395,21 @@ impl AbiFunctions for VmContext {
         println!("fd_prestat_dir_name {} {}", fd, path_len);
         // TODO
         Ok(())
+    }
+
+    fn path_open(
+        &self,
+        dir_fd: Fd,
+        dir_flags: LookupFlags,
+        path: WasmPtr<u8>,
+        path_len: Size,
+        o_flags: OFlags,
+        fs_rights_base: Rights,
+        fs_rights_inheriting: Rights,
+        fd_flags: FdFlags,
+        fd: WasmPtr<Fd>,
+    ) -> WasmStatus {
+        unimplemented!()
     }
 
     fn proc_exit(&self, exit_code: ExitCode) {

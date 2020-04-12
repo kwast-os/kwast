@@ -29,13 +29,19 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::{copy_nonoverlapping, write_unaligned};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
-use cranelift_codegen::ir::{types, Signature, Type};
+use cranelift_codegen::ir::{types, LibCall, Signature, Type};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
 
 // TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
+
+extern "C" {
+    pub fn __rust_probestack();
+}
+
+static PROBESTACK: unsafe extern "C" fn() = __rust_probestack;
 
 #[derive(Debug)]
 pub enum Error {
@@ -75,6 +81,12 @@ impl<'data> CompileResult<'data> {
     /// Compile result to instantiation.
     pub fn instantiate(&self) -> Instantiation {
         Instantiation::new(self)
+    }
+
+    /// Gets the signature of a function.
+    pub fn get_sig(&self, func_idx: FuncIndex) -> &Signature {
+        let sig_idx = self.func_sigs[func_idx.as_u32() as usize];
+        &self.signatures[sig_idx.as_u32() as usize]
     }
 }
 
@@ -187,7 +199,10 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                         RUNTIME_MEMORY_SIZE_IDX => runtime_memory_size as usize,
                         _ => unreachable!(),
                     },
-                    RelocationTarget::LibCall(_libcall) => unimplemented!(),
+                    RelocationTarget::LibCall(libcall) => match libcall {
+                        LibCall::Probestack => PROBESTACK as usize,
+                        _ => unimplemented!("{:?}", libcall),
+                    },
                     RelocationTarget::JumpTable(jt) => {
                         let ctx = &self.compile_result.contexts[idx];
                         let offset = ctx
@@ -300,8 +315,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             for (i, import) in self.compile_result.function_imports.iter().enumerate() {
                 println!("{} {:?}", i, import);
 
-                let sig_idx = self.compile_result.func_sigs[i];
-                let sig = &self.compile_result.signatures[sig_idx.as_u32() as usize];
+                let sig = self.compile_result.get_sig(FuncIndex::from_u32(i as u32));
 
                 function_imports[i] = match import.module.as_str() {
                     "wasi_snapshot_preview1" => VmFunctionImportEntry {
@@ -448,7 +462,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         _ => None,
     });
 
-    Ok(CompileResult {
+    let compile_result = CompileResult {
         isa,
         contexts: contexts.into_boxed_slice(),
         memories: env.memories.into_boxed_slice(),
@@ -461,5 +475,18 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
         globals: env.globals.into_boxed_slice(),
         total_size,
         signatures: env.signatures.into_boxed_slice(),
-    })
+    };
+
+    // Check the signature of the start function.
+    // Must not take any arguments (which means arg length == 1 because vmctx)
+    // and not have return values.
+    if let Some(start_func) = start_func {
+        let sig = compile_result.get_sig(start_func);
+
+        if !sig.returns.is_empty() || sig.params.len() != 1 {
+            return Err(Error::NoStart);
+        }
+    }
+
+    Ok(compile_result)
 }

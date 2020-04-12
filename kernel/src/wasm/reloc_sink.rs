@@ -22,10 +22,10 @@ pub enum RelocationTarget {
 /// A relocation entry for the function.
 #[derive(Debug)]
 pub struct Relocation {
-    pub code_offset: u32,
+    pub code_offset: CodeOffset,
     pub reloc: Reloc,
     pub target: RelocationTarget,
-    pub addend: i64,
+    pub addend: Addend,
 }
 
 /// Relocation sink, stores relocations for code.

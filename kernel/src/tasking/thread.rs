@@ -9,6 +9,12 @@ use crate::sync::spinlock::Spinlock;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::cell::Cell;
 
+/// Stack size in bytes.
+const STACK_SIZE: usize = 1024 * 256;
+
+/// Amount of guard pages for stack underflow.
+const AMOUNT_GUARD_PAGES: usize = 2;
+
 /// The stack of a thread.
 #[derive(Debug)]
 pub struct Stack {
@@ -47,11 +53,10 @@ impl Thread {
         heap: LazilyMappedVma,
         vmctx_container: VmContextContainer,
     ) -> Result<Thread, MemoryError> {
-        // TODO
-        let stack_size = 8 * PAGE_SIZE;
-        let stack_guard_size: usize = PAGE_SIZE;
-        let mut stack = Stack::create(stack_size, stack_guard_size)?;
-        // Safe because enough size on the stack and stack allocated at a known good location.
+        // TODO: lazily allocate in the future?
+        let stack_guard_size: usize = AMOUNT_GUARD_PAGES * PAGE_SIZE;
+        let mut stack = Stack::create(STACK_SIZE, stack_guard_size)?;
+        // Safe because enough size on the stack and memory allocated at a known good location.
         stack.prepare_trampoline(entry, vmctx_container.ptr());
         Ok(Self::new(stack, code, heap, Some(vmctx_container)))
     }
@@ -74,6 +79,7 @@ impl Thread {
     }
 
     /// Gets the thread id.
+    #[inline]
     pub fn id(&self) -> ThreadId {
         self.id
     }

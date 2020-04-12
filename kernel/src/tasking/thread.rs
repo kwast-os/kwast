@@ -5,7 +5,7 @@ use crate::arch::paging::{EntryFlags, PAGE_SIZE};
 use crate::arch::simd::SimdState;
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
-use crate::sync::spinlock::{ RwLock};
+use crate::sync::spinlock::RwLock;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::cell::Cell;
 

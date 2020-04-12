@@ -3,6 +3,9 @@ members = [
     "wasm-test",
 ]
 
+[profile.dev]
+opt-level = "z"
+
 [profile.release]
 lto = true
 opt-level = 3

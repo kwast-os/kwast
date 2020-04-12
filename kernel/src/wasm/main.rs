@@ -353,21 +353,23 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         // Run data initializers
         {
-            // TODO: bounds check? must not go beyond minimum? Otherwise the init would be odd (also "ensure mapped" would be weird)
-
             for initializer in self.compile_result.data_initializers.iter() {
                 assert_eq!(initializer.memory_index.as_u32(), 0);
                 // TODO: support this
                 assert!(initializer.base.is_none());
 
+                if initializer.offset >= heap_vma.size() - initializer.data.len() {
+                    return Err(Error::MemoryError(MemoryError::InvalidRange));
+                }
+
                 let offset = heap_vma.address() + initializer.offset;
-                println!(
-                    "Copy {:?} to {:?} length {}",
-                    initializer.data.as_ptr(),
-                    offset.as_mut::<u8>(),
-                    initializer.data.len()
-                );
-                let offset = heap_vma.address() + initializer.offset;
+
+                //println!(
+                //    "Copy {:?} to {:?} length {}",
+                //    initializer.data.as_ptr(),
+                //    offset.as_mut::<u8>(),
+                //    initializer.data.len()
+                //);
                 unsafe {
                     copy_nonoverlapping(
                         initializer.data.as_ptr(),

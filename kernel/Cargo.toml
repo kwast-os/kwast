@@ -20,7 +20,7 @@ test-interval-tree = ["test-interval-tree-tests"]
 test-interval-tree-fragments = ["test-interval-tree-tests"]
 
 [profile.dev]
-opt-level = 1
+opt-level = "z"
 panic = "abort"
 
 [profile.release]

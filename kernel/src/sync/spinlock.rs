@@ -2,8 +2,10 @@ use crate::arch::interrupts::{irq_restore, irq_save_and_stop, IrqState};
 use crate::arch::{get_per_cpu_data, preempt_disable, preempt_enable};
 use spin::{Mutex, SchedulerInfluence};
 
+#[derive(Copy, Clone)]
 pub struct PreemptCounterInfluence {}
 
+#[derive(Copy, Clone)]
 pub struct IrqInfluence {
     state: IrqState,
 }
@@ -12,17 +14,13 @@ impl SchedulerInfluence for PreemptCounterInfluence {
     #[inline(always)]
     fn preempt_enable(&self) {
         preempt_enable();
+        get_per_cpu_data().check_should_schedule();
     }
 
     #[inline(always)]
     fn preempt_disable() -> Self {
         preempt_disable();
         Self {}
-    }
-
-    #[inline(always)]
-    fn check_schedule_flag() {
-        get_per_cpu_data().check_should_schedule();
     }
 }
 
@@ -36,8 +34,6 @@ impl SchedulerInfluence for IrqInfluence {
             state: irq_save_and_stop(),
         }
     }
-
-    fn check_schedule_flag() {}
 }
 
 // TODO: apply Hardware Lock Elision if supported

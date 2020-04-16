@@ -521,6 +521,10 @@ impl HeapCaches {
 
     /// Converts the layout to a type.
     fn layout_to_size(layout: Layout) -> usize {
+        // Note that alignment bigger than 4096 is not possible because the start of the slabs
+        // are only aligned on at least a page, but not necessarily more than one.
+        debug_assert!(PAGE_SIZE >= 4096);
+
         if layout.size() <= 32 && layout.align() <= 32 {
             32
         } else if layout.size() <= 64 && layout.align() <= 64 {
@@ -537,7 +541,7 @@ impl HeapCaches {
             2048
         } else if layout.size() <= 4096 && layout.align() <= 4096 {
             4096
-        } else if layout.size() <= 8192 && layout.align() <= 8192 {
+        } else if layout.size() <= 8192 && layout.align() <= 4096 {
             8192
         } else {
             layout.size()

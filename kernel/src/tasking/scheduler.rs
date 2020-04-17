@@ -124,6 +124,7 @@ impl Scheduler {
             // Exit the thread.
             SwitchReason::Exit => {
                 debug_assert!(self.garbage.is_none());
+
                 // TODO: cleanup thread stuff here, otherwise we will likely pagefault
                 self.garbage = Some(old_thread.id());
             }

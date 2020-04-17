@@ -423,6 +423,7 @@ pub fn run(buffer: &[u8]) -> Result<(), Error> {
         let guard = unsafe { ActiveMapping::get_new() }.map_err(Error::MemoryError)?;
         let instantiation = compile_result.instantiate();
         let thread = instantiation.emit_and_link()?;
+        drop(guard);
         preempt_enable();
         thread
     };

@@ -248,7 +248,7 @@ extern "x86-interrupt" fn exc_invalid_opcode(frame: &mut ISRStackFrame) {
     if frame.rip.as_usize() < USER_START {
         panic!("Invalid opcode: {:#?}", frame);
     } else {
-        println!("wasm trap");
+        println!("wasm trap, thread killed");
         scheduler::switch_to_next(SwitchReason::Exit);
     }
 }

@@ -8,13 +8,13 @@ use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler::{self, with_core_scheduler, SwitchReason};
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::VmContext;
+use alloc::collections::BTreeMap;
 use bitflags::bitflags;
 use core::cell::Cell;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
 use core::slice;
 use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
-use hashbrown::HashMap;
 use lazy_static::lazy_static;
 
 #[repr(u16)]

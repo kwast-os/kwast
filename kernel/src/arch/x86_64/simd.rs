@@ -82,7 +82,10 @@ pub fn setup_simd() {
         unsafe {
             cr4_write(cr4);
             xsetbv(0, xcr0);
-            SIMD_SAVE_SIZE = cpuid.get_extended_state_info().unwrap().xsave_size();
+            SIMD_SAVE_SIZE = cpuid
+                .get_extended_state_info()
+                .unwrap()
+                .xsave_area_size_enabled_features();
             assert!(SIMD_SAVE_SIZE > 0);
             if state.has_xsaves_xrstors() {
                 SIMD_SAVE_ROUTINE = simd_routine_xsaves;

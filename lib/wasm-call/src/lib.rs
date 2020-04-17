@@ -197,8 +197,6 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
         });
     }
 
-    let map_capacity = map_entries.len();
-
     let result = quote! {
         trait AbiFunctions {
             #(fn #trait_funcs;)*
@@ -207,8 +205,8 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
         #(#glue_functions)*
 
         lazy_static! {
-            static ref ABI_MAP: HashMap<&'static str, (VirtAddr, Signature)> = {
-                let mut map = HashMap::with_capacity(#map_capacity);
+            static ref ABI_MAP: BTreeMap<&'static str, (VirtAddr, Signature)> = {
+                let mut map = BTreeMap::new();
                 #(#map_entries)*
                 map
             };

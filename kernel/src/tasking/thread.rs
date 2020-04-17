@@ -1,10 +1,10 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{EntryFlags, PAGE_SIZE, ActiveMapping};
+use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::arch::simd::SimdState;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma, VmaAllocator};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
 use crate::sync::spinlock::RwLock;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::cell::Cell;
@@ -18,7 +18,7 @@ const AMOUNT_GUARD_PAGES: usize = 2;
 /// The stack of a thread.
 #[derive(Debug)]
 pub struct Stack {
-    _vma: MappedVma,
+    vma: MappedVma,
     current_location: Cell<VirtAddr>,
 }
 
@@ -38,10 +38,11 @@ impl ThreadId {
 pub struct Thread {
     pub stack: Stack,
     heap: RwLock<LazilyMappedVma>, // TODO: Something lighter? since this is only an issue with shared heaps
-    _code: MappedVma,
+    code: MappedVma,
     id: ThreadId,
     _vmctx_container: Option<VmContextContainer>,
     simd_state: SimdState,
+    vma_allocator: VmaAllocator,
 }
 
 impl Thread {
@@ -59,7 +60,7 @@ impl Thread {
         let mut stack = Stack::create(&mut vma_allocator, STACK_SIZE, stack_guard_size)?;
         // Safe because enough size on the stack and memory allocated at a known good location.
         stack.prepare_trampoline(entry, vmctx_container.ptr());
-        Ok(Self::new(stack, code, heap, Some(vmctx_container)))
+        Ok(Self::new(stack, code, heap, vma_allocator, Some(vmctx_container)))
     }
 
     /// Creates a new thread from given parameters.
@@ -67,14 +68,16 @@ impl Thread {
         stack: Stack,
         code: MappedVma,
         heap: LazilyMappedVma,
+        vma_allocator: VmaAllocator,
         vmctx_container: Option<VmContextContainer>,
     ) -> Self {
         Self {
             stack,
             heap: RwLock::new(heap),
-            _code: code,
+            code,
             id: ThreadId::new(),
             _vmctx_container: vmctx_container,
+            vma_allocator,
             simd_state: SimdState::new(),
         }
     }
@@ -104,7 +107,9 @@ impl Thread {
         // TODO: should be locked if needed
         let mut mapping = unsafe { ActiveMapping::get_unlocked() };
 
-        self.heap.write().try_handle_page_fault(&mut mapping, fault_addr)
+        self.heap
+            .write()
+            .try_handle_page_fault(&mut mapping, fault_addr)
     }
 
     /// Save SIMD state.
@@ -120,16 +125,36 @@ impl Thread {
     }
 }
 
+impl Drop for Thread {
+    fn drop(&mut self) {
+        // TODO
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+
+        self.vma_allocator.destroy_vma(&mut mapping, &mut self.code);
+        self.vma_allocator.destroy_vma(&mut mapping, self.heap.get_mut());
+        self.vma_allocator.destroy_vma(&mut mapping, &mut self.stack.vma);
+    }
+}
+
 impl Stack {
     /// Creates a stack.
-    pub fn create(vma_allocator: &mut VmaAllocator, size: usize, guard_size: usize) -> Result<Stack, MemoryError> {
+    pub fn create(
+        vma_allocator: &mut VmaAllocator,
+        size: usize,
+        guard_size: usize,
+    ) -> Result<Stack, MemoryError> {
         let vma = {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
             // TODO: should be locked if needed
             let mut mapping = unsafe { ActiveMapping::get_unlocked() };
 
-            vma_allocator.create_vma(size + guard_size)?.map(&mut mapping, guard_size, size, flags)?
+            vma_allocator.create_vma(size + guard_size)?.map(
+                &mut mapping,
+                guard_size,
+                size,
+                flags,
+            )?
         };
         Ok(Stack::new(vma))
     }
@@ -138,7 +163,7 @@ impl Stack {
     pub fn new(vma: MappedVma) -> Self {
         let current_location = vma.address() + vma.size();
         Self {
-            _vma: vma,
+            vma: vma,
             current_location: Cell::new(current_location),
         }
     }
@@ -153,7 +178,7 @@ impl Stack {
     #[inline]
     pub fn set_current_location(&self, location: VirtAddr) {
         debug_assert!(
-            self._vma.is_dummy() || self._vma.is_contained(location),
+            self.vma.is_dummy() || self.vma.is_contained(location),
             "the address {:?} does not belong to the stack {:?}",
             location,
             self

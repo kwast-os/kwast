@@ -1,3 +1,4 @@
+use crate::arch;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::buddy;
@@ -10,7 +11,6 @@ use core::cmp;
 use core::intrinsics::unlikely;
 use core::mem::size_of;
 use core::ptr::{null_mut, NonNull};
-use crate::arch;
 
 struct SpaceManager<'t> {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -434,9 +434,7 @@ impl<'t> SpaceManager<'t> {
     fn get_active_mapping() -> ActiveMapping {
         // This is safe as long as we have a global heap lock.
         // This is always the case right now.
-        unsafe {
-            ActiveMapping::get_unlocked()
-        }
+        unsafe { ActiveMapping::get_unlocked() }
     }
 
     /// Maximum end address of the heap.
@@ -456,7 +454,11 @@ impl<'t> SpaceManager<'t> {
         let size = PAGE_SIZE << order;
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-        if unlikely(Self::get_active_mapping().map_range(addr, size, flags).is_err()) {
+        if unlikely(
+            Self::get_active_mapping()
+                .map_range(addr, size, flags)
+                .is_err(),
+        ) {
             self.tree.dealloc(order, offset);
             null_mut()
         } else {

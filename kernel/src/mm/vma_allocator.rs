@@ -1,12 +1,12 @@
 //! Allocator used to split an address space domain into virtual memory areas.
 
+use crate::arch;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::avl_interval_tree::AVLIntervalTree;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use core::intrinsics::{likely, unlikely};
 use core::ptr::write_bytes;
-use crate::arch;
 
 /// Virtual memory allocator.
 pub struct VmaAllocator {
@@ -44,6 +44,7 @@ pub struct MappedVma {
 }
 
 /// Lazily mapped Vma, mapped on access.
+#[derive(Debug)]
 pub struct LazilyMappedVma {
     vma: Vma,
     /// The flags to use when mapping the memory.
@@ -158,7 +159,9 @@ impl LazilyMappedVma {
     /// Returns the old size on success, an error on failure.
     pub fn expand(&mut self, amount: usize) -> Result<usize, MemoryError> {
         let old_size = self.allocated_size;
-        let new_size = old_size.checked_add(amount).ok_or(MemoryError::InvalidRange)?;
+        let new_size = old_size
+            .checked_add(amount)
+            .ok_or(MemoryError::InvalidRange)?;
 
         if new_size > self.vma.size {
             Err(MemoryError::InvalidRange)
@@ -169,7 +172,11 @@ impl LazilyMappedVma {
     }
 
     /// Try handle a page fault.
-    pub fn try_handle_page_fault(&mut self, mapping: &mut ActiveMapping, fault_addr: VirtAddr) -> bool {
+    pub fn try_handle_page_fault(
+        &mut self,
+        mapping: &mut ActiveMapping,
+        fault_addr: VirtAddr,
+    ) -> bool {
         if likely(self.is_contained(fault_addr)) {
             let flags = self.flags();
             let map_addr = fault_addr.align_down();
@@ -239,9 +246,7 @@ impl VmaAllocator {
         let mut tree = AVLIntervalTree::new();
         tree.insert(arch::USER_START, arch::USER_LEN);
 
-        Self {
-            tree,
-        }
+        Self { tree }
     }
 
     /// Inserts a region.
@@ -267,7 +272,7 @@ impl VmaAllocator {
     }
 
     /// Destroy a Vma.
-    pub fn destroy_vma<M: MappableVma>(&mut self, mapping: &mut ActiveMapping, mut vma: M) {
+    pub fn destroy_vma<M: MappableVma>(&mut self, mapping: &mut ActiveMapping, vma: &mut M) {
         vma.unmap(mapping);
         self.insert_region(vma.address(), vma.size());
     }

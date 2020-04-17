@@ -3,7 +3,7 @@ use alloc::collections::VecDeque;
 use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
-use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma, VmaAllocator};
 use crate::sync::spinlock::RwLock;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
@@ -58,6 +58,7 @@ impl Scheduler {
             Stack::new(MappedVma::dummy()),
             MappedVma::dummy(),
             LazilyMappedVma::dummy(),
+            VmaAllocator::new(),
             None,
         ));
 

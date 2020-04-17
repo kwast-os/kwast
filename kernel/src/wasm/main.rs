@@ -5,10 +5,11 @@ use cranelift_codegen::{CodegenError, Context};
 use cranelift_wasm::{translate_module, Global, Memory, SignatureIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
+use crate::alloc::string::ToString;
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma, VmaAllocator};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
 use crate::tasking::scheduler::add_and_schedule_thread;
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
@@ -31,7 +32,6 @@ use core::ptr::{copy_nonoverlapping, write_unaligned};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
 use cranelift_codegen::ir::{types, LibCall, Signature, Type};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
-use crate::alloc::string::ToString;
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
@@ -125,7 +125,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             let len = align_up(self.compile_result.total_size);
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-            self.vma_allocator.create_vma(len)
+            self.vma_allocator
+                .create_vma(len)
                 .and_then(|v| v.map(&mut mapping, 0, len, flags))
                 .map_err(Error::MemoryError)?
         };
@@ -151,7 +152,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
             let len = maximum + HEAP_GUARD_SIZE;
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            self.vma_allocator.create_vma(len as usize)
+            self.vma_allocator
+                .create_vma(len as usize)
                 .and_then(|v| v.map_lazily(&mut mapping, minimum, flags))
                 .map_err(Error::MemoryError)?
         };
@@ -324,12 +326,15 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             // Safety: we are the only ones who have access to this slice right now.
             let function_imports = unsafe { vmctx_container.function_imports_as_mut_slice() };
 
-            for (i, import) in self.compile_result.function_imports.iter().enumerate() {
+            for (entry, (i, import)) in function_imports
+                .iter_mut()
+                .zip(self.compile_result.function_imports.iter().enumerate())
+            {
                 println!("{} {:?}", i, import);
 
                 let sig = self.compile_result.get_sig(FuncIndex::from_u32(i as u32));
 
-                function_imports[i] = match import.module.as_str() {
+                *entry = match import.module.as_str() {
                     "wasi_snapshot_preview1" => VmFunctionImportEntry {
                         address: get_address_for_wasi_and_validate_sig(&import.field, sig)
                             .ok_or(Error::MissingImport)?,
@@ -412,7 +417,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 pub fn run(buffer: &[u8]) -> Result<(), Error> {
     let thread = {
         let compile_result = compile(buffer)?;
-        let mut instantiation = compile_result.instantiate();
+        let instantiation = compile_result.instantiate();
         instantiation.emit_and_link()?
     };
 
@@ -429,8 +434,12 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
     let mut flag_builder = settings::builder();
 
     // Flags
-    flag_builder.set("opt_level", "speed_and_size").expect("valid flag");
-    flag_builder.set("enable_probestack", "true").expect("valid flag");
+    flag_builder
+        .set("opt_level", "speed_and_size")
+        .expect("valid flag");
+    flag_builder
+        .set("enable_probestack", "true")
+        .expect("valid flag");
     flag_builder.set("enable_simd", "true").expect("valid flag");
     // TODO: avoid div traps?
 

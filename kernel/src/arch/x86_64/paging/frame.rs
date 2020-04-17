@@ -1,6 +1,6 @@
 use multiboot2::MemoryMapTag;
 
-use super::{invalidate, ActiveMapping, EntryFlags, PhysAddr, VirtAddr, PAGE_SIZE};
+use super::{invalidate, ActiveMapping, EntryFlags, PhysAddr, VirtAddr};
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::FrameAllocator;
 

@@ -83,9 +83,7 @@ impl<'a> EntryModifier<'a> {
 impl MemoryMapper for ActiveMapping {
     unsafe fn get_unlocked() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
-        Self {
-            p4: &mut *p4_ptr,
-        }
+        Self { p4: &mut *p4_ptr }
     }
 
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {

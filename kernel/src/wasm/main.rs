@@ -31,6 +31,7 @@ use core::ptr::{copy_nonoverlapping, write_unaligned};
 use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
 use cranelift_codegen::ir::{types, LibCall, Signature, Type};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
+use crate::alloc::string::ToString;
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
@@ -419,10 +420,13 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
     let mut flag_builder = settings::builder();
 
     // Flags
-    flag_builder.set("opt_level", "speed_and_size").unwrap();
-    flag_builder.set("enable_probestack", "true").unwrap();
+    flag_builder.set("opt_level", "speed_and_size").expect("valid flag");
+    flag_builder.set("enable_probestack", "true").expect("valid flag");
+    flag_builder.set("enable_simd", "true").expect("valid flag");
+    // TODO: avoid div traps?
 
     let flags = settings::Flags::new(flag_builder);
+    println!("{}", flags.to_string());
     let isa = isa_builder.finish(flags);
 
     // Module

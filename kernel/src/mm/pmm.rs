@@ -46,7 +46,7 @@ impl FrameAllocator {
     }
 
     /// Pops the top and moves the current top pointer. This function is used internally for memory management by paging.
-    pub fn pop_top<F>(&mut self, f: F) -> MemoryResult
+    pub fn pop_top<F>(&mut self, f: F) -> Result<PhysAddr, MemoryError>
     where
         F: FnOnce(PhysAddr) -> VirtAddr,
     {
@@ -55,9 +55,10 @@ impl FrameAllocator {
         }
 
         // Read and set the next top address.
-        let ptr = f(self.top).as_const();
+        let paddr = self.top;
+        let ptr = f(paddr).as_const();
         self.top = PhysAddr::new(unsafe { *ptr });
-        Ok(())
+        Ok(paddr)
     }
 
     /// Similar to `pop_top`.

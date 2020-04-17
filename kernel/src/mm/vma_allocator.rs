@@ -240,6 +240,8 @@ impl Drop for LazilyMappedVma {
     }
 }
 
+// TODO: also add global pages
+// TODO: also add a bump allocator
 impl VmaAllocator {
     /// Creates a new VMA allocator.
     pub fn new() -> Self {

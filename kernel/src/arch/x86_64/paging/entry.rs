@@ -44,6 +44,16 @@ impl Entry {
         self.0 = (self.0 & !USED_COUNT_MASK) | (count << 52);
     }
 
+    /// Sets the raw value.
+    pub unsafe fn set_raw(&mut self, value: u64) {
+        self.0 = value;
+    }
+
+    /// Gets the raw value.
+    pub fn get_raw(&self) -> u64 {
+        self.0
+    }
+
     /// Returns true if this entry is unused.
     pub fn is_unused(&self) -> bool {
         self.phys_addr_unchecked().is_null()

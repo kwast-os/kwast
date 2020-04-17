@@ -38,6 +38,14 @@ pub struct ActiveMapping {
     p4: &'static mut Table<Level4>,
 }
 
+#[repr(transparent)]
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct CpuPageMapping(u64);
+
+pub struct MappingGuard {
+    old: CpuPageMapping,
+}
+
 /// Entry modifier helper.
 pub struct EntryModifier<'a> {
     entry: &'a mut Entry,
@@ -46,10 +54,26 @@ pub struct EntryModifier<'a> {
 
 /// Invalidates page.
 #[inline(always)]
-fn invalidate(addr: u64) {
-    unsafe {
-        asm!("invlpg ($0)" :: "r" (addr) : "memory");
+unsafe fn invalidate(addr: u64) {
+    asm!("invlpg ($0)" : : "r" (addr) : "memory");
+}
+
+/// Switches to another CR3.
+#[inline(always)]
+pub unsafe fn cpu_page_mapping_switch_to(cr3: CpuPageMapping) {
+    if get_cpu_page_mapping() != cr3 {
+        asm!("movq $0, %cr3" : : "r" (cr3) : "memory" : "volatile");
     }
+}
+
+/// Gets the value for CR3.
+#[inline(always)]
+pub fn get_cpu_page_mapping() -> CpuPageMapping {
+    let cr3: CpuPageMapping;
+    unsafe {
+        asm!("movq %cr3, $0" : "=r" (cr3) : : "memory" : "volatile");
+    }
+    cr3
 }
 
 impl<'a> EntryModifier<'a> {
@@ -65,7 +89,9 @@ impl<'a> EntryModifier<'a> {
 
         // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
         if was_present {
-            invalidate(self.addr);
+            unsafe {
+                invalidate(self.addr);
+            }
         }
     }
 
@@ -80,10 +106,47 @@ impl<'a> EntryModifier<'a> {
     }
 }
 
+impl Drop for MappingGuard {
+    fn drop(&mut self) {
+        unsafe {
+            cpu_page_mapping_switch_to(self.old);
+        }
+    }
+}
+
 impl MemoryMapper for ActiveMapping {
     unsafe fn get_unlocked() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self { p4: &mut *p4_ptr }
+    }
+
+    unsafe fn get_new() -> Result<MappingGuard, MemoryError> {
+        // TODO
+        let mut mapping = Self::get_unlocked();
+        let old = get_cpu_page_mapping();
+
+        // Get a new frame & page for PML4
+        let vaddr = VirtAddr::new(0x1000); // TODO: not good, shared between all processes
+        let cr3 = mapping.get_and_map_single(
+            vaddr,
+            EntryFlags::PRESENT | EntryFlags::NX | EntryFlags::WRITABLE,
+        )?;
+
+        // Copy kernel mappings and clear the others.
+        let p4_ptr = &mut *vaddr.as_mut::<Table<Level4>>();
+        p4_ptr.entries[0].set_raw(mapping.p4.entries[0].get_raw());
+        p4_ptr.entries[511].set_raw(mapping.p4.entries[511].get_raw());
+        p4_ptr.entries[511].set_phys_addr(cr3);
+        for entry in &mut mapping.p4.entries[1..511] {
+            entry.set_raw(0);
+        }
+
+        // Unmap the temporary mapping.
+        mapping.unmap_single_internal(vaddr, false);
+
+        cpu_page_mapping_switch_to(CpuPageMapping(cr3.as_u64()));
+
+        Ok(MappingGuard { old })
     }
 
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
@@ -105,15 +168,19 @@ impl MemoryMapper for ActiveMapping {
         }
     }
 
-    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MemoryResult {
+    fn get_and_map_single(
+        &mut self,
+        vaddr: VirtAddr,
+        flags: EntryFlags,
+    ) -> Result<PhysAddr, MemoryError> {
         let mut e = self.get_4k_entry_may_create(vaddr)?;
 
-        with_pmm(|pmm| {
+        Ok(with_pmm(|pmm| {
             pmm.pop_top(move |top| {
                 e.set(top, flags);
                 vaddr
             })
-        })
+        })?)
     }
 
     #[inline]
@@ -167,7 +234,7 @@ impl MemoryMapper for ActiveMapping {
             let res = self.get_and_map_single(vaddr, flags);
             if unlikely(res.is_err()) {
                 self.free_and_unmap_range(start_vaddr, offset);
-                return res;
+                return Err(res.err().unwrap());
             }
 
             vaddr += PAGE_SIZE;
@@ -234,7 +301,9 @@ impl ActiveMapping {
                     e.set_flags(flags | EntryFlags::WRITABLE | EntryFlags::NX);
 
                     // Sadly, we have to invalidate here too...
-                    invalidate(vaddr.as_u64());
+                    unsafe {
+                        invalidate(vaddr.as_u64());
+                    }
                 }
 
                 pmm.push_top(vaddr, e.phys_addr_unchecked())
@@ -242,7 +311,9 @@ impl ActiveMapping {
         }
 
         e.clear();
-        invalidate(vaddr.as_u64());
+        unsafe {
+            invalidate(vaddr.as_u64());
+        }
 
         p1.decrease_used_count();
 

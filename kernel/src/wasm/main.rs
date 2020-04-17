@@ -8,6 +8,7 @@ use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 use crate::alloc::string::ToString;
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
+use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
 use crate::tasking::scheduler::add_and_schedule_thread;
@@ -417,8 +418,13 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 pub fn run(buffer: &[u8]) -> Result<(), Error> {
     let thread = {
         let compile_result = compile(buffer)?;
+        preempt_disable();
+        // Safety: executing in an environment with only references inside kernel space.
+        let guard = unsafe { ActiveMapping::get_new() }.map_err(Error::MemoryError)?;
         let instantiation = compile_result.instantiate();
-        instantiation.emit_and_link()?
+        let thread = instantiation.emit_and_link()?;
+        preempt_enable();
+        thread
     };
 
     add_and_schedule_thread(thread);

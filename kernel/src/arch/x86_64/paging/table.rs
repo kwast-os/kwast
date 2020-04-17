@@ -54,7 +54,7 @@ where
     L: Level,
 {
     /// Clears the table entries. (internal use only)
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         for e in self.entries.iter_mut() {
             e.clear();
         }

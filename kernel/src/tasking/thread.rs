@@ -1,7 +1,7 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
+use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE, get_cpu_page_mapping, CpuPageMapping};
 use crate::arch::simd::SimdState;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
@@ -37,6 +37,7 @@ impl ThreadId {
 
 pub struct Thread {
     pub stack: Stack,
+    pub cpu_page_mapping: CpuPageMapping,
     heap: RwLock<LazilyMappedVma>, // TODO: Something lighter? since this is only an issue with shared heaps
     code: MappedVma,
     id: ThreadId,
@@ -60,7 +61,13 @@ impl Thread {
         let mut stack = Stack::create(&mut vma_allocator, STACK_SIZE, stack_guard_size)?;
         // Safe because enough size on the stack and memory allocated at a known good location.
         stack.prepare_trampoline(entry, vmctx_container.ptr());
-        Ok(Self::new(stack, code, heap, vma_allocator, Some(vmctx_container)))
+        Ok(Self::new(
+            stack,
+            code,
+            heap,
+            vma_allocator,
+            Some(vmctx_container),
+        ))
     }
 
     /// Creates a new thread from given parameters.
@@ -72,6 +79,7 @@ impl Thread {
         vmctx_container: Option<VmContextContainer>,
     ) -> Self {
         Self {
+            cpu_page_mapping: get_cpu_page_mapping(),
             stack,
             heap: RwLock::new(heap),
             code,
@@ -131,8 +139,10 @@ impl Drop for Thread {
         let mut mapping = unsafe { ActiveMapping::get_unlocked() };
 
         self.vma_allocator.destroy_vma(&mut mapping, &mut self.code);
-        self.vma_allocator.destroy_vma(&mut mapping, self.heap.get_mut());
-        self.vma_allocator.destroy_vma(&mut mapping, &mut self.stack.vma);
+        self.vma_allocator
+            .destroy_vma(&mut mapping, self.heap.get_mut());
+        self.vma_allocator
+            .destroy_vma(&mut mapping, &mut self.stack.vma);
     }
 }
 

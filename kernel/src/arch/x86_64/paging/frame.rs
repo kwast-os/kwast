@@ -91,7 +91,9 @@ impl FrameAllocator {
 
             p2.entries[P2_IDX].clear();
             p2.decrease_used_count();
-            invalidate(tmp_2m_map_addr.as_u64());
+            unsafe {
+                invalidate(tmp_2m_map_addr.as_u64());
+            }
         }
     }
 }

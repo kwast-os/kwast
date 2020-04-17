@@ -9,6 +9,7 @@ use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::sync::Arc;
 use core::mem::swap;
+use crate::arch::paging::cpu_page_mapping_switch_to;
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -123,11 +124,13 @@ impl Scheduler {
             // Exit the thread.
             SwitchReason::Exit => {
                 debug_assert!(self.garbage.is_none());
+                // TODO: cleanup thread stuff here, otherwise we will likely pagefault
                 self.garbage = Some(old_thread.id());
             }
         }
 
         self.current_thread.restore_simd();
+        unsafe { cpu_page_mapping_switch_to(self.current_thread.cpu_page_mapping); }
         self.current_thread.stack.get_current_location()
     }
 }

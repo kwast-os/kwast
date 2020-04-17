@@ -6,6 +6,9 @@ use lazy_static::lazy_static;
 use crate::arch::x86_64::address::VirtAddr;
 use crate::arch::x86_64::paging::PageFaultError;
 use crate::arch::x86_64::port::write_port8;
+use crate::arch::USER_START;
+use crate::tasking::scheduler::SwitchReason;
+use crate::tasking::scheduler;
 
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
@@ -242,7 +245,12 @@ extern "x86-interrupt" fn exc_bound_range_exceeded(frame: &mut ISRStackFrame) {
 }
 
 extern "x86-interrupt" fn exc_invalid_opcode(frame: &mut ISRStackFrame) {
-    panic!("Invalid opcode: {:#?}", frame);
+    if frame.rip.as_usize() < USER_START {
+        panic!("Invalid opcode: {:#?}", frame);
+    } else {
+        println!("wasm trap");
+        scheduler::switch_to_next(SwitchReason::Exit);
+    }
 }
 
 extern "x86-interrupt" fn exc_device_not_available(frame: &mut ISRStackFrame) {

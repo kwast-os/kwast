@@ -1,10 +1,10 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{EntryFlags, PAGE_SIZE};
+use crate::arch::paging::{EntryFlags, PAGE_SIZE, ActiveMapping};
 use crate::arch::simd::SimdState;
-use crate::mm::mapper::MemoryError;
-use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
+use crate::mm::mapper::{MemoryError, MemoryMapper};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma, VmaAllocator};
 use crate::sync::spinlock::RwLock;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::cell::Cell;
@@ -48,6 +48,7 @@ impl Thread {
     /// Creates a thread.
     /// Unsafe because it's possible to set an entry point.
     pub unsafe fn create(
+        mut vma_allocator: VmaAllocator,
         entry: VirtAddr,
         code: MappedVma,
         heap: LazilyMappedVma,
@@ -55,7 +56,7 @@ impl Thread {
     ) -> Result<Thread, MemoryError> {
         // TODO: lazily allocate in the future?
         let stack_guard_size: usize = AMOUNT_GUARD_PAGES * PAGE_SIZE;
-        let mut stack = Stack::create(STACK_SIZE, stack_guard_size)?;
+        let mut stack = Stack::create(&mut vma_allocator, STACK_SIZE, stack_guard_size)?;
         // Safe because enough size on the stack and memory allocated at a known good location.
         stack.prepare_trampoline(entry, vmctx_container.ptr());
         Ok(Self::new(stack, code, heap, Some(vmctx_container)))
@@ -100,7 +101,10 @@ impl Thread {
     /// Handle a page fault for this thread. Returns true if handled successfully.
     #[inline]
     pub fn page_fault(&self, fault_addr: VirtAddr) -> bool {
-        self.heap.write().try_handle_page_fault(fault_addr)
+        // TODO: should be locked if needed
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+
+        self.heap.write().try_handle_page_fault(&mut mapping, fault_addr)
     }
 
     /// Save SIMD state.
@@ -118,10 +122,14 @@ impl Thread {
 
 impl Stack {
     /// Creates a stack.
-    pub fn create(size: usize, guard_size: usize) -> Result<Stack, MemoryError> {
+    pub fn create(vma_allocator: &mut VmaAllocator, size: usize, guard_size: usize) -> Result<Stack, MemoryError> {
         let vma = {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            Vma::create(size + guard_size)?.map(guard_size, size, flags)?
+
+            // TODO: should be locked if needed
+            let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+
+            vma_allocator.create_vma(size + guard_size)?.map(&mut mapping, guard_size, size, flags)?
         };
         Ok(Stack::new(vma))
     }

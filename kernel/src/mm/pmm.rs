@@ -74,6 +74,7 @@ impl FrameAllocator {
 static PMM: Spinlock<FrameAllocator> = Spinlock::new(FrameAllocator::empty());
 
 /// Execute something using the PMM.
+#[inline]
 pub fn with_pmm<F, T>(f: F) -> T
 where
     F: FnOnce(&mut FrameAllocator) -> T,

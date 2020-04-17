@@ -8,7 +8,7 @@ use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, Vma, VmaAllocator};
 use crate::tasking::scheduler::add_and_schedule_thread;
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
@@ -75,6 +75,7 @@ struct CompileResult<'data> {
 struct Instantiation<'r, 'data> {
     compile_result: &'r CompileResult<'data>,
     func_offsets: Vec<usize>,
+    vma_allocator: VmaAllocator,
 }
 
 impl<'data> CompileResult<'data> {
@@ -98,6 +99,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         Self {
             compile_result,
             func_offsets: Vec::with_capacity(capacity),
+            vma_allocator: VmaAllocator::new(),
         }
     }
 
@@ -114,12 +116,16 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
     /// Emit code.
     fn emit(&mut self) -> Result<(MappedVma, LazilyMappedVma, Vec<RelocSink>), Error> {
+        // TODO
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+
         // Create code area, will be made executable read-only later.
         let code_vma = {
             let len = align_up(self.compile_result.total_size);
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            Vma::create(len)
-                .and_then(|x| x.map(0, len, flags))
+
+            self.vma_allocator.create_vma(len)
+                .and_then(|v| v.map(&mut mapping, 0, len, flags))
                 .map_err(Error::MemoryError)?
         };
 
@@ -144,8 +150,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
             let len = maximum + HEAP_GUARD_SIZE;
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            Vma::create(len as usize)
-                .and_then(|x| x.map_lazily(minimum, flags))
+            self.vma_allocator.create_vma(len as usize)
+                .and_then(|v| v.map_lazily(&mut mapping, minimum, flags))
                 .map_err(Error::MemoryError)?
         };
 
@@ -181,7 +187,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
     }
 
     /// Emit and link.
-    pub fn emit_and_link(&mut self) -> Result<Thread, Error> {
+    pub fn emit_and_link(mut self) -> Result<Thread, Error> {
         let defined_function_offset = self.defined_function_offset();
 
         let (code_vma, heap_vma, reloc_sinks) = self.emit()?;
@@ -248,7 +254,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         // Now the code is written, change it to read-only & executable.
         {
-            let mut mapping = ActiveMapping::get();
+            // TODO
+            let mut mapping = unsafe { ActiveMapping::get_unlocked() };
             let flags = EntryFlags::PRESENT;
             mapping
                 .change_flags_range(code_vma.address(), code_vma.size(), flags)
@@ -256,12 +263,14 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         };
 
         let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
+        let start_address = self.get_func_address(&code_vma, start_func);
 
         let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma)?;
 
         Ok(unsafe {
             Thread::create(
-                self.get_func_address(&code_vma, start_func),
+                self.vma_allocator,
+                start_address,
                 code_vma,
                 heap_vma,
                 vmctx_container,

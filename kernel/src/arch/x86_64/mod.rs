@@ -6,7 +6,6 @@ use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
 use crate::arch::x86_64::simd::setup_simd;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
-use crate::mm::vma_allocator::with_vma_allocator;
 use crate::util::boot_module::{BootModule, BootModuleProvider, Range};
 use multiboot2::{BootInformation, ElfSectionFlags, ModuleIter};
 
@@ -24,6 +23,12 @@ pub mod vga_text;
 // For tests
 pub mod qemu;
 pub mod serial;
+
+const ONE_PML4_ENTRY: usize = 512usize * 1024 * 1024 * 1024;
+
+// TODO: do we also want to give the 0xffff8000_00000000-(0x8000_00000000 - ONE_PML4_ENTRY) range?
+pub const USER_START: usize = ONE_PML4_ENTRY;
+pub const USER_LEN: usize = 0x8000_00000000 - ONE_PML4_ENTRY;
 
 extern "C" {
     static KERNEL_END_PTR: usize;
@@ -112,7 +117,8 @@ pub extern "C" fn entry(mboot_addr: usize) {
 
     // Map sections correctly
     {
-        let mut mapping = ActiveMapping::get();
+        // Safety: we are the only running thread right now, so no locking is required.
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
         let sections = mboot_struct
             .elf_sections_tag()
             .expect("no elf sections tag");
@@ -150,7 +156,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
     unsafe {
         let stack_bottom = VirtAddr::new(&STACK_BOTTOM as *const _ as usize);
         let interrupt_stack_bottom = VirtAddr::new(&INTERRUPT_STACK_BOTTOM as *const _ as usize);
-        let mut mapping = ActiveMapping::get();
+        let mut mapping = ActiveMapping::get_unlocked();
         mapping.free_and_unmap_single(stack_bottom);
         mapping.free_and_unmap_single(interrupt_stack_bottom);
     }
@@ -163,17 +169,6 @@ pub extern "C" fn entry(mboot_addr: usize) {
 /// Late init.
 pub fn late_init() {
     setup_simd();
-}
-
-/// Inits the VMA regions. May only be called once per VMA allocator.
-pub fn init_vma_regions(start: VirtAddr) {
-    with_vma_allocator(|vma| {
-        vma.insert_region(start, 0x8000_00000000 - start.as_usize());
-        vma.insert_region(
-            VirtAddr::new(0xffff8000_00000000),
-            0x8000_00000000 - 512 * 1024 * 1024 * 1024,
-        );
-    });
 }
 
 /// Halt instruction. Waits for interrupt.

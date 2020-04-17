@@ -19,7 +19,8 @@ impl FrameAllocator {
         let map_flags =
             EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::HUGE_PAGE;
 
-        let mut mapping = ActiveMapping::get();
+        // Safety: we are the only running thread right now, so no locking is required.
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
         let mut e = mapping.get_2m_entry(tmp_2m_map_addr).unwrap();
 
         // Previous entry address
@@ -92,28 +93,5 @@ impl FrameAllocator {
             p2.decrease_used_count();
             invalidate(tmp_2m_map_addr.as_u64());
         }
-
-        // Debug
-        //self.debug_print_frames();
-    }
-
-    /// Debug print all frames.
-    #[allow(dead_code)]
-    fn debug_print_frames(&mut self) {
-        println!("debug print frames");
-
-        let mut mapping = ActiveMapping::get();
-
-        while !self.top.is_null() {
-            self.pop_top(|top| {
-                print!("{:x} ", top.as_usize() / PAGE_SIZE);
-                let vaddr = VirtAddr::new(0x1000);
-                mapping.map_single(vaddr, top, EntryFlags::PRESENT).unwrap();
-                vaddr
-            })
-            .unwrap();
-        }
-
-        println!();
     }
 }

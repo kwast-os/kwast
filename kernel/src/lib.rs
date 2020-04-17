@@ -105,7 +105,8 @@ fn handle_module(module: BootModule) -> Option<()> {
 fn kernel_main(boot_modules: impl BootModuleProvider) {
     // Make sure the boot modules are mapped.
     if let Some(range) = boot_modules.range() {
-        let mut mapping = ActiveMapping::get();
+        // Safety: we are the only running thread right now, so no locking is required.
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
         mapping
             .map_range_physical(
                 range.start,

@@ -3,8 +3,8 @@ use crate::arch::paging::EntryFlags;
 
 /// Trait for memory mapper: maps physical addresses to a virtual addresses.
 pub trait MemoryMapper {
-    /// Gets the active paging mapping.
-    fn get() -> Self;
+    /// Gets the active paging mapping, without locking.
+    unsafe fn get_unlocked() -> Self;
 
     /// Translate a virtual address to a physical address (if mapped).
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr>;

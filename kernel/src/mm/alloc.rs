@@ -10,6 +10,7 @@ use core::cmp;
 use core::intrinsics::unlikely;
 use core::mem::size_of;
 use core::ptr::{null_mut, NonNull};
+use crate::arch;
 
 struct SpaceManager<'t> {
     /// Tree that can be used to get a contiguous area of pages for the slabs.
@@ -412,7 +413,8 @@ impl<'t> SpaceManager<'t> {
     fn new(tree_location: VirtAddr) -> Self {
         // Map space for the tree
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-        let mut mapping = ActiveMapping::get();
+        // Safety: we are the only running thread right now, so no locking is required.
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
         mapping
             .map_range(tree_location, size_of::<Tree>(), flags)
             .expect("cannot map range for tree");
@@ -424,6 +426,16 @@ impl<'t> SpaceManager<'t> {
         Self {
             tree,
             alloc_area_start: (tree_location + size_of::<Tree>()).align_up(),
+        }
+    }
+
+    /// This function should provide a safe way to get the active mapping. May lock.
+    #[inline]
+    fn get_active_mapping() -> ActiveMapping {
+        // This is safe as long as we have a global heap lock.
+        // This is always the case right now.
+        unsafe {
+            ActiveMapping::get_unlocked()
         }
     }
 
@@ -444,7 +456,7 @@ impl<'t> SpaceManager<'t> {
         let size = PAGE_SIZE << order;
         let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-        if unlikely(ActiveMapping::get().map_range(addr, size, flags).is_err()) {
+        if unlikely(Self::get_active_mapping().map_range(addr, size, flags).is_err()) {
             self.tree.dealloc(order, offset);
             null_mut()
         } else {
@@ -458,7 +470,7 @@ impl<'t> SpaceManager<'t> {
         self.tree.dealloc(order, offset);
 
         let size = PAGE_SIZE << order;
-        ActiveMapping::get().free_and_unmap_range(VirtAddr::new(ptr as usize), size);
+        Self::get_active_mapping().free_and_unmap_range(VirtAddr::new(ptr as usize), size);
     }
 
     /// Creates a free slab of the requested order.
@@ -662,10 +674,10 @@ static ALLOCATOR: LockedHeap = LockedHeap {
 };
 
 /// Inits allocation. May only be called once.
-pub unsafe fn init(reserved_end: VirtAddr) -> VirtAddr {
+pub unsafe fn init(reserved_end: VirtAddr) {
     debug_assert!(ALLOCATOR.inner.lock().is_none());
     let heap = Heap::new(reserved_end);
     let max_end = heap.max_end();
+    debug_assert!(max_end.as_usize() < arch::USER_START);
     *ALLOCATOR.inner.lock() = Some(heap);
-    max_end
 }

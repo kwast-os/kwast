@@ -45,7 +45,7 @@ pub struct EntryModifier<'a> {
 }
 
 /// Invalidates page.
-#[inline]
+#[inline(always)]
 fn invalidate(addr: u64) {
     unsafe {
         asm!("invlpg ($0)" :: "r" (addr) : "memory");
@@ -81,10 +81,10 @@ impl<'a> EntryModifier<'a> {
 }
 
 impl MemoryMapper for ActiveMapping {
-    fn get() -> Self {
+    unsafe fn get_unlocked() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self {
-            p4: unsafe { &mut *p4_ptr },
+            p4: &mut *p4_ptr,
         }
     }
 

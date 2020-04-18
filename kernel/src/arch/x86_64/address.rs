@@ -103,7 +103,8 @@ impl VirtAddr {
                 let x = addr.get_bits(47..64);
                 x == 0 || x == 0x1ffff
             },
-            "Virtual address is not in canonical form: {:#x}", addr
+            "Virtual address is not in canonical form: {:#x}",
+            addr
         );
         Self(addr)
     }

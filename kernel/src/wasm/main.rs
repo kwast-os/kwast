@@ -1,7 +1,10 @@
 //! Based on https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src
 
-use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{CodegenError, Context};
+use cranelift_codegen::settings::{self, Configurable};
+use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
+use cranelift_codegen::ir::{types, LibCall, Signature, Type};
+use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_wasm::{translate_module, Global, Memory, SignatureIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
@@ -10,7 +13,7 @@ use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::tasking::scheduler::add_and_schedule_thread;
 use crate::tasking::thread::{ProtectionDomain, Thread};
 use crate::wasm::func_env::FuncEnv;
@@ -30,9 +33,6 @@ use crate::wasm::wasi::get_address_for_wasi_and_validate_sig;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::{copy_nonoverlapping, write_unaligned};
-use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
-use cranelift_codegen::ir::{types, LibCall, Signature, Type};
-use cranelift_codegen::isa::{CallConv, TargetIsa};
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
@@ -124,8 +124,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                 let len = align_up(self.compile_result.total_size);
                 let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-                vma
-                    .create_vma(len)
+                vma.create_vma(len)
                     .and_then(|v| v.map(mapping, 0, len, flags))
                     .map_err(Error::MemoryError)?
             };
@@ -151,8 +150,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
                 let len = maximum + HEAP_GUARD_SIZE;
                 let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-                vma
-                    .create_vma(len as usize)
+                vma.create_vma(len as usize)
                     .and_then(|v| v.map_lazily(mapping, minimum, flags))
                     .map_err(Error::MemoryError)?
             };
@@ -259,13 +257,13 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         // Now the code is written, change it to read-only & executable.
         {
-            // TODO
-            let mut mapping = unsafe { ActiveMapping::get_unlocked() };
-            let flags = EntryFlags::PRESENT;
-            mapping
-                .change_flags_range(code_vma.address(), code_vma.size(), flags)
-                .map_err(Error::MemoryError)?;
-        };
+            self.domain.with(|_vma, mapping| {
+                let flags = EntryFlags::PRESENT;
+                mapping
+                    .change_flags_range(code_vma.address(), code_vma.size(), flags)
+                    .map_err(Error::MemoryError)
+            })?
+        }
 
         let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
         let start_address = self.get_func_address(&code_vma, start_func);
@@ -422,7 +420,7 @@ pub fn run(buffer: &[u8]) -> Result<(), Error> {
         preempt_disable();
         // Safety: executing in an environment with only references inside kernel space.
         let guard = unsafe { ActiveMapping::get_new() }.map_err(Error::MemoryError)?; // TODO: combine with protection domain
-        // TODO
+                                                                                      // TODO
         let domain = ProtectionDomain::new();
         let instantiation = compile_result.instantiate(domain);
         let thread = instantiation.emit_and_link()?;

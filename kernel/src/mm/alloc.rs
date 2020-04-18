@@ -412,7 +412,8 @@ impl<'t> SpaceManager<'t> {
     /// Creates a new manager.
     fn new(tree_location: VirtAddr) -> Self {
         // Map space for the tree
-        let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::GLOBAL;
+        let flags =
+            EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::GLOBAL;
         // Safety: we are the only running thread right now, so no locking is required.
         let mut mapping = unsafe { ActiveMapping::get_unlocked() };
         mapping
@@ -452,7 +453,8 @@ impl<'t> SpaceManager<'t> {
     fn offset_to_ptr_and_map(&mut self, order: usize, offset: usize) -> *mut u8 {
         let addr = self.offset_to_addr(offset);
         let size = PAGE_SIZE << order;
-        let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::GLOBAL;
+        let flags =
+            EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::GLOBAL;
 
         if unlikely(
             Self::get_active_mapping()

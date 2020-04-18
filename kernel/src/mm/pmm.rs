@@ -1,7 +1,7 @@
 use multiboot2::BootInformation;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::mm::mapper::{MemoryError, MemoryResult};
+use crate::mm::mapper::MemoryError;
 use crate::sync::spinlock::Spinlock;
 use core::intrinsics::unlikely;
 

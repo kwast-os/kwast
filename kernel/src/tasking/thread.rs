@@ -1,19 +1,34 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE, get_cpu_page_mapping, CpuPageMapping};
+use crate::arch::paging::{
+    get_cpu_page_mapping, ActiveMapping, CpuPageMapping, EntryFlags, PAGE_SIZE,
+};
 use crate::arch::simd::SimdState;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
-use crate::sync::spinlock::RwLock;
+use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
+use alloc::sync::Arc;
+use core::borrow::BorrowMut;
 use core::cell::Cell;
+use core::ops::DerefMut;
 
 /// Stack size in bytes.
 const STACK_SIZE: usize = 1024 * 256;
 
 /// Amount of guard pages for stack underflow.
 const AMOUNT_GUARD_PAGES: usize = 2;
+
+/// Hardware memory protection domain.
+/// Responsible for safely getting both an active mapping & getting an address allocator.
+pub struct ProtectionDomain(Arc<Spinlock<ProtectionDomainInner>>);
+
+/// Inner structure of a ProtectionDomain.
+struct ProtectionDomainInner {
+    vma_allocator: VmaAllocator,
+    mapping: ActiveMapping,
+}
 
 /// The stack of a thread.
 #[derive(Debug)]
@@ -25,6 +40,49 @@ pub struct Stack {
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct ThreadId(u64);
+
+impl ProtectionDomain {
+    /// Creates a new protection domain.
+    pub fn new() -> Self {
+        Self(Arc::new(Spinlock::new(ProtectionDomainInner {
+            vma_allocator: VmaAllocator::new(),
+            mapping: unsafe { ActiveMapping::get_unlocked() },
+        })))
+    }
+
+    /// Checks if we can avoid locks for this domain.
+    #[inline]
+    fn can_avoid_locks(&self) -> bool {
+        // We can avoid locks if we have only one thread containing this domain.
+        // That's because to clone this domain, you need to have access to a thread which
+        // has access to this domain.
+        // Since this code is also executing from a thread containing this domain,
+        // we know that this is the only executing code that has access to this domain.
+        // That means we can avoid locking because this thread is the only accessor.
+        Arc::strong_count(&self.0) == 1
+    }
+
+    /// Clones this domain reference.
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+
+    /// Execute action with both the Vma allocator and active mapping.
+    #[inline]
+    pub fn with<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut VmaAllocator, &mut ActiveMapping) -> T,
+    {
+        if self.can_avoid_locks() {
+            let inner = unsafe { &mut *self.0.get_cell().get() };
+            f(&mut inner.vma_allocator, &mut inner.mapping)
+        } else {
+            let mut inner = self.0.lock();
+            let inner = inner.deref_mut();
+            f(&mut inner.vma_allocator, &mut inner.mapping)
+        }
+    }
+}
 
 impl ThreadId {
     /// Create new thread id.
@@ -43,14 +101,14 @@ pub struct Thread {
     id: ThreadId,
     _vmctx_container: Option<VmContextContainer>,
     simd_state: SimdState,
-    vma_allocator: VmaAllocator,
+    domain: ProtectionDomain,
 }
 
 impl Thread {
     /// Creates a thread.
     /// Unsafe because it's possible to set an entry point.
     pub unsafe fn create(
-        mut vma_allocator: VmaAllocator,
+        domain: ProtectionDomain,
         entry: VirtAddr,
         code: MappedVma,
         heap: LazilyMappedVma,
@@ -58,16 +116,10 @@ impl Thread {
     ) -> Result<Thread, MemoryError> {
         // TODO: lazily allocate in the future?
         let stack_guard_size: usize = AMOUNT_GUARD_PAGES * PAGE_SIZE;
-        let mut stack = Stack::create(&mut vma_allocator, STACK_SIZE, stack_guard_size)?;
+        let mut stack = Stack::create(&domain, STACK_SIZE, stack_guard_size)?;
         // Safe because enough size on the stack and memory allocated at a known good location.
         stack.prepare_trampoline(entry, vmctx_container.ptr());
-        Ok(Self::new(
-            stack,
-            code,
-            heap,
-            vma_allocator,
-            Some(vmctx_container),
-        ))
+        Ok(Self::new(stack, code, heap, domain, Some(vmctx_container)))
     }
 
     /// Creates a new thread from given parameters.
@@ -75,7 +127,7 @@ impl Thread {
         stack: Stack,
         code: MappedVma,
         heap: LazilyMappedVma,
-        vma_allocator: VmaAllocator,
+        domain: ProtectionDomain,
         vmctx_container: Option<VmContextContainer>,
     ) -> Self {
         Self {
@@ -85,7 +137,7 @@ impl Thread {
             code,
             id: ThreadId::new(),
             _vmctx_container: vmctx_container,
-            vma_allocator,
+            domain,
             simd_state: SimdState::new(),
         }
     }
@@ -112,12 +164,8 @@ impl Thread {
     /// Handle a page fault for this thread. Returns true if handled successfully.
     #[inline]
     pub fn page_fault(&self, fault_addr: VirtAddr) -> bool {
-        // TODO: should be locked if needed
-        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
-
-        self.heap
-            .write()
-            .try_handle_page_fault(&mut mapping, fault_addr)
+        self.domain
+            .with(|_vma, mapping| self.heap.write().try_handle_page_fault(mapping, fault_addr))
     }
 
     /// Save SIMD state.
@@ -137,36 +185,32 @@ impl Drop for Thread {
     fn drop(&mut self) {
         // TODO: free PML4
 
-        // TODO
-        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+        let code = self.code.borrow_mut();
+        let stack = self.stack.vma.borrow_mut();
+        let heap = self.heap.get_mut();
 
-        self.vma_allocator.destroy_vma(&mut mapping, &mut self.code);
-        self.vma_allocator
-            .destroy_vma(&mut mapping, self.heap.get_mut());
-        self.vma_allocator
-            .destroy_vma(&mut mapping, &mut self.stack.vma);
+        self.domain.with(|vma, mapping| {
+            vma.destroy_vma(mapping, code);
+            vma.destroy_vma(mapping, heap);
+            vma.destroy_vma(mapping, stack);
+        });
     }
 }
 
 impl Stack {
     /// Creates a stack.
     pub fn create(
-        vma_allocator: &mut VmaAllocator,
+        domain: &ProtectionDomain,
         size: usize,
         guard_size: usize,
     ) -> Result<Stack, MemoryError> {
         let vma = {
             let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-            // TODO: should be locked if needed
-            let mut mapping = unsafe { ActiveMapping::get_unlocked() };
-
-            vma_allocator.create_vma(size + guard_size)?.map(
-                &mut mapping,
-                guard_size,
-                size,
-                flags,
-            )?
+            domain.with(|vma, mapping| {
+                vma.create_vma(size + guard_size)?
+                    .map(mapping, guard_size, size, flags)
+            })?
         };
         Ok(Stack::new(vma))
     }
@@ -175,7 +219,7 @@ impl Stack {
     pub fn new(vma: MappedVma) -> Self {
         let current_location = vma.address() + vma.size();
         Self {
-            vma: vma,
+            vma,
             current_location: Cell::new(current_location),
         }
     }

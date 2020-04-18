@@ -12,7 +12,7 @@ use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
 use crate::tasking::scheduler::add_and_schedule_thread;
-use crate::tasking::thread::Thread;
+use crate::tasking::thread::{ProtectionDomain, Thread};
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{
     DataInitializer, Export, FunctionBody, FunctionImport, ModuleEnv, TableElements,
@@ -273,7 +273,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         Ok(unsafe {
             Thread::create(
-                self.vma_allocator,
+                ProtectionDomain::new(),
                 start_address,
                 code_vma,
                 heap_vma,

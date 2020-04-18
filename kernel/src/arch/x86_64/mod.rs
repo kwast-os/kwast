@@ -122,9 +122,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
         let sections = mboot_struct
             .elf_sections_tag()
             .expect("no elf sections tag");
-        for x in sections.sections().filter(|x| {
-            !x.flags().is_empty()
-        }) {
+        for x in sections.sections().filter(|x| !x.flags().is_empty()) {
             let mut paging_flags: EntryFlags = EntryFlags::PRESENT | EntryFlags::GLOBAL;
 
             if x.flags().contains(ElfSectionFlags::WRITABLE) {

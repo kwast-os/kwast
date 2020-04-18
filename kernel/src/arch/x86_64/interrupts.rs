@@ -8,7 +8,7 @@ use crate::arch::x86_64::paging::PageFaultError;
 use crate::arch::x86_64::port::write_port8;
 use crate::arch::USER_START;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::{SwitchReason, with_core_scheduler};
+use crate::tasking::scheduler::SwitchReason;
 
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]

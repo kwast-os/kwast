@@ -321,14 +321,14 @@ checksum = "05720e22615919e4734f6a99ceae50d00226c3c5aca406e102ebc33298214e0a"
 [[package]]
 name = "spin"
 version = "0.5.2"
-source = "git+https://github.com/kwast-os/spin-rs#fdf0e1e0f27a327b09c6e44e6f0cef0b624eb48d"
+source = "git+https://github.com/kwast-os/spin-rs?rev=728a0de#728a0de51363d2138aa3ba94c59cebc6dc408622"
 
 [[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
-replace = "spin 0.5.2 (git+https://github.com/kwast-os/spin-rs)"
+replace = "spin 0.5.2 (git+https://github.com/kwast-os/spin-rs?rev=728a0de)"
 
 [[package]]
 name = "syn"

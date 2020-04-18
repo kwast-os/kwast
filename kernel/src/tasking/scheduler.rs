@@ -3,13 +3,13 @@ use alloc::collections::VecDeque;
 use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
-use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma, VmaAllocator};
+use crate::arch::paging::CpuPageMapping;
+use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma};
 use crate::sync::spinlock::RwLock;
-use crate::tasking::thread::{Stack, Thread, ThreadId};
+use crate::tasking::thread::{ProtectionDomain, Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::sync::Arc;
 use core::mem::swap;
-use crate::arch::paging::{cpu_page_mapping_switch_to, CpuPageMapping};
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -59,7 +59,7 @@ impl Scheduler {
             Stack::new(MappedVma::dummy()),
             MappedVma::dummy(),
             LazilyMappedVma::dummy(),
-            VmaAllocator::new(),
+            ProtectionDomain::new(),
             None,
         ));
 
@@ -131,7 +131,10 @@ impl Scheduler {
         }
 
         self.current_thread.restore_simd();
-        (self.current_thread.stack.get_current_location(), self.current_thread.cpu_page_mapping)
+        (
+            self.current_thread.stack.get_current_location(),
+            self.current_thread.cpu_page_mapping,
+        )
     }
 }
 
@@ -149,7 +152,10 @@ pub fn switch_to_next(switch_reason: SwitchReason) {
 
 /// Saves the old state and gets the next state.
 #[no_mangle]
-pub extern "C" fn next_thread_state(switch_reason: SwitchReason, old_stack: VirtAddr) -> (VirtAddr, CpuPageMapping) {
+pub extern "C" fn next_thread_state(
+    switch_reason: SwitchReason,
+    old_stack: VirtAddr,
+) -> (VirtAddr, CpuPageMapping) {
     with_core_scheduler(|scheduler| scheduler.next_thread_state(switch_reason, old_stack))
 }
 

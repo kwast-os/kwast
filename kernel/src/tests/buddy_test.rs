@@ -7,7 +7,7 @@ use core::mem::size_of;
 /// Buddy test.
 #[cfg(feature = "test-buddy")]
 pub fn test_main() {
-    let mut mapping = ActiveMapping::get();
+    let mut mapping = unsafe { ActiveMapping::get_unlocked() };
     let addr: usize = 0xFFF00000;
     mapping
         .map_range(

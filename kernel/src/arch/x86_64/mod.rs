@@ -24,7 +24,7 @@ pub mod vga_text;
 pub mod qemu;
 pub mod serial;
 
-const ONE_PML4_ENTRY: usize = 512usize * 1024 * 1024 * 1024;
+const ONE_PML4_ENTRY: usize = 512 * 1024 * 1024 * 1024;
 
 // TODO: do we also want to give the 0xffff8000_00000000-(0x8000_00000000 - ONE_PML4_ENTRY) range?
 pub const USER_START: usize = ONE_PML4_ENTRY;

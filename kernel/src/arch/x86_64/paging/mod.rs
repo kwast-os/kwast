@@ -202,77 +202,65 @@ impl MemoryMapper for ActiveMapping {
 
     fn map_range_physical(
         &mut self,
-        mut vaddr: VirtAddr,
-        mut paddr: PhysAddr,
+        vaddr: VirtAddr,
+        paddr: PhysAddr,
         size: usize,
         flags: EntryFlags,
     ) -> MemoryResult {
         debug_assert!(vaddr.is_page_aligned());
         debug_assert!(paddr.is_page_aligned());
 
-        let start_vaddr = vaddr;
-
         for offset in (0..size).step_by(PAGE_SIZE) {
-            let res = self.map_single(vaddr, paddr, flags);
+            let res = self.map_single(vaddr + offset, paddr + offset, flags);
             if unlikely(res.is_err()) {
-                self.unmap_range(start_vaddr, offset);
+                self.unmap_range(vaddr, offset);
                 return res;
             }
-
-            vaddr += PAGE_SIZE;
-            paddr += PAGE_SIZE;
         }
 
         Ok(())
     }
 
-    fn map_range(&mut self, mut vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MemoryResult {
+    fn map_range(&mut self, vaddr: VirtAddr, size: usize, flags: EntryFlags) -> MemoryResult {
         debug_assert!(vaddr.is_page_aligned());
-
-        let start_vaddr = vaddr;
 
         for offset in (0..size).step_by(PAGE_SIZE) {
-            let res = self.get_and_map_single(vaddr, flags);
+            let res = self.get_and_map_single(vaddr + offset, flags);
             if unlikely(res.is_err()) {
-                self.free_and_unmap_range(start_vaddr, offset);
+                self.free_and_unmap_range(vaddr, offset);
                 return Err(res.err().unwrap());
             }
-
-            vaddr += PAGE_SIZE;
         }
 
         Ok(())
     }
 
-    fn unmap_range(&mut self, mut vaddr: VirtAddr, size: usize) {
+    fn unmap_range(&mut self, vaddr: VirtAddr, size: usize) {
         debug_assert!(vaddr.is_page_aligned());
 
-        for _ in (0..size).step_by(PAGE_SIZE) {
-            self.unmap_single(vaddr);
-            vaddr += PAGE_SIZE;
+        for i in (0..size).step_by(PAGE_SIZE) {
+            self.unmap_single(vaddr + i);
         }
     }
 
-    fn free_and_unmap_range(&mut self, mut vaddr: VirtAddr, size: usize) {
+    fn free_and_unmap_range(&mut self, vaddr: VirtAddr, size: usize) {
         debug_assert!(vaddr.is_page_aligned());
 
-        for _ in (0..size).step_by(PAGE_SIZE) {
-            self.free_and_unmap_single(vaddr);
-            vaddr += PAGE_SIZE;
+        for i in (0..size).step_by(PAGE_SIZE) {
+            self.free_and_unmap_single(vaddr + i);
         }
     }
 
     fn change_flags_range(
         &mut self,
-        mut vaddr: VirtAddr,
+        vaddr: VirtAddr,
         size: usize,
         flags: EntryFlags,
     ) -> MemoryResult {
         debug_assert!(vaddr.is_page_aligned());
 
-        for _ in (0..size).step_by(PAGE_SIZE) {
-            self.get_4k_entry_may_create(vaddr)?.set_flags(flags);
-            vaddr += PAGE_SIZE;
+        for i in (0..size).step_by(PAGE_SIZE) {
+            self.get_4k_entry_may_create(vaddr + i)?.set_flags(flags);
         }
 
         Ok(())

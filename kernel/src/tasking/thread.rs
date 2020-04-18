@@ -114,11 +114,14 @@ impl Thread {
         heap: LazilyMappedVma,
         vmctx_container: VmContextContainer,
     ) -> Result<Thread, MemoryError> {
+        println!("DLJIFMSLDJFMLKSDJFMLKSDJF");
         // TODO: lazily allocate in the future?
         let stack_guard_size: usize = AMOUNT_GUARD_PAGES * PAGE_SIZE;
         let mut stack = Stack::create(&domain, STACK_SIZE, stack_guard_size)?;
+        println!("DLJIFMSLDJFMLKSDJFMLKSDJF");
         // Safe because enough size on the stack and memory allocated at a known good location.
         stack.prepare_trampoline(entry, vmctx_container.ptr());
+        println!("DLJIFMSLDJFMLKSDJFMLKSDJF");
         Ok(Self::new(stack, code, heap, domain, Some(vmctx_container)))
     }
 

@@ -77,13 +77,13 @@ struct CompileResult<'data> {
 struct Instantiation<'r, 'data> {
     compile_result: &'r CompileResult<'data>,
     func_offsets: Vec<usize>,
-    vma_allocator: VmaAllocator,
+    domain: ProtectionDomain,
 }
 
 impl<'data> CompileResult<'data> {
     /// Compile result to instantiation.
-    pub fn instantiate(&self) -> Instantiation {
-        Instantiation::new(self)
+    pub fn instantiate(&self, domain: ProtectionDomain) -> Instantiation {
+        Instantiation::new(self, domain)
     }
 
     /// Gets the signature of a function.
@@ -95,13 +95,13 @@ impl<'data> CompileResult<'data> {
 
 impl<'r, 'data> Instantiation<'r, 'data> {
     /// Creates a new instantiation.
-    fn new(compile_result: &'r CompileResult<'data>) -> Self {
+    fn new(compile_result: &'r CompileResult<'data>, domain: ProtectionDomain) -> Self {
         let capacity = compile_result.contexts.len();
 
         Self {
             compile_result,
             func_offsets: Vec::with_capacity(capacity),
-            vma_allocator: VmaAllocator::new(),
+            domain,
         }
     }
 
@@ -118,46 +118,47 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
     /// Emit code.
     fn emit(&mut self) -> Result<(MappedVma, LazilyMappedVma, Vec<RelocSink>), Error> {
-        // TODO
-        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+        let (code_vma, heap_vma) = self.domain.with(|vma, mapping| {
+            // Create code area, will be made executable read-only later.
+            let code_vma = {
+                let len = align_up(self.compile_result.total_size);
+                let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-        // Create code area, will be made executable read-only later.
-        let code_vma = {
-            let len = align_up(self.compile_result.total_size);
-            let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+                vma
+                    .create_vma(len)
+                    .and_then(|v| v.map(mapping, 0, len, flags))
+                    .map_err(Error::MemoryError)?
+            };
 
-            self.vma_allocator
-                .create_vma(len)
-                .and_then(|v| v.map(&mut mapping, 0, len, flags))
-                .map_err(Error::MemoryError)?
-        };
+            let heap_vma = {
+                let mem = self.compile_result.memories.get(0).unwrap_or(&Memory {
+                    minimum: 0,
+                    maximum: None,
+                    shared: false,
+                });
+                let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
 
-        let heap_vma = {
-            let mem = self.compile_result.memories.get(0).unwrap_or(&Memory {
-                minimum: 0,
-                maximum: None,
-                shared: false,
-            });
-            let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
+                // TODO: func_env assumes 4GiB is available, also makes it so that we can't construct
+                //       a pointer outside (See issue #10 also)
+                //let maximum = mem
+                //    .maximum
+                //    .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
+                let maximum = HEAP_SIZE;
 
-            // TODO: func_env assumes 4GiB is available, also makes it so that we can't construct
-            //       a pointer outside (See issue #10 also)
-            //let maximum = mem
-            //    .maximum
-            //    .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
-            let maximum = HEAP_SIZE;
+                if minimum as u64 > HEAP_SIZE || maximum > HEAP_SIZE {
+                    return Err(Error::MemoryError(MemoryError::InvalidRange));
+                }
 
-            if minimum as u64 > HEAP_SIZE || maximum > HEAP_SIZE {
-                return Err(Error::MemoryError(MemoryError::InvalidRange));
-            }
+                let len = maximum + HEAP_GUARD_SIZE;
+                let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+                vma
+                    .create_vma(len as usize)
+                    .and_then(|v| v.map_lazily(mapping, minimum, flags))
+                    .map_err(Error::MemoryError)?
+            };
 
-            let len = maximum + HEAP_GUARD_SIZE;
-            let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-            self.vma_allocator
-                .create_vma(len as usize)
-                .and_then(|v| v.map_lazily(&mut mapping, minimum, flags))
-                .map_err(Error::MemoryError)?
-        };
+            Ok((code_vma, heap_vma))
+        })?;
 
         // Emit code
         let capacity = self.compile_result.contexts.len();
@@ -273,7 +274,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         Ok(unsafe {
             Thread::create(
-                ProtectionDomain::new(),
+                self.domain,
                 start_address,
                 code_vma,
                 heap_vma,
@@ -420,8 +421,10 @@ pub fn run(buffer: &[u8]) -> Result<(), Error> {
         let compile_result = compile(buffer)?;
         preempt_disable();
         // Safety: executing in an environment with only references inside kernel space.
-        let guard = unsafe { ActiveMapping::get_new() }.map_err(Error::MemoryError)?;
-        let instantiation = compile_result.instantiate();
+        let guard = unsafe { ActiveMapping::get_new() }.map_err(Error::MemoryError)?; // TODO: combine with protection domain
+        // TODO
+        let domain = ProtectionDomain::new();
+        let instantiation = compile_result.instantiate(domain);
         let thread = instantiation.emit_and_link()?;
         drop(guard);
         preempt_enable();

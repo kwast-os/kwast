@@ -241,7 +241,7 @@ impl Drop for LazilyMappedVma {
 }
 
 // TODO: PCID
-// TODO: also add a bump allocator
+// TODO: also add a bump allocator?
 impl VmaAllocator {
     /// Creates a new VMA allocator.
     pub fn new() -> Self {

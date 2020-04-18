@@ -8,7 +8,6 @@ use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_wasm::{translate_module, Global, Memory, SignatureIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
-use crate::alloc::string::ToString;
 use crate::arch::address::{align_up, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::arch::{preempt_disable, preempt_enable};
@@ -415,6 +414,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
 /// Runs WebAssembly from a buffer.
 pub fn run(buffer: &[u8]) -> Result<(), Error> {
+    // TODO: PCID
     let thread = {
         let compile_result = compile(buffer)?;
         preempt_disable();
@@ -450,7 +450,7 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
     // TODO: avoid div traps?
 
     let flags = settings::Flags::new(flag_builder);
-    println!("{}", flags.to_string());
+    // println!("{}", flags.to_string());
     let isa = isa_builder.finish(flags);
 
     // Module

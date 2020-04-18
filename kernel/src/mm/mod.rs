@@ -1,6 +1,7 @@
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler::{self, with_core_scheduler, SwitchReason};
 use core::intrinsics::unlikely;
+use crate::arch;
 
 mod alloc;
 pub mod avl_interval_tree;
@@ -15,14 +16,19 @@ pub unsafe fn init(reserved_end: VirtAddr) {
 }
 
 /// Page fault handler.
-pub fn page_fault(fault_addr: VirtAddr) {
-    // TODO: when to panic the kernel?
-
+pub fn page_fault(fault_addr: VirtAddr, ip: VirtAddr) {
     let failed =
         !with_core_scheduler(|scheduler| scheduler.get_current_thread().page_fault(fault_addr));
     if unlikely(failed) {
-        // Failed, kill the thread.
-        println!("Pagefault in thread at {:?}", fault_addr);
-        scheduler::switch_to_next(SwitchReason::Exit);
+        // Failed, is it the kernel's fault?
+
+        if fault_addr.as_usize() < arch::USER_START || ip.as_usize() < arch::USER_START {
+            // Kernel fault.
+            panic!("Pagefault in kernel, faulting address: {:?}, IP: {:?}", fault_addr, ip);
+        } else {
+            // Kill the thread.
+            println!("Pagefault in thread at {:?}", fault_addr);
+            scheduler::switch_to_next(SwitchReason::Exit);
+        }
     }
 }

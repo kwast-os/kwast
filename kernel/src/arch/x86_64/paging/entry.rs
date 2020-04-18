@@ -7,6 +7,7 @@ bitflags! {
         const PRESENT = 1;
         const WRITABLE = 1 << 1;
         const HUGE_PAGE = 1 << 7;
+        const GLOBAL = 1 << 8;
         /// No execute.
         const NX = 1 << 63;
         // Cache types (see PAT in boot assembly)

@@ -240,7 +240,6 @@ impl Drop for LazilyMappedVma {
     }
 }
 
-// TODO: also add global pages
 // TODO: PCID
 // TODO: also add a bump allocator
 impl VmaAllocator {

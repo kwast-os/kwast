@@ -118,9 +118,9 @@ start:
     mov %eax, %cr0
     fninit
 
-    // Enable: PSE, PAE
+    // Enable: PSE, PAE, PGE
     mov %cr4, %eax
-    orl $(1 << 4 | 1 << 5), %eax
+    orl $(1 << 4 | 1 << 5 | 1 << 7), %eax
     mov %eax, %cr4
 
     // Enable: long mode and NX bit

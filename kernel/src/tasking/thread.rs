@@ -135,6 +135,8 @@ impl Thread {
 
 impl Drop for Thread {
     fn drop(&mut self) {
+        // TODO: free PML4
+
         // TODO
         let mut mapping = unsafe { ActiveMapping::get_unlocked() };
 

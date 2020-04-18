@@ -24,7 +24,11 @@ _switch_to_next:
     // rdi already contains `switch_reason`
     call next_thread_state
     movq %rax, %rsp
-
+    movq %cr3, %rax
+    cmpq %rax, %rdx
+    jz 1f
+    movq %rdx, %cr3
+1:
     popq %r15
     popq %r14
     popq %r13

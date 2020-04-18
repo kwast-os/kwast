@@ -430,8 +430,6 @@ pub fn run(buffer: &[u8]) -> Result<(), Error> {
 
     add_and_schedule_thread(thread);
 
-    println!();
-
     Ok(())
 }
 

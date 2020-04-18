@@ -9,7 +9,7 @@ use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::sync::Arc;
 use core::mem::swap;
-use crate::arch::paging::cpu_page_mapping_switch_to;
+use crate::arch::paging::{cpu_page_mapping_switch_to, CpuPageMapping};
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -97,7 +97,7 @@ impl Scheduler {
         &mut self,
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
-    ) -> VirtAddr {
+    ) -> (VirtAddr, CpuPageMapping) {
         // Cleanup old thread.
         if let Some(garbage) = self.garbage {
             with_common_write(|common| common.remove_thread(garbage));
@@ -131,8 +131,7 @@ impl Scheduler {
         }
 
         self.current_thread.restore_simd();
-        unsafe { cpu_page_mapping_switch_to(self.current_thread.cpu_page_mapping); }
-        self.current_thread.stack.get_current_location()
+        (self.current_thread.stack.get_current_location(), self.current_thread.cpu_page_mapping)
     }
 }
 
@@ -150,7 +149,7 @@ pub fn switch_to_next(switch_reason: SwitchReason) {
 
 /// Saves the old state and gets the next state.
 #[no_mangle]
-pub extern "C" fn next_thread_state(switch_reason: SwitchReason, old_stack: VirtAddr) -> VirtAddr {
+pub extern "C" fn next_thread_state(switch_reason: SwitchReason, old_stack: VirtAddr) -> (VirtAddr, CpuPageMapping) {
     with_core_scheduler(|scheduler| scheduler.next_thread_state(switch_reason, old_stack))
 }
 

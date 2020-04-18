@@ -135,6 +135,7 @@ impl MemoryMapper for ActiveMapping {
         // Copy kernel mappings and clear the others.
         let p4_ptr = &mut *vaddr.as_mut::<Table<Level4>>();
         p4_ptr.entries[0].set_raw(mapping.p4.entries[0].get_raw());
+        p4_ptr.entries[0].set_used_count(2);
         p4_ptr.entries[511].set_raw(mapping.p4.entries[511].get_raw());
         p4_ptr.entries[511].set_phys_addr(cr3);
         for entry in &mut mapping.p4.entries[1..511] {

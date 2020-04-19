@@ -1,34 +1,21 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{
-    get_cpu_page_mapping, ActiveMapping, CpuPageMapping, EntryFlags, PAGE_SIZE,
-};
+use crate::arch::paging::{EntryFlags, PAGE_SIZE, ActiveMapping};
 use crate::arch::simd::SimdState;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
-use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma, VmaAllocator};
-use crate::sync::spinlock::{RwLock, Spinlock};
+use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
+use crate::sync::spinlock::RwLock;
+use crate::tasking::protection_domain::ProtectionDomain;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
-use alloc::sync::Arc;
 use core::borrow::BorrowMut;
 use core::cell::Cell;
-use core::ops::DerefMut;
 
 /// Stack size in bytes.
 const STACK_SIZE: usize = 1024 * 256;
 
 /// Amount of guard pages for stack underflow.
 const AMOUNT_GUARD_PAGES: usize = 2;
-
-/// Hardware memory protection domain.
-/// Responsible for safely getting both an active mapping & getting an address allocator.
-pub struct ProtectionDomain(Arc<Spinlock<ProtectionDomainInner>>);
-
-/// Inner structure of a ProtectionDomain.
-struct ProtectionDomainInner {
-    vma_allocator: VmaAllocator,
-    mapping: ActiveMapping,
-}
 
 /// The stack of a thread.
 #[derive(Debug)]
@@ -41,49 +28,6 @@ pub struct Stack {
 #[repr(transparent)]
 pub struct ThreadId(u64);
 
-impl ProtectionDomain {
-    /// Creates a new protection domain.
-    pub fn new() -> Self {
-        Self(Arc::new(Spinlock::new(ProtectionDomainInner {
-            vma_allocator: VmaAllocator::new(),
-            mapping: unsafe { ActiveMapping::get_unlocked() },
-        })))
-    }
-
-    /// Checks if we can avoid locks for this domain.
-    #[inline]
-    fn can_avoid_locks(&self) -> bool {
-        // We can avoid locks if we have only one thread containing this domain.
-        // That's because to clone this domain, you need to have access to a thread which
-        // has access to this domain.
-        // Since this code is also executing from a thread containing this domain,
-        // we know that this is the only executing code that has access to this domain.
-        // That means we can avoid locking because this thread is the only accessor.
-        Arc::strong_count(&self.0) == 1
-    }
-
-    /// Clones this domain reference.
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-
-    /// Execute action with both the Vma allocator and active mapping.
-    #[inline]
-    pub fn with<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&mut VmaAllocator, &mut ActiveMapping) -> T,
-    {
-        if self.can_avoid_locks() {
-            let inner = unsafe { &mut *self.0.get_cell().get() };
-            f(&mut inner.vma_allocator, &mut inner.mapping)
-        } else {
-            let mut inner = self.0.lock();
-            let inner = inner.deref_mut();
-            f(&mut inner.vma_allocator, &mut inner.mapping)
-        }
-    }
-}
-
 impl ThreadId {
     /// Create new thread id.
     pub fn new() -> Self {
@@ -95,7 +39,6 @@ impl ThreadId {
 
 pub struct Thread {
     pub stack: Stack,
-    pub cpu_page_mapping: CpuPageMapping,
     heap: RwLock<LazilyMappedVma>, // TODO: Something lighter? since this is only an issue with shared heaps
     code: MappedVma,
     id: ThreadId,
@@ -131,7 +74,6 @@ impl Thread {
         vmctx_container: Option<VmContextContainer>,
     ) -> Self {
         Self {
-            cpu_page_mapping: get_cpu_page_mapping(),
             stack,
             heap: RwLock::new(heap),
             code,
@@ -161,6 +103,12 @@ impl Thread {
             .map_or(core::u32::MAX, |x| (x / WASM_PAGE_SIZE) as u32)
     }
 
+    /// Gets the current protection domain.
+    #[inline]
+    pub fn domain(&self) -> &ProtectionDomain {
+        &self.domain
+    }
+
     /// Handle a page fault for this thread. Returns true if handled successfully.
     #[inline]
     pub fn page_fault(&self, fault_addr: VirtAddr) -> bool {
@@ -183,17 +131,28 @@ impl Thread {
 
 impl Drop for Thread {
     fn drop(&mut self) {
-        // TODO: free PML4
+        println!("drop thread");
 
         let code = self.code.borrow_mut();
         let stack = self.stack.vma.borrow_mut();
         let heap = self.heap.get_mut();
 
-        self.domain.with(|vma, mapping| {
+        /*self.domain.with(|vma, mapping| {
+            // TODO: mapping incorrect?
+
             vma.destroy_vma(mapping, code);
             vma.destroy_vma(mapping, heap);
             vma.destroy_vma(mapping, stack);
-        });
+        });*/
+
+        // TODO
+        unsafe {
+            code.forget_mapping();
+            stack.forget_mapping();
+            heap.unmap(&mut ActiveMapping::get_unlocked());
+        }
+
+        println!("finished dropping thread");
     }
 }
 

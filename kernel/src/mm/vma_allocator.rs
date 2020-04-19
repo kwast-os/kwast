@@ -126,6 +126,11 @@ impl MappedVma {
     pub fn is_dummy(&self) -> bool {
         *self == Self::dummy()
     }
+
+    /// Forget mapping. Unsafe because if you don't manually free it you leak memory.
+    pub unsafe fn forget_mapping(&mut self) {
+        self.vma.size = 0;
+    }
 }
 
 impl MappableVma for MappedVma {
@@ -273,7 +278,7 @@ impl VmaAllocator {
 
     /// Destroy a Vma.
     pub fn destroy_vma<M: MappableVma>(&mut self, mapping: &mut ActiveMapping, vma: &mut M) {
-        vma.unmap(mapping);
         self.insert_region(vma.address(), vma.size());
+        vma.unmap(mapping);
     }
 }

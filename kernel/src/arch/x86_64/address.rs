@@ -25,7 +25,8 @@ impl PhysAddr {
         debug_assert_eq!(
             addr.get_bits(52..64),
             0,
-            "Physical address cannot be more than 52-bits."
+            "physical address cannot be more than 52-bits: {:#x}",
+            addr
         );
         Self(addr)
     }

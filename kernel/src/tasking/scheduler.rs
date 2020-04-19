@@ -3,13 +3,14 @@ use alloc::collections::VecDeque;
 use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::CpuPageMapping;
+use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
 use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma};
 use crate::sync::spinlock::RwLock;
-use crate::tasking::thread::{ProtectionDomain, Stack, Thread, ThreadId};
+use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::sync::Arc;
 use core::mem::swap;
+use crate::tasking::protection_domain::ProtectionDomain;
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -53,13 +54,13 @@ impl SchedulerCommon {
 
 impl Scheduler {
     /// New scheduler.
-    fn new() -> Self {
+    fn new(idle_protection_domain: ProtectionDomain) -> Self {
         // This will be overwritten on the first context switch with data from the current running code.
         let idle_thread = Arc::new(Thread::new(
             Stack::new(MappedVma::dummy()),
             MappedVma::dummy(),
             LazilyMappedVma::dummy(),
-            ProtectionDomain::new(),
+            idle_protection_domain,
             None,
         ));
 
@@ -133,7 +134,7 @@ impl Scheduler {
         self.current_thread.restore_simd();
         (
             self.current_thread.stack.get_current_location(),
-            self.current_thread.cpu_page_mapping,
+            self.current_thread.domain().cpu_page_mapping(),
         )
     }
 }
@@ -199,5 +200,6 @@ where
 pub unsafe fn init() {
     debug_assert!(SCHEDULER.is_none());
     *SCHEDULER_COMMON.write() = Some(SchedulerCommon::new());
-    SCHEDULER = Some(Scheduler::new());
+    let idle_protection_domain = ProtectionDomain::from_existing_mapping(get_cpu_page_mapping());
+    SCHEDULER = Some(Scheduler::new(idle_protection_domain));
 }

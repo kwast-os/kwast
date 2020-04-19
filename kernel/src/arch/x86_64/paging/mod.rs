@@ -7,6 +7,8 @@ pub use self::entry::EntryFlags;
 use self::table::{Level4, Table};
 use crate::mm::mapper::{MemoryError, MemoryMapper, MemoryResult};
 use crate::mm::pmm::with_pmm;
+use crate::mm::vma_allocator::MappableVma;
+use crate::tasking::scheduler::with_core_scheduler;
 use core::intrinsics::unlikely;
 
 mod entry;
@@ -39,12 +41,8 @@ pub struct ActiveMapping {
 }
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct CpuPageMapping(u64);
-
-pub struct MappingGuard {
-    old: CpuPageMapping,
-}
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct CpuPageMapping(PhysAddr);
 
 /// Entry modifier helper.
 pub struct EntryModifier<'a> {
@@ -58,11 +56,11 @@ unsafe fn invalidate(addr: u64) {
     asm!("invlpg ($0)" : : "r" (addr) : "memory");
 }
 
-/// Switches to another CR3.
+/// Switches to another page mapping.
 #[inline(always)]
-pub unsafe fn cpu_page_mapping_switch_to(cr3: CpuPageMapping) {
-    if get_cpu_page_mapping() != cr3 {
-        asm!("movq $0, %cr3" : : "r" (cr3) : "memory" : "volatile");
+pub unsafe fn cpu_page_mapping_switch_to(mapping: CpuPageMapping) {
+    if get_cpu_page_mapping() != mapping {
+        asm!("movq $0, %cr3" : : "r" (mapping) : "memory" : "volatile");
     }
 }
 
@@ -74,6 +72,14 @@ pub fn get_cpu_page_mapping() -> CpuPageMapping {
         asm!("movq %cr3, $0" : "=r" (cr3) : : "memory" : "volatile");
     }
     cr3
+}
+
+impl CpuPageMapping {
+    /// Cpu page mapping as physical address representation.
+    #[inline]
+    pub fn as_phys_addr(self) -> PhysAddr {
+        self.0
+    }
 }
 
 impl<'a> EntryModifier<'a> {
@@ -106,48 +112,59 @@ impl<'a> EntryModifier<'a> {
     }
 }
 
-impl Drop for MappingGuard {
-    fn drop(&mut self) {
-        unsafe {
-            cpu_page_mapping_switch_to(self.old);
-        }
-    }
-}
-
 impl MemoryMapper for ActiveMapping {
     unsafe fn get_unlocked() -> Self {
         let p4_ptr = 0xffffffff_fffff000 as *mut _;
         Self { p4: &mut *p4_ptr }
     }
 
-    unsafe fn get_new() -> Result<MappingGuard, MemoryError> {
-        // TODO
-        let mut mapping = Self::get_unlocked();
-        let old = get_cpu_page_mapping();
+    fn get_new() -> Result<CpuPageMapping, MemoryError> {
+        // We need to make a temporary mapping to set up the initial state of the PML4.
+        // We will do it in the current thread's protection domain.
+        with_core_scheduler(|s| {
+            let domain = s.get_current_thread().domain();
+            domain.with(|vma, mapping| {
+                // Temporarily map the new PML4 in the current address space.
+                let mut p4 = vma.create_vma(PAGE_SIZE)?.map(
+                    mapping,
+                    0,
+                    PAGE_SIZE,
+                    EntryFlags::PRESENT | EntryFlags::NX | EntryFlags::WRITABLE,
+                )?;
 
-        // Get a new frame & page for PML4
-        let vaddr = VirtAddr::new(0x1000); // TODO: not good, shared between all processes
-        let cr3 = mapping.get_and_map_single(
-            vaddr,
-            EntryFlags::PRESENT | EntryFlags::NX | EntryFlags::WRITABLE,
-        )?;
+                // Determine physical address of the new PML4.
+                let cr3 = mapping
+                    .translate(p4.address())
+                    .expect("mapping should exist");
 
-        // Copy kernel mappings and clear the others.
-        let p4_ptr = &mut *vaddr.as_mut::<Table<Level4>>();
-        p4_ptr.entries[0].set_raw(mapping.p4.entries[0].get_raw());
-        p4_ptr.entries[0].set_used_count(2);
-        p4_ptr.entries[511].set_raw(mapping.p4.entries[511].get_raw());
-        p4_ptr.entries[511].set_phys_addr(cr3);
-        for entry in &mut mapping.p4.entries[1..511] {
-            entry.set_raw(0);
-        }
+                // Copy kernel mappings and clear the others.
+                unsafe {
+                    let p4_ptr = &mut *p4.address().as_mut::<Table<Level4>>();
+                    p4_ptr.entries[0].set_raw(mapping.p4.entries[0].get_raw());
+                    p4_ptr.entries[0].set_used_count(2);
+                    p4_ptr.entries[511].set(
+                        cr3,
+                        EntryFlags::PRESENT | EntryFlags::NX | EntryFlags::WRITABLE,
+                    );
+                    for entry in &mut p4_ptr.entries[1..511] {
+                        entry.set_raw(0);
+                    }
+                }
 
-        // Unmap the temporary mapping.
-        mapping.unmap_single_internal(vaddr, false);
+                // Undo temporary mapping
+                // Safety: We free this ourselves.
+                //         We need to free manually because we should not free the physical frame.
+                vma.insert_region(p4.address(), p4.size());
+                unsafe {
+                    p4.forget_mapping();
+                }
+                mapping.unmap_single(p4.address());
 
-        cpu_page_mapping_switch_to(CpuPageMapping(cr3.as_u64()));
+                println!("new cr3: {:?}", cr3);
 
-        Ok(MappingGuard { old })
+                Ok(CpuPageMapping(cr3))
+            })
+        })
     }
 
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr> {
@@ -169,11 +186,7 @@ impl MemoryMapper for ActiveMapping {
         }
     }
 
-    fn get_and_map_single(
-        &mut self,
-        vaddr: VirtAddr,
-        flags: EntryFlags,
-    ) -> Result<PhysAddr, MemoryError> {
+    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MemoryResult {
         let mut e = self.get_4k_entry_may_create(vaddr)?;
 
         Ok(with_pmm(|pmm| {

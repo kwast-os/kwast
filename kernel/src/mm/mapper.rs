@@ -1,25 +1,19 @@
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::arch::paging::{EntryFlags, MappingGuard};
+use crate::arch::paging::{CpuPageMapping, EntryFlags};
 
 /// Trait for memory mapper: maps physical addresses to a virtual addresses.
 pub trait MemoryMapper {
     /// Gets the active paging mapping, without locking.
     unsafe fn get_unlocked() -> Self;
 
-    /// Gets a new active paging mapping.
-    /// Can be unsafe because might make memory references invalid outside of kernel space.
-    /// It's the responsibility of the caller to switch back to the right mapping if necessary.
-    unsafe fn get_new() -> Result<MappingGuard, MemoryError>;
+    /// Gets a new paging mapping.
+    fn get_new() -> Result<CpuPageMapping, MemoryError>;
 
     /// Translate a virtual address to a physical address (if mapped).
     fn translate(&self, addr: VirtAddr) -> Option<PhysAddr>;
 
     /// Gets a single physical page and maps it to a given virtual address.
-    fn get_and_map_single(
-        &mut self,
-        vaddr: VirtAddr,
-        flags: EntryFlags,
-    ) -> Result<PhysAddr, MemoryError>;
+    fn get_and_map_single(&mut self, vaddr: VirtAddr, flags: EntryFlags) -> MemoryResult;
 
     /// Unmaps a single page and frees the corresponding physical frame.
     fn free_and_unmap_single(&mut self, vaddr: VirtAddr);

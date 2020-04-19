@@ -95,5 +95,25 @@ impl FrameAllocator {
                 invalidate(tmp_2m_map_addr.as_u64());
             }
         }
+
+        // self.debug_print_frames();
+    }
+
+    /// Debug print all frames.
+    #[allow(dead_code)]
+    fn debug_print_frames(&mut self) {
+        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+
+        while !self.top.is_null() {
+            self.pop_top(|top| {
+                println!("{:x}", top.as_usize());
+                let vaddr = VirtAddr::new(0x1000);
+                mapping.map_single(vaddr, top, EntryFlags::PRESENT).unwrap();
+                vaddr
+            })
+            .unwrap();
+        }
+
+        println!();
     }
 }

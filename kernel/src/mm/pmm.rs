@@ -1,7 +1,7 @@
 use multiboot2::BootInformation;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::mm::mapper::MemoryError;
+use crate::mm::mapper::{MemoryError, MemoryResult};
 use crate::sync::spinlock::Spinlock;
 use core::intrinsics::unlikely;
 
@@ -46,7 +46,7 @@ impl FrameAllocator {
     }
 
     /// Pops the top and moves the current top pointer. This function is used internally for memory management by paging.
-    pub fn pop_top<F>(&mut self, f: F) -> Result<PhysAddr, MemoryError>
+    pub fn pop_top<F>(&mut self, f: F) -> MemoryResult
     where
         F: FnOnce(PhysAddr) -> VirtAddr,
     {
@@ -55,10 +55,9 @@ impl FrameAllocator {
         }
 
         // Read and set the next top address.
-        let paddr = self.top;
-        let ptr = f(paddr).as_const();
+        let ptr = f(self.top).as_const();
         self.top = PhysAddr::new(unsafe { *ptr });
-        Ok(paddr)
+        Ok(())
     }
 
     /// Similar to `pop_top`.

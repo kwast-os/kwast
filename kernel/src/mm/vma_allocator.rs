@@ -14,7 +14,7 @@ pub struct VmaAllocator {
 }
 
 /// Virtual memory area.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Vma {
     start: VirtAddr,
     size: usize,
@@ -38,7 +38,7 @@ pub trait MappableVma {
 }
 
 /// Mapped of a Vma (may be partially).
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct MappedVma {
     vma: Vma,
 }

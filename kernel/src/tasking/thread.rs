@@ -198,11 +198,11 @@ impl Stack {
     /// Sets the current location.
     #[inline]
     pub fn set_current_location(&self, location: VirtAddr) {
-        debug_assert!(
-            self.vma.get().is_dummy() || self.vma.get().is_contained(location),
-            "the address {:?} does not belong to the thread's stack",
-            location,
-        );
+        //debug_assert!(
+        //    self.vma.get().is_dummy() || self.vma.get().is_contained(location),
+        //    "the address {:?} does not belong to the thread's stack",
+        //    location,
+        //);
         self.current_location.replace(location);
     }
 

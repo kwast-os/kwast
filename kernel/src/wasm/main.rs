@@ -452,11 +452,14 @@ extern "C" fn start_from_compile_result(compile_result: *mut CompileResult) {
                 unsafe { mem::transmute(wasm_instance.start_address.as_usize()) };
 
             with_core_scheduler(|s| {
-                s.get_current_thread().set_wasm_data(
-                    wasm_instance.code_vma,
-                    wasm_instance.heap_vma,
-                    wasm_instance.vmctx_container,
-                )
+                // Safety: this is a new thread without existing wasm data.
+                unsafe {
+                    s.get_current_thread().set_wasm_data(
+                        wasm_instance.code_vma,
+                        wasm_instance.heap_vma,
+                        wasm_instance.vmctx_container,
+                    )
+                }
             });
 
             drop(compile_result);

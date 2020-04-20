@@ -9,7 +9,6 @@ use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::RwLock;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
-use core::borrow::BorrowMut;
 use core::cell::Cell;
 
 /// Stack size in bytes.
@@ -19,9 +18,8 @@ const STACK_SIZE: usize = 1024 * 256;
 const AMOUNT_GUARD_PAGES: usize = 2;
 
 /// The stack of a thread.
-#[derive(Debug)]
 pub struct Stack {
-    vma: MappedVma,
+    vma: Cell<MappedVma>,
     current_location: Cell<VirtAddr>,
 }
 
@@ -83,7 +81,9 @@ impl Thread {
         }
     }
 
-    pub fn set_wasm_data(
+    /// Sets the thread wasm data.
+    /// Unsafe when incorrect data is passed, or when used data is overwritten.
+    pub unsafe fn set_wasm_data(
         &self,
         code_vma: MappedVma,
         heap_vma: LazilyMappedVma,
@@ -116,15 +116,15 @@ impl Thread {
     /// Unmaps the memory that this thread holds.
     /// Unsafe because you can totally break memory mappings and safety if you call this
     /// while memory of this thread is still used somewhere.
-    pub unsafe fn unmap_memory(&mut self) {
-        let code = self.code.get_mut();
-        let stack = self.stack.vma.borrow_mut();
-        let heap = self.heap.get_mut();
-
+    pub unsafe fn unmap_memory(&self) {
         self.domain.with(|vma, mapping| {
-            vma.destroy_vma(mapping, code);
-            vma.destroy_vma(mapping, heap);
-            vma.destroy_vma(mapping, stack);
+            let code = self.code.replace(MappedVma::dummy());
+            vma.destroy_vma(mapping, &code);
+            let stack = self.stack.vma.replace(MappedVma::dummy());
+            vma.destroy_vma(mapping, &stack);
+            let mut heap_guard = self.heap.write();
+            vma.destroy_vma(mapping, &*heap_guard);
+            *heap_guard = LazilyMappedVma::dummy();
         });
     }
 
@@ -154,6 +154,14 @@ impl Thread {
     }
 }
 
+impl Drop for Thread {
+    fn drop(&mut self) {
+        debug_assert_eq!(self.heap.get_mut().size(), 0);
+        debug_assert_eq!(self.stack.vma.get_mut().size(), 0);
+        debug_assert_eq!(self.code.get_mut().size(), 0);
+    }
+}
+
 impl Stack {
     /// Creates a stack.
     pub fn create(
@@ -176,7 +184,7 @@ impl Stack {
     pub fn new(vma: MappedVma) -> Self {
         let current_location = vma.address() + vma.size();
         Self {
-            vma,
+            vma: Cell::new(vma),
             current_location: Cell::new(current_location),
         }
     }
@@ -191,10 +199,9 @@ impl Stack {
     #[inline]
     pub fn set_current_location(&self, location: VirtAddr) {
         debug_assert!(
-            self.vma.is_dummy() || self.vma.is_contained(location),
-            "the address {:?} does not belong to the stack {:?}",
+            self.vma.get().is_dummy() || self.vma.get().is_contained(location),
+            "the address {:?} does not belong to the thread's stack",
             location,
-            self
         );
         self.current_location.replace(location);
     }

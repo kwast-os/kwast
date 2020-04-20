@@ -14,7 +14,7 @@ pub struct VmaAllocator {
 }
 
 /// Virtual memory area.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Vma {
     start: VirtAddr,
     size: usize,
@@ -34,11 +34,11 @@ pub trait MappableVma {
     }
 
     /// Unmaps the mapped memory.
-    fn unmap(&mut self, mapping: &mut ActiveMapping);
+    fn unmap(&self, mapping: &mut ActiveMapping);
 }
 
 /// Mapped of a Vma (may be partially).
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MappedVma {
     vma: Vma,
 }
@@ -144,9 +144,8 @@ impl MappableVma for MappedVma {
         self.vma.size()
     }
 
-    fn unmap(&mut self, mapping: &mut ActiveMapping) {
+    fn unmap(&self, mapping: &mut ActiveMapping) {
         drop_mapping(mapping, self.address(), self.size());
-        self.vma.size = 0;
     }
 }
 
@@ -221,9 +220,8 @@ impl MappableVma for LazilyMappedVma {
         self.allocated_size
     }
 
-    fn unmap(&mut self, mapping: &mut ActiveMapping) {
+    fn unmap(&self, mapping: &mut ActiveMapping) {
         drop_mapping(mapping, self.address(), self.size());
-        self.allocated_size = 0;
     }
 }
 
@@ -231,18 +229,6 @@ fn drop_mapping(mapping: &mut ActiveMapping, start: VirtAddr, size: usize) {
     // We don't need to tell the exact mapped range, we own all of this.
     // For an empty mapping, the size will be zero, so we don't have to check that.
     mapping.free_and_unmap_range(start, size);
-}
-
-impl Drop for MappedVma {
-    fn drop(&mut self) {
-        assert_eq!(self.size(), 0, "leaking mapping");
-    }
-}
-
-impl Drop for LazilyMappedVma {
-    fn drop(&mut self) {
-        assert_eq!(self.size(), 0, "leaking lazy mapping");
-    }
 }
 
 impl VmaAllocator {
@@ -277,7 +263,7 @@ impl VmaAllocator {
     }
 
     /// Destroy a Vma.
-    pub fn destroy_vma<M: MappableVma>(&mut self, mapping: &mut ActiveMapping, vma: &mut M) {
+    pub fn destroy_vma<M: MappableVma>(&mut self, mapping: &mut ActiveMapping, vma: &M) {
         self.insert_region(vma.address(), vma.size());
         vma.unmap(mapping);
     }

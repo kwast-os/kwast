@@ -104,7 +104,7 @@ impl Scheduler {
         }
 
         // Decide which thread to run next.
-        let mut old_thread = {
+        let old_thread = {
             let mut next_thread = self.next_thread();
             swap(&mut self.current_thread, &mut next_thread);
             next_thread
@@ -124,11 +124,8 @@ impl Scheduler {
             SwitchReason::Exit => {
                 debug_assert!(self.garbage.is_none());
                 unsafe {
-                    // There could be multiple references to the thread,
-                    // but only the thread itself has access to its memory areas.
-                    // These are not referenced anywhere because the thread is not running.
-                    // So doing operations on the memory areas is fine.
-                    Arc::get_mut_unchecked(&mut old_thread).unmap_memory();
+                    // Safety: We call this from a safe place and we are not referencing thread memory here.
+                    old_thread.unmap_memory();
                 }
                 self.garbage = Some(old_thread.id());
             }

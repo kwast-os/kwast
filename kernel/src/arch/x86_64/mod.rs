@@ -28,7 +28,7 @@ const ONE_PML4_ENTRY: usize = 512 * 1024 * 1024 * 1024;
 
 // TODO: do we also want to give the 0xffff8000_00000000-(0x8000_00000000 - ONE_PML4_ENTRY) range?
 pub const USER_START: usize = ONE_PML4_ENTRY;
-pub const USER_LEN: usize = 0x8000_00000000 - ONE_PML4_ENTRY;
+pub const USER_LEN: usize = 0x8000_00000000 - ONE_PML4_ENTRY - 0x1000;
 
 extern "C" {
     static KERNEL_END_PTR: usize;
@@ -242,5 +242,12 @@ pub fn preempt_disable() {
     debug_assert_eq!(CpuData::preempt_count_offset(), 8);
     unsafe {
         asm!("incl %gs:8" ::: "memory" : "volatile");
+    }
+}
+
+/// Invalid opcode.
+pub fn invalid_opcode() {
+    unsafe {
+        asm!("ud2" :::: "volatile");
     }
 }

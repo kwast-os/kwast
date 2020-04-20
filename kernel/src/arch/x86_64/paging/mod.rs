@@ -160,8 +160,6 @@ impl MemoryMapper for ActiveMapping {
                 }
                 mapping.unmap_single(p4.address());
 
-                println!("new cr3: {:?}", cr3);
-
                 Ok(CpuPageMapping(cr3))
             })
         })

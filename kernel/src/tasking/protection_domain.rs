@@ -1,11 +1,14 @@
-use crate::arch::paging::{cpu_page_mapping_switch_to, get_cpu_page_mapping, ActiveMapping, CpuPageMapping, PAGE_SIZE, EntryFlags};
+use crate::arch::paging::{
+    cpu_page_mapping_switch_to, get_cpu_page_mapping, ActiveMapping, CpuPageMapping, EntryFlags,
+    PAGE_SIZE,
+};
 use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::VmaAllocator;
 use crate::sync::spinlock::Spinlock;
+use crate::tasking::scheduler::with_core_scheduler;
 use alloc::sync::Arc;
 use core::ops::DerefMut;
-use crate::tasking::scheduler::with_core_scheduler;
 
 /// Hardware memory protection domain.
 /// Responsible for safely getting both an active mapping & getting an address allocator.
@@ -55,7 +58,6 @@ impl ProtectionDomain {
 
     /// Temporarily switch to this mapping.
     pub unsafe fn temporarily_switch(&self) -> SwitchGuard {
-        // TODO: we should avoid the preempt enable&disable by changing our own pml4 stored value?
         SwitchGuard::new(self.0.mapping)
     }
 
@@ -112,9 +114,16 @@ impl Drop for ProtectionDomain {
             s.get_current_thread().domain().with(|vma, mapping| {
                 let paddr = self.0.mapping.as_phys_addr();
 
-                let _ = vma.alloc_region(PAGE_SIZE).ok_or(MemoryError::NoMoreVMA)
+                let _ = vma
+                    .alloc_region(PAGE_SIZE)
+                    .ok_or(MemoryError::NoMoreVMA)
                     .and_then(|vaddr| {
-                        mapping.map_range_physical(vaddr, paddr, PAGE_SIZE, EntryFlags::PRESENT | EntryFlags::NX | EntryFlags::WRITABLE)?;
+                        mapping.map_range_physical(
+                            vaddr,
+                            paddr,
+                            PAGE_SIZE,
+                            EntryFlags::PRESENT | EntryFlags::NX | EntryFlags::WRITABLE,
+                        )?;
                         Ok(vaddr)
                     })
                     .and_then(|vaddr| {

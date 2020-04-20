@@ -1,17 +1,16 @@
 use core::mem::size_of;
 
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::{EntryFlags, PAGE_SIZE, ActiveMapping};
+use crate::arch::paging::{EntryFlags, PAGE_SIZE};
 use crate::arch::simd::SimdState;
-use crate::mm::mapper::{MemoryError, MemoryMapper};
+use crate::arch::{preempt_disable, preempt_enable};
+use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::RwLock;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::borrow::BorrowMut;
 use core::cell::Cell;
-use bitflags::_core::mem::swap;
-use crate::arch::{preempt_disable, preempt_enable};
 
 /// Stack size in bytes.
 const STACK_SIZE: usize = 1024 * 256;
@@ -42,9 +41,9 @@ impl ThreadId {
 pub struct Thread {
     pub stack: Stack,
     heap: RwLock<LazilyMappedVma>, // TODO: Something lighter? since this is only an issue with shared heaps
-    code: MappedVma,
+    code: Cell<MappedVma>,
     id: ThreadId,
-    _vmctx_container: Option<VmContextContainer>,
+    _vmctx_container: Cell<Option<VmContextContainer>>,
     simd_state: SimdState,
     domain: ProtectionDomain,
 }
@@ -55,35 +54,44 @@ impl Thread {
     pub unsafe fn create(
         domain: ProtectionDomain,
         entry: VirtAddr,
-        code: MappedVma,
-        heap: LazilyMappedVma,
-        vmctx_container: VmContextContainer,
+        first_arg: usize,
     ) -> Result<Thread, MemoryError> {
         // TODO: lazily allocate in the future?
         let stack_guard_size: usize = AMOUNT_GUARD_PAGES * PAGE_SIZE;
-        let mut stack = Stack::create(&domain, STACK_SIZE, stack_guard_size)?;
-        // Safe because enough size on the stack and memory allocated at a known good location.
-        stack.prepare_trampoline(entry, vmctx_container.ptr());
-        Ok(Self::new(stack, code, heap, domain, Some(vmctx_container)))
+        let stack = {
+            preempt_disable();
+            let guard = domain.temporarily_switch();
+            let mut stack = Stack::create(&domain, STACK_SIZE, stack_guard_size)?;
+            stack.prepare_trampoline(entry, first_arg);
+            drop(guard);
+            preempt_enable();
+            stack
+        };
+        Ok(Self::new(stack, domain))
     }
 
     /// Creates a new thread from given parameters.
-    pub fn new(
-        stack: Stack,
-        code: MappedVma,
-        heap: LazilyMappedVma,
-        domain: ProtectionDomain,
-        vmctx_container: Option<VmContextContainer>,
-    ) -> Self {
+    pub fn new(stack: Stack, domain: ProtectionDomain) -> Self {
         Self {
             stack,
-            heap: RwLock::new(heap),
-            code,
+            heap: RwLock::new(LazilyMappedVma::dummy()),
+            code: Cell::new(MappedVma::dummy()),
             id: ThreadId::new(),
-            _vmctx_container: vmctx_container,
+            _vmctx_container: Cell::new(None),
             domain,
             simd_state: SimdState::new(),
         }
+    }
+
+    pub fn set_wasm_data(
+        &self,
+        code_vma: MappedVma,
+        heap_vma: LazilyMappedVma,
+        vmctx_container: VmContextContainer,
+    ) {
+        self.code.set(code_vma);
+        *self.heap.write() = heap_vma;
+        self._vmctx_container.replace(Some(vmctx_container));
     }
 
     /// Gets the thread id.
@@ -109,7 +117,7 @@ impl Thread {
     /// Unsafe because you can totally break memory mappings and safety if you call this
     /// while memory of this thread is still used somewhere.
     pub unsafe fn unmap_memory(&mut self) {
-        let code = self.code.borrow_mut();
+        let code = self.code.get_mut();
         let stack = self.stack.vma.borrow_mut();
         let heap = self.heap.get_mut();
 

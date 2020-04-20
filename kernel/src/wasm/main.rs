@@ -12,10 +12,13 @@ use cranelift_wasm::{translate_module, Global, Memory, SignatureIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
+use crate::arch::invalid_opcode;
 use crate::arch::paging::EntryFlags;
 use crate::mm::mapper::MemoryError;
+use crate::mm::mapper::MemoryMapper;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
-use crate::tasking::scheduler::add_and_schedule_thread;
+use crate::tasking::protection_domain::ProtectionDomain;
+use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{
@@ -27,12 +30,11 @@ use crate::wasm::runtime::{
 };
 use crate::wasm::table::Table;
 use crate::wasm::vmctx::{
-    VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE, HEAP_SIZE,
-    WASM_PAGE_SIZE,
+    VmContext, VmContextContainer, VmFunctionImportEntry, VmTableElement, HEAP_GUARD_SIZE,
+    HEAP_SIZE, WASM_PAGE_SIZE,
 };
 use crate::wasm::wasi::get_address_for_wasi_and_validate_sig;
-use crate::tasking::protection_domain::ProtectionDomain;
-use crate::mm::mapper::MemoryMapper;
+use core::mem;
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
@@ -77,13 +79,19 @@ struct CompileResult<'data> {
 struct Instantiation<'r, 'data> {
     compile_result: &'r CompileResult<'data>,
     func_offsets: Vec<usize>,
-    domain: ProtectionDomain,
+}
+
+struct WasmInstance {
+    code_vma: MappedVma,
+    heap_vma: LazilyMappedVma,
+    vmctx_container: VmContextContainer,
+    start_address: VirtAddr,
 }
 
 impl<'data> CompileResult<'data> {
     /// Compile result to instantiation.
-    pub fn instantiate(&self, domain: ProtectionDomain) -> Instantiation {
-        Instantiation::new(self, domain)
+    pub fn instantiate(&self) -> Instantiation {
+        Instantiation::new(self)
     }
 
     /// Gets the signature of a function.
@@ -95,13 +103,12 @@ impl<'data> CompileResult<'data> {
 
 impl<'r, 'data> Instantiation<'r, 'data> {
     /// Creates a new instantiation.
-    fn new(compile_result: &'r CompileResult<'data>, domain: ProtectionDomain) -> Self {
+    fn new(compile_result: &'r CompileResult<'data>) -> Self {
         let capacity = compile_result.contexts.len();
 
         Self {
             compile_result,
             func_offsets: Vec::with_capacity(capacity),
-            domain,
         }
     }
 
@@ -118,44 +125,46 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
     /// Emit code.
     fn emit(&mut self) -> Result<(MappedVma, LazilyMappedVma, Vec<RelocSink>), Error> {
-        let (code_vma, heap_vma) = self.domain.with(|vma, mapping| {
-            // Create code area, will be made executable read-only later.
-            let code_vma = {
-                let len = align_up(self.compile_result.total_size);
-                let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+        let (code_vma, heap_vma) = with_core_scheduler(|s| {
+            s.get_current_thread().domain().with(|vma, mapping| {
+                // Create code area, will be made executable read-only later.
+                let code_vma = {
+                    let len = align_up(self.compile_result.total_size);
+                    let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
 
-                vma.create_vma(len)
-                    .and_then(|v| v.map(mapping, 0, len, flags))
-                    .map_err(Error::MemoryError)?
-            };
+                    vma.create_vma(len)
+                        .and_then(|v| v.map(mapping, 0, len, flags))
+                        .map_err(Error::MemoryError)?
+                };
 
-            let heap_vma = {
-                let mem = self.compile_result.memories.get(0).unwrap_or(&Memory {
-                    minimum: 0,
-                    maximum: None,
-                    shared: false,
-                });
-                let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
+                let heap_vma = {
+                    let mem = self.compile_result.memories.get(0).unwrap_or(&Memory {
+                        minimum: 0,
+                        maximum: None,
+                        shared: false,
+                    });
+                    let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
 
-                // TODO: func_env assumes 4GiB is available, also makes it so that we can't construct
-                //       a pointer outside (See issue #10 also)
-                //let maximum = mem
-                //    .maximum
-                //    .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
-                let maximum = HEAP_SIZE;
+                    // TODO: func_env assumes 4GiB is available, also makes it so that we can't construct
+                    //       a pointer outside (See issue #10 also)
+                    //let maximum = mem
+                    //    .maximum
+                    //    .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
+                    let maximum = HEAP_SIZE;
 
-                if minimum as u64 > HEAP_SIZE || maximum > HEAP_SIZE {
-                    return Err(Error::MemoryError(MemoryError::InvalidRange));
-                }
+                    if minimum as u64 > HEAP_SIZE || maximum > HEAP_SIZE {
+                        return Err(Error::MemoryError(MemoryError::InvalidRange));
+                    }
 
-                let len = maximum + HEAP_GUARD_SIZE;
-                let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
-                vma.create_vma(len as usize)
-                    .and_then(|v| v.map_lazily(mapping, minimum, flags))
-                    .map_err(Error::MemoryError)?
-            };
+                    let len = maximum + HEAP_GUARD_SIZE;
+                    let flags = EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX;
+                    vma.create_vma(len as usize)
+                        .and_then(|v| v.map_lazily(mapping, minimum, flags))
+                        .map_err(Error::MemoryError)?
+                };
 
-            Ok((code_vma, heap_vma))
+                Ok((code_vma, heap_vma))
+            })
         })?;
 
         // Emit code
@@ -190,7 +199,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
     }
 
     /// Emit and link.
-    pub fn emit_and_link(mut self) -> Result<Thread, Error> {
+    pub fn emit_and_link(mut self) -> Result<WasmInstance, Error> {
         let defined_function_offset = self.defined_function_offset();
         let (code_vma, heap_vma, reloc_sinks) = self.emit()?;
 
@@ -256,12 +265,14 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         // Now the code is written, change it to read-only & executable.
         {
-            self.domain.with(|_vma, mapping| {
-                let flags = EntryFlags::PRESENT;
-                mapping
-                    .change_flags_range(code_vma.address(), code_vma.size(), flags)
-                    .map_err(Error::MemoryError)
-            })?
+            with_core_scheduler(|s| {
+                s.get_current_thread().domain().with(|_vma, mapping| {
+                    let flags = EntryFlags::PRESENT;
+                    mapping
+                        .change_flags_range(code_vma.address(), code_vma.size(), flags)
+                        .map_err(Error::MemoryError)
+                })
+            })?;
         }
 
         let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
@@ -269,16 +280,12 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
         let vmctx_container = self.create_vmctx_container(&code_vma, &heap_vma)?;
 
-        Ok(unsafe {
-            Thread::create(
-                self.domain,
-                start_address,
-                code_vma,
-                heap_vma,
-                vmctx_container,
-            )
-        }
-        .map_err(Error::MemoryError)?)
+        Ok(WasmInstance {
+            code_vma,
+            heap_vma,
+            vmctx_container,
+            start_address,
+        })
     }
 
     /// Print code section as hex.
@@ -414,21 +421,57 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
 /// Runs WebAssembly from a buffer.
 pub fn run(buffer: &[u8]) -> Result<(), Error> {
-    // TODO: PCID
-    let thread = {
-        let compile_result = compile(buffer)?;
-        let domain = ProtectionDomain::new().map_err(Error::MemoryError)?;
-        // Safety: only kernel space memory is referenced
-        let guard = unsafe { domain.temporarily_switch() };
-        let instantiation = compile_result.instantiate(domain);
-        let thread = instantiation.emit_and_link()?;
-        drop(guard);
-        thread
-    };
+    let compile_result = Box::new(compile(buffer)?);
+    let domain = ProtectionDomain::new().map_err(Error::MemoryError)?;
 
+    // TODO: PCID
+    let compile_result = Box::into_raw(compile_result);
+    let thread = unsafe {
+        Thread::create(
+            domain,
+            VirtAddr::new(start_from_compile_result as usize),
+            compile_result as usize,
+        )
+        .map_err(Error::MemoryError)?
+    };
     add_and_schedule_thread(thread);
 
     Ok(())
+}
+
+/// Start the wasm application from compile result.
+extern "C" fn start_from_compile_result(compile_result: *mut CompileResult) {
+    let compile_result = unsafe { Box::from_raw(compile_result) };
+    let instantiation = compile_result.instantiate();
+
+    match instantiation.emit_and_link() {
+        Ok(wasm_instance) => {
+            let vmctx = wasm_instance.vmctx_container.ptr();
+
+            let func: extern "C" fn(*const VmContext) =
+                unsafe { mem::transmute(wasm_instance.start_address.as_usize()) };
+
+            with_core_scheduler(|s| {
+                s.get_current_thread().set_wasm_data(
+                    wasm_instance.code_vma,
+                    wasm_instance.heap_vma,
+                    wasm_instance.vmctx_container,
+                )
+            });
+
+            drop(compile_result);
+
+            func(vmctx);
+        }
+
+        Err(e) => {
+            drop(compile_result);
+            println!("Error while starting: {:?}", e);
+        }
+    }
+
+    invalid_opcode();
+    unreachable!()
 }
 
 /// Compiles a WebAssembly buffer.

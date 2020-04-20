@@ -536,6 +536,7 @@ impl HeapCaches {
     }
 
     /// Converts the layout to a type.
+    #[allow(clippy::assertions_on_constants)]
     fn layout_to_size(layout: Layout) -> usize {
         // Note that alignment bigger than 4096 is not possible because the start of the slabs
         // are only aligned on at least a page, but not necessarily more than one.

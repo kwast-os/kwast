@@ -4,13 +4,13 @@ use hashbrown::HashMap;
 
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
-use crate::mm::vma_allocator::{LazilyMappedVma, MappedVma};
+use crate::mm::vma_allocator::MappedVma;
 use crate::sync::spinlock::RwLock;
+use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::sync::Arc;
 use core::mem::swap;
-use crate::tasking::protection_domain::ProtectionDomain;
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -59,10 +59,7 @@ impl Scheduler {
         // This will be overwritten on the first context switch with data from the current running code.
         let idle_thread = Arc::new(Thread::new(
             Stack::new(MappedVma::dummy()),
-            MappedVma::dummy(),
-            LazilyMappedVma::dummy(),
             idle_protection_domain,
-            None,
         ));
 
         with_common_write(|common| common.add_thread(idle_thread.clone()));

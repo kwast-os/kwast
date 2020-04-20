@@ -1,4 +1,4 @@
-use crate::tasking::scheduler::{self, SwitchReason};
+use crate::tasking::scheduler;
 use core::cell::Cell;
 
 /// Per-CPU data.
@@ -32,7 +32,7 @@ impl CpuData {
     /// Should schedule now? Do if needed.
     pub fn check_should_schedule(&self) {
         if self.should_schedule.replace(0) != 0 {
-            scheduler::switch_to_next(SwitchReason::RegularSwitch);
+            scheduler::thread_yield();
         }
     }
 

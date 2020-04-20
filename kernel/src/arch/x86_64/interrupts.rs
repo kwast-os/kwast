@@ -8,7 +8,6 @@ use crate::arch::x86_64::paging::PageFaultError;
 use crate::arch::x86_64::port::write_port8;
 use crate::arch::USER_START;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::SwitchReason;
 
 /// The stack frame pushed by the CPU for an ISR.
 #[derive(Debug)]
@@ -249,7 +248,7 @@ extern "x86-interrupt" fn exc_invalid_opcode(frame: &mut ISRStackFrame) {
         panic!("Invalid opcode: {:#?}", frame);
     } else {
         println!("wasm trap, thread killed");
-        scheduler::switch_to_next(SwitchReason::Exit);
+        scheduler::thread_exit(u32::MAX); // TODO: exit code
     }
 }
 

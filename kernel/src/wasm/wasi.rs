@@ -5,7 +5,7 @@
 #![allow(clippy::identity_op)]
 
 use crate::arch::address::VirtAddr;
-use crate::tasking::scheduler::{self, with_core_scheduler, SwitchReason};
+use crate::tasking::scheduler::{self, with_core_scheduler};
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::VmContext;
 use alloc::collections::BTreeMap;
@@ -432,10 +432,7 @@ impl AbiFunctions for VmContext {
     }
 
     fn proc_exit(&self, exit_code: ExitCode) {
-        // TODO: exit code
-        println!("proc_exit: exit code {}", exit_code);
-        scheduler::switch_to_next(SwitchReason::Exit);
-        unreachable!("thread exit")
+        scheduler::thread_exit(exit_code);
     }
 }
 

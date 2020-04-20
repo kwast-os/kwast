@@ -6,7 +6,8 @@
     ptr_internals,
     alloc_error_handler,
     lang_items,
-    atomic_mut_ptr
+    atomic_mut_ptr,
+    get_mut_unchecked
 )]
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]
@@ -28,7 +29,6 @@ use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::SwitchReason;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 use core::slice;
@@ -127,7 +127,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         });
     }
 
-    scheduler::switch_to_next(SwitchReason::RegularSwitch);
+    scheduler::thread_yield();
     loop {
         arch::halt();
     }

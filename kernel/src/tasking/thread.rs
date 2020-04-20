@@ -10,6 +10,8 @@ use crate::tasking::protection_domain::ProtectionDomain;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::borrow::BorrowMut;
 use core::cell::Cell;
+use bitflags::_core::mem::swap;
+use crate::arch::{preempt_disable, preempt_enable};
 
 /// Stack size in bytes.
 const STACK_SIZE: usize = 1024 * 256;
@@ -103,6 +105,21 @@ impl Thread {
             .map_or(core::u32::MAX, |x| (x / WASM_PAGE_SIZE) as u32)
     }
 
+    /// Unmaps the memory that this thread holds.
+    /// Unsafe because you can totally break memory mappings and safety if you call this
+    /// while memory of this thread is still used somewhere.
+    pub unsafe fn unmap_memory(&mut self) {
+        let code = self.code.borrow_mut();
+        let stack = self.stack.vma.borrow_mut();
+        let heap = self.heap.get_mut();
+
+        self.domain.with(|vma, mapping| {
+            vma.destroy_vma(mapping, code);
+            vma.destroy_vma(mapping, heap);
+            vma.destroy_vma(mapping, stack);
+        });
+    }
+
     /// Gets the current protection domain.
     #[inline]
     pub fn domain(&self) -> &ProtectionDomain {
@@ -126,33 +143,6 @@ impl Thread {
     #[inline]
     pub fn restore_simd(&self) {
         self.simd_state.restore();
-    }
-}
-
-impl Drop for Thread {
-    fn drop(&mut self) {
-        println!("drop thread");
-
-        let code = self.code.borrow_mut();
-        let stack = self.stack.vma.borrow_mut();
-        let heap = self.heap.get_mut();
-
-        /*self.domain.with(|vma, mapping| {
-            // TODO: mapping incorrect?
-
-            vma.destroy_vma(mapping, code);
-            vma.destroy_vma(mapping, heap);
-            vma.destroy_vma(mapping, stack);
-        });*/
-
-        // TODO
-        unsafe {
-            code.forget_mapping();
-            stack.forget_mapping();
-            heap.unmap(&mut ActiveMapping::get_unlocked());
-        }
-
-        println!("finished dropping thread");
     }
 }
 

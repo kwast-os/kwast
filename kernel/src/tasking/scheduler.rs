@@ -14,7 +14,8 @@ use crate::tasking::protection_domain::ProtectionDomain;
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
-pub enum SwitchReason {
+#[allow(dead_code)]
+enum SwitchReason {
     RegularSwitch = 0,
     Exit = 1,
 }
@@ -94,7 +95,7 @@ impl Scheduler {
     }
 
     /// Sets the scheduler up for switching to the next thread and gets the next thread stack address.
-    pub fn next_thread_state(
+    fn next_thread_state(
         &mut self,
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
@@ -106,7 +107,7 @@ impl Scheduler {
         }
 
         // Decide which thread to run next.
-        let old_thread = {
+        let mut old_thread = {
             let mut next_thread = self.next_thread();
             swap(&mut self.current_thread, &mut next_thread);
             next_thread
@@ -125,8 +126,13 @@ impl Scheduler {
             // Exit the thread.
             SwitchReason::Exit => {
                 debug_assert!(self.garbage.is_none());
-
-                // TODO: cleanup thread stuff here, otherwise we will likely pagefault
+                unsafe {
+                    // There could be multiple references to the thread,
+                    // but only the thread itself has access to its memory areas.
+                    // These are not referenced anywhere because the thread is not running.
+                    // So doing operations on the memory areas is fine.
+                    Arc::get_mut_unchecked(&mut old_thread).unmap_memory();
+                }
                 self.garbage = Some(old_thread.id());
             }
         }
@@ -141,7 +147,7 @@ impl Scheduler {
 
 /// Switches to the next thread.
 #[inline]
-pub fn switch_to_next(switch_reason: SwitchReason) {
+fn switch_to_next(switch_reason: SwitchReason) {
     extern "C" {
         fn _switch_to_next(switch_reason: SwitchReason);
     }
@@ -151,9 +157,29 @@ pub fn switch_to_next(switch_reason: SwitchReason) {
     }
 }
 
+/// Yield the current thread.
+#[inline]
+pub fn thread_yield() {
+    switch_to_next(SwitchReason::RegularSwitch);
+}
+
+/// Exit the thread.
+#[inline]
+pub fn thread_exit(exit_code: u32) -> ! {
+    extern "C" {
+        fn _thread_exit() -> !;
+    }
+
+    println!("thread exit: {}", exit_code);
+
+    unsafe {
+        _thread_exit();
+    }
+}
+
 /// Saves the old state and gets the next state.
 #[no_mangle]
-pub extern "C" fn next_thread_state(
+extern "C" fn next_thread_state(
     switch_reason: SwitchReason,
     old_stack: VirtAddr,
 ) -> (VirtAddr, CpuPageMapping) {

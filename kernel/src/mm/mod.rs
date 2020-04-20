@@ -1,7 +1,7 @@
 use crate::arch;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::get_cpu_page_mapping;
-use crate::tasking::scheduler::{self, with_core_scheduler, SwitchReason};
+use crate::tasking::scheduler::{self, with_core_scheduler};
 use core::intrinsics::unlikely;
 
 mod alloc;
@@ -32,7 +32,7 @@ pub fn page_fault(fault_addr: VirtAddr, ip: VirtAddr) {
         } else {
             // Kill the thread.
             println!("Pagefault in thread at {:?}", fault_addr);
-            scheduler::switch_to_next(SwitchReason::Exit);
+            scheduler::thread_exit(u32::MAX); // TODO: exit code
         }
     }
 }

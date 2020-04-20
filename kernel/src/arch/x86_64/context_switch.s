@@ -76,3 +76,20 @@ irq0:
     popq %rax
 
     iretq
+
+.global _thread_exit
+.type _thread_exit, @function
+_thread_exit:
+    // We want to free the memory areas of this thread. This includes the stack.
+    // We can use the "interrupt stack" temporarily, because it's per-core and we are guaranteed to leave it alone
+    // when the next thread is selected.
+    cli
+    .extern INTERRUPT_STACK_TOP
+    movq $INTERRUPT_STACK_TOP, %rsp
+
+    // Switch reason: exit (see scheduler.rs)
+    movl $1, %edi
+    call _switch_to_next
+
+    // Should not get here
+    ud2

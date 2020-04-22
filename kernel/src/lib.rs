@@ -7,7 +7,7 @@
     alloc_error_handler,
     lang_items,
     atomic_mut_ptr,
-    get_mut_unchecked
+    assoc_int_consts
 )]
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]

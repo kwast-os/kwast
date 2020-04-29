@@ -16,14 +16,8 @@ impl Asid {
         self.number as u64
     }
 
-    /// Gets the generation.
-    #[inline]
-    pub fn generation(self) -> AsidGeneration {
-        self.generation
-    }
-
-    /// Invalid asid.
-    pub const fn invalid() -> Self {
+    /// Null asid. Must be valid in both asid and non-asid systems.
+    pub const fn null() -> Self {
         Self {
             generation: 0,
             number: 0,
@@ -62,8 +56,8 @@ impl AsidManager {
     /// Creates a new Address Space Identifier Manager.
     pub const fn new() -> Self {
         Self {
-            global_mask: 0b01, //core::u64::MAX,
-            generation: 1,
+            global_mask: core::u64::MAX,
+            generation: 0,
             entries: [Entry::new(); 64],
         }
     }
@@ -82,25 +76,22 @@ impl AsidManager {
 
         // Roll-over if needed.
         if self.global_mask == 0 {
-            self.global_mask = 0b01; //core::u64::MAX;
+            self.global_mask = core::u64::MAX;
             for i in 0..64 {
                 self.entries[i] = Entry::new();
             }
 
-            self.generation += 1;
-
-            println!("rollover {:?}", old);
+            self.generation = self.generation.wrapping_add(1);
         }
 
         // Try to reuse the old asid.
         // Only possible if it was used in the previous generation and no other domain has used this
         // already.
-        let (global_free, free) = if old.generation == self.generation - 1
-            && old.generation > 0
+        let (global_free, free) = if old.generation == self.generation.wrapping_sub(1)
             && self.entries[(old.number >> 6) as usize].used_in_this_generation
-                & (1u64 << (old.number as u64 & 63)) > 0
+                & (1u64 << (old.number as u64 & 63))
+                > 0
         {
-            println!("reuse");
             ((old.number >> 6) as usize, old.number as u32 & 63)
         } else {
             // Search in the global mask for an entry with free asids.

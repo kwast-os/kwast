@@ -423,6 +423,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 pub fn run(buffer: &[u8], domain: ProtectionDomain) -> Result<(), Error> {
     let compile_result = Box::new(compile(buffer)?);
     let compile_result = Box::into_raw(compile_result);
+    // Safety: valid and correct entry point.
     let thread = unsafe {
         Thread::create(
             domain,

@@ -404,6 +404,6 @@ impl CpuPageMapping {
     /// Applies an Asid to a cpu page mapping.
     #[inline]
     pub fn with_asid(self, asid: Asid) -> CpuPageMapping {
-        CpuPageMapping((1 << 63) | self.0 | asid.as_u64())
+        CpuPageMapping(1 << 63 | self.0 | asid.as_u64())
     }
 }

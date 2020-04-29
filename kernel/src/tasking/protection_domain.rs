@@ -20,6 +20,7 @@ pub struct ProtectionDomain(Arc<ProtectionDomainInner>);
 struct ProtectionDomainInner {
     vma_allocator: Spinlock<VmaAllocator>,
     mapping: CpuPageMapping,
+    asid: bool,
     // TODO: expand on multi-core systems
     current_asid: Cell<Asid>,
 }
@@ -54,10 +55,17 @@ impl ProtectionDomain {
 
     /// Creates a domain from an existing cpu page mapping.
     pub unsafe fn from_existing_mapping(mapping: CpuPageMapping) -> Self {
+        let (current_asid, asid) = if let Some(asid_manager) = get_per_cpu_data().asid_manager() {
+            (asid_manager.borrow_mut().alloc(Asid::null()), true)
+        } else {
+            (Asid::null(), false)
+        };
+
         Self(Arc::new(ProtectionDomainInner {
             vma_allocator: Spinlock::new(VmaAllocator::new()),
             mapping,
-            current_asid: Cell::new(Asid::invalid()),
+            asid,
+            current_asid: Cell::new(current_asid),
         }))
     }
 
@@ -65,10 +73,9 @@ impl ProtectionDomain {
     pub fn assign_asid_if_necessary(&self) {
         if let Some(asid_manager) = get_per_cpu_data().asid_manager() {
             let mut asid_manager = asid_manager.borrow_mut();
-            if !asid_manager.is_valid(self.0.current_asid.get()) {
-                self.0
-                    .current_asid
-                    .set(asid_manager.alloc(self.0.current_asid.get()));
+            let old = self.0.current_asid.get();
+            if !asid_manager.is_valid(old) {
+                self.0.current_asid.set(asid_manager.alloc(old));
             }
         }
     }
@@ -81,7 +88,7 @@ impl ProtectionDomain {
     /// Gets the cpu page mapping
     #[inline]
     pub fn cpu_page_mapping(&self) -> CpuPageMapping {
-        if self.0.current_asid.get().generation() > 0 {
+        if self.0.asid {
             self.0.mapping.with_asid(self.0.current_asid.get())
         } else {
             self.0.mapping

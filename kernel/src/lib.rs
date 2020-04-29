@@ -7,7 +7,8 @@
     alloc_error_handler,
     lang_items,
     atomic_mut_ptr,
-    assoc_int_consts
+    assoc_int_consts,
+    const_in_array_repeat_expressions
 )]
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]
@@ -30,11 +31,11 @@ use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
+use crate::tasking::scheduler::with_core_scheduler;
 use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 use core::slice;
-use crate::tasking::scheduler::with_core_scheduler;
 
 #[macro_use]
 mod macros;
@@ -135,15 +136,15 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         });
     }
 
-    //let mut i = 0;
-    //while i < 90 {
-    //    unsafe {
-    //        let entry = VirtAddr::new(thread_test as usize);
-    //        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, i).unwrap();
-    //        scheduler::add_and_schedule_thread(t);
-    //    }
-    //    i += 1;
-    //}
+    let mut i = 0;
+    while i < 90 {
+        unsafe {
+            let entry = VirtAddr::new(thread_test as usize);
+            let t = Thread::create(ProtectionDomain::new().unwrap(), entry, i).unwrap();
+            scheduler::add_and_schedule_thread(t);
+        }
+        i += 1;
+    }
 
     loop {
         arch::halt();
@@ -152,6 +153,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 
 extern "C" fn thread_test(arg: u64) {
     println!("hi {}", arg);
+    scheduler::thread_yield();
     scheduler::thread_exit(0);
 }
 

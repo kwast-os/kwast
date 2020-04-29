@@ -129,6 +129,7 @@ impl ProtectionDomain {
 
 impl Drop for ProtectionDomain {
     fn drop(&mut self) {
+        // Don't free when there are still references.
         if Arc::strong_count(&self.0) != 1 {
             return;
         }

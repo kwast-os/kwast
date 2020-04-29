@@ -31,27 +31,40 @@ impl Asid {
     }
 }
 
+struct Entry {
+    /// The bitsets for free/used (1 = free, 0 = used).
+    used_free: u64,
+    /// Bitmap which indicate that entry has not been used yet in this generation.
+    /// 1 = never used, 0 = used at least once
+    used_in_this_generation: u64,
+}
+
 pub struct AsidManager {
     /// 1 = at least one available in the bitset corresponding to this bit.
     /// 0 = all used
     global_mask: u64,
     /// Generation counter, used in the case of a roll-over.
     generation: AsidGeneration,
-    /// The bitsets for free/used (1 = free, 0 = used).
-    entries: [u64; 64],
-    /// Bitmap which indicate that entry has not been used yet in this generation.
-    /// 1 = never used, 0 = used at least once
-    fresh: [u64; 64],
+    /// Bitmasks.
+    entries: [Entry; 64],
+}
+
+impl Entry {
+    pub const fn new() -> Self {
+        Self {
+            used_free: core::u64::MAX,
+            used_in_this_generation: core::u64::MAX,
+        }
+    }
 }
 
 impl AsidManager {
     /// Creates a new Address Space Identifier Manager.
     pub const fn new() -> Self {
         Self {
-            global_mask: 0b01,//core::u64::MAX,
+            global_mask: 0b01, //core::u64::MAX,
             generation: 1,
-            entries: [core::u64::MAX; 64],
-            fresh: [core::u64::MAX; 64],
+            entries: [Entry::new(); 64],
         }
     }
 
@@ -69,10 +82,9 @@ impl AsidManager {
 
         // Roll-over if needed.
         if self.global_mask == 0 {
-            self.global_mask = 0b01;//core::u64::MAX;
+            self.global_mask = 0b01; //core::u64::MAX;
             for i in 0..64 {
-                self.entries[i] = core::u64::MAX;
-                self.fresh[i] = core::u64::MAX;
+                self.entries[i] = Entry::new();
             }
 
             self.generation += 1;
@@ -85,10 +97,11 @@ impl AsidManager {
         // already.
         let (global_free, free) = if old.generation == self.generation - 1
             && old.generation > 0
-            && self.fresh[(old.number >> 6) as usize] & (1u64 << (old.number as u64 & 63)) > 0
+            && self.entries[(old.number >> 6) as usize].used_in_this_generation
+                & (1u64 << (old.number as u64 & 63)) > 0
         {
             println!("reuse");
-            ((old.number >> 6) as u32, old.number as u32 & 63)
+            ((old.number >> 6) as usize, old.number as u32 & 63)
         } else {
             // Search in the global mask for an entry with free asids.
             let global_free = self.global_mask.trailing_zeros();
@@ -97,35 +110,35 @@ impl AsidManager {
             }
 
             // Find a free asid and mark it as used.
-            let free = self.entries[global_free as usize].trailing_zeros();
-            (global_free, free)
+            let free = self.entries[global_free as usize]
+                .used_free
+                .trailing_zeros();
+            (global_free as usize, free)
         };
 
         unsafe {
             core::intrinsics::assume(free < 64);
         }
 
-        self.entries[global_free as usize] ^= 1 << free;
+        self.entries[global_free].used_free ^= 1 << free;
 
         // Need to update global mask if there are no asids left in this entry now.
-        if self.entries[global_free as usize] == 0 {
+        if self.entries[global_free].used_free == 0 {
             self.global_mask ^= 1 << global_free;
         }
 
         let asid = Asid {
             generation: self.generation,
-            number: ((global_free << 6) | free) as u16,
+            number: ((global_free << 6) | free as usize) as u16,
         };
-
-        println!("selected {:?}", asid);
 
         // If it has been used before in this generation (indicated by a zero bit),
         // invalidate this asid on the cpu.
-        if self.fresh[global_free as usize] & (1 << free) == 0 {
+        if self.entries[global_free].used_in_this_generation & (1 << free) == 0 {
             invalidate_asid(asid);
         } else {
             // Not been used yet, mark as "used at least once".
-            self.fresh[global_free as usize] ^= 1 << free;
+            self.entries[global_free].used_in_this_generation ^= 1 << free;
         }
 
         asid
@@ -140,8 +153,8 @@ impl AsidManager {
             }
 
             let global_entry = (which >> 6) as usize;
-            self.entries[global_entry] ^= 1 << (which & 63) as u64;
-            if self.entries[global_entry] != 0 {
+            self.entries[global_entry].used_free ^= 1 << (which & 63) as u64;
+            if self.entries[global_entry].used_free != 0 {
                 self.global_mask |= (1 << global_entry) as u64;
             }
         }

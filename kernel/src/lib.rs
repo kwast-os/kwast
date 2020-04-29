@@ -34,6 +34,7 @@ use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 use core::slice;
+use crate::tasking::scheduler::with_core_scheduler;
 
 #[macro_use]
 mod macros;
@@ -94,7 +95,11 @@ fn handle_module(module: BootModule) -> Option<()> {
     // For now, just try to run all files in the tar.
     // Might need a manifest or something alike in the future.
     for file in tar {
-        wasm::main::run(file.as_slice()).unwrap_or_else(|e| {
+        // TODO: we should probably have a manifest file which describes what services should be
+        //       in the same domain.
+        let domain = ProtectionDomain::new().expect("domain");
+        // let domain = with_core_scheduler(|s| s.get_current_thread().domain().clone());
+        wasm::main::run(file.as_slice(), domain).unwrap_or_else(|e| {
             println!("Could not start: {:?}", e);
         });
     }
@@ -121,24 +126,24 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 
     interrupts::enable();
     interrupts::setup_timer();
+    scheduler::thread_yield();
 
     // Handle boot modules.
-    //for module in boot_modules {
-    //    handle_module(module).unwrap_or_else(|| {
-    //        println!("Failed to handle module {:?}", module);
-    //    });
-    //}
-
-    scheduler::thread_yield();
-    let mut i = 0;
-    while i < 130 {
-        unsafe {
-            let entry = VirtAddr::new(thread_test as usize);
-            let t = Thread::create(ProtectionDomain::new().unwrap(), entry, i).unwrap();
-            scheduler::add_and_schedule_thread(t);
-        }
-        i += 1;
+    for module in boot_modules {
+        handle_module(module).unwrap_or_else(|| {
+            println!("Failed to handle module {:?}", module);
+        });
     }
+
+    //let mut i = 0;
+    //while i < 90 {
+    //    unsafe {
+    //        let entry = VirtAddr::new(thread_test as usize);
+    //        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, i).unwrap();
+    //        scheduler::add_and_schedule_thread(t);
+    //    }
+    //    i += 1;
+    //}
 
     loop {
         arch::halt();
@@ -147,8 +152,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 
 extern "C" fn thread_test(arg: u64) {
     println!("hi {}", arg);
-    //scheduler::thread_exit(0);
-    loop {}
+    scheduler::thread_exit(0);
 }
 
 /// Kernel test main, called after arch init is done.

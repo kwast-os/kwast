@@ -81,7 +81,6 @@ impl ProtectionDomain {
     /// Gets the cpu page mapping
     #[inline]
     pub fn cpu_page_mapping(&self) -> CpuPageMapping {
-        println!("{:?}", self.0.current_asid.get());
         if self.0.current_asid.get().generation() > 0 {
             self.0.mapping.with_asid(self.0.current_asid.get())
         } else {
@@ -102,7 +101,7 @@ impl ProtectionDomain {
     }
 
     /// Clones this domain reference.
-    fn clone(&self) -> Self {
+    pub fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 
@@ -130,12 +129,15 @@ impl ProtectionDomain {
 
 impl Drop for ProtectionDomain {
     fn drop(&mut self) {
+        if Arc::strong_count(&self.0) != 1 {
+            return;
+        }
+
         debug_assert_ne!(self.0.mapping, get_cpu_page_mapping());
 
         // Free the old asid.
         if let Some(asid_manager) = get_per_cpu_data().asid_manager() {
-            // TODO
-            //asid_manager.borrow_mut().free(self.0.current_asid.get());
+            asid_manager.borrow_mut().free(self.0.current_asid.get());
         }
 
         // The PMM expects a virtual address because it needs to update the list.

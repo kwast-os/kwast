@@ -132,12 +132,11 @@ impl Scheduler {
         }
 
         self.current_thread.restore_simd();
-        self.get_current_thread()
-            .domain()
-            .assign_asid_if_necessary();
+        let domain = self.get_current_thread().domain();
+        domain.assign_asid_if_necessary();
         (
             self.current_thread.stack.get_current_location(),
-            self.current_thread.domain().cpu_page_mapping(),
+            domain.cpu_page_mapping(),
         )
     }
 }

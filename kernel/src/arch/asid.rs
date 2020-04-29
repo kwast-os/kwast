@@ -48,7 +48,7 @@ impl AsidManager {
     /// Creates a new Address Space Identifier Manager.
     pub const fn new() -> Self {
         Self {
-            global_mask: 0b11, //core::u64::MAX,
+            global_mask: 0b01,//core::u64::MAX,
             generation: 1,
             entries: [core::u64::MAX; 64],
             fresh: [core::u64::MAX; 64],
@@ -69,13 +69,15 @@ impl AsidManager {
 
         // Roll-over if needed.
         if self.global_mask == 0 {
-            self.global_mask = core::u64::MAX;
+            self.global_mask = 0b01;//core::u64::MAX;
             for i in 0..64 {
                 self.entries[i] = core::u64::MAX;
                 self.fresh[i] = core::u64::MAX;
             }
 
             self.generation += 1;
+
+            println!("rollover {:?}", old);
         }
 
         // Try to reuse the old asid.
@@ -114,6 +116,8 @@ impl AsidManager {
             generation: self.generation,
             number: ((global_free << 6) | free) as u16,
         };
+
+        println!("selected {:?}", asid);
 
         // If it has been used before in this generation (indicated by a zero bit),
         // invalidate this asid on the cpu.

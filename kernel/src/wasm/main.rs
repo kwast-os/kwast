@@ -420,10 +420,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 }
 
 /// Runs WebAssembly from a buffer.
-pub fn run(buffer: &[u8]) -> Result<(), Error> {
+pub fn run(buffer: &[u8], domain: ProtectionDomain) -> Result<(), Error> {
     let compile_result = Box::new(compile(buffer)?);
-    let domain = ProtectionDomain::new().map_err(Error::MemoryError)?;
-
     let compile_result = Box::into_raw(compile_result);
     let thread = unsafe {
         Thread::create(

@@ -64,20 +64,15 @@ unsafe fn invalidate_page(addr: u64) {
     asm!("invlpg ($0)" : : "r" (addr) : "memory");
 }
 
-/// Invalidates a PCID.
-unsafe fn invalidate_pcid(pcid: u64) {
-    debug_assert!(pcid < 4096);
-    let ty: u64 = 1;
-    let arg: [u64; 2] = [pcid, 0];
-    asm!("invpcid ($1), $0" : : "r" (ty), "r" (&arg) : "memory");
-}
-
-/// Invalidates an Address Space Identifier.
+/// Invalidates an Address Space Identifier (PCID on x64).µ
 #[inline]
-pub fn invalidate_asid(asid: Asid) {
-    // Safety: invalidating only has an effect on performance, not correctness.
+pub fn invalidate_asid(asid_number: u64) {
+    debug_assert!(asid_number < 4096);
+    let ty: u64 = 1;
+    let arg: [u64; 2] = [asid_number, 0];
+    // Safety: only has a performance impact on wrong use, not a correctness issue.
     unsafe {
-        invalidate_pcid(asid.as_u64());
+        asm!("invpcid ($1), $0" : : "r" (ty), "r" (&arg) : "memory");
     }
 }
 

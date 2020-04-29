@@ -68,12 +68,16 @@ impl AsidManager {
         asid.generation == self.generation
     }
 
+    /// Converts an asid to entry number and bit.
+    fn asid_to_entry_and_bit(asid: Asid) -> (usize, u64) {
+        unsafe {
+            core::intrinsics::assume(asid.number < 4096);
+        }
+        ((asid.number >> 6) as usize, asid.number as u64 & 63)
+    }
+
     /// Allocates a new Asid.
     pub fn alloc(&mut self, old: Asid) -> Asid {
-        unsafe {
-            core::intrinsics::assume(old.number < 4096);
-        }
-
         // Roll-over if needed.
         if self.global_mask == 0 {
             self.global_mask = core::u64::MAX;
@@ -85,14 +89,17 @@ impl AsidManager {
         }
 
         // Try to reuse the old asid.
-        // Only possible if it was used in the previous generation and no other domain has used this
-        // already.
-        let (global_free, free) = if old.generation == self.generation.wrapping_sub(1)
-            && self.entries[(old.number >> 6) as usize].used_in_this_generation
-                & (1u64 << (old.number as u64 & 63))
-                > 0
-        {
-            ((old.number >> 6) as usize, old.number as u32 & 63)
+        // Only possible if it was used in the previous generation
+        // and no other domain has used this already.
+        let (global_free, free) = if old.generation == self.generation.wrapping_sub(1) && {
+            let (index, bit) = Self::asid_to_entry_and_bit(old);
+            self.entries[index].used_in_this_generation & (1u64 << bit) > 0
+        } {
+            // No need to invalidate the asid since it was not used since the previous
+            // generation and the TLB entries are thus still from the same domain.
+            let (index, bit) = Self::asid_to_entry_and_bit(old);
+            self.entries[index].used_in_this_generation ^= 1u64 << bit;
+            (index, bit)
         } else {
             // Search in the global mask for an entry with free asids.
             let global_free = self.global_mask.trailing_zeros();
@@ -103,7 +110,8 @@ impl AsidManager {
             // Find a free asid and mark it as used.
             let free = self.entries[global_free as usize]
                 .used_free
-                .trailing_zeros();
+                .trailing_zeros() as u64;
+            invalidate_asid(free);
             (global_free as usize, free)
         };
 
@@ -118,21 +126,10 @@ impl AsidManager {
             self.global_mask ^= 1 << global_free;
         }
 
-        let asid = Asid {
+        Asid {
             generation: self.generation,
             number: ((global_free << 6) | free as usize) as u16,
-        };
-
-        // If it has been used before in this generation (indicated by a zero bit),
-        // invalidate this asid on the cpu.
-        if self.entries[global_free].used_in_this_generation & (1 << free) == 0 {
-            invalidate_asid(asid);
-        } else {
-            // Not been used yet, mark as "used at least once".
-            self.entries[global_free].used_in_this_generation ^= 1 << free;
         }
-
-        asid
     }
 
     /// Frees an old asid.

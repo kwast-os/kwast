@@ -22,12 +22,13 @@ impl PhysAddr {
     #[inline]
     pub fn new(addr: usize) -> Self {
         // Defined limit by the architecture spec.
-        debug_assert_eq!(
-            addr.get_bits(52..64),
-            0,
-            "physical address cannot be more than 52-bits: {:#x}",
-            addr
-        );
+        // TODO
+        //debug_assert_eq!(
+        //    addr.get_bits(52..64),
+        //    0,
+        //    "physical address cannot be more than 52-bits: {:#x}",
+        //    addr
+        //);
         Self(addr)
     }
 

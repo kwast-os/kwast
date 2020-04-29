@@ -1,6 +1,6 @@
 use multiboot2::MemoryMapTag;
 
-use super::{invalidate, ActiveMapping, EntryFlags, PhysAddr, VirtAddr};
+use super::{invalidate_page, ActiveMapping, EntryFlags, PhysAddr, VirtAddr};
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::FrameAllocator;
 
@@ -92,7 +92,7 @@ impl FrameAllocator {
             p2.entries[P2_IDX].clear();
             p2.decrease_used_count();
             unsafe {
-                invalidate(tmp_2m_map_addr.as_u64());
+                invalidate_page(tmp_2m_map_addr.as_u64());
             }
         }
 

@@ -8,6 +8,7 @@ use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
 use crate::util::boot_module::{BootModule, BootModuleProvider, Range};
 use multiboot2::{BootInformation, ElfSectionFlags, ModuleIter};
+use raw_cpuid::CpuId;
 
 #[macro_use]
 pub mod macros;
@@ -92,8 +93,18 @@ impl Iterator for ArchBootModuleProvider<'_> {
 #[no_mangle]
 pub extern "C" fn entry(mboot_addr: usize) {
     unsafe {
+        let cpuid = CpuId::new();
+        let use_pcid = cpuid.get_feature_info().expect("feature info").has_pcid()
+            && cpuid
+                .get_extended_feature_info()
+                .map_or_else(|| false, |info| info.has_invpcid());
+
+        if use_pcid {
+            cr4_write(cr4_read() | (1 << 17));
+        }
+
         // Not shared between cores, but we must be careful about what data we modify or read.
-        PER_CPU_DATA_BSP.prepare_to_set();
+        PER_CPU_DATA_BSP.prepare_to_set(use_pcid);
         set_per_cpu_data(&mut PER_CPU_DATA_BSP as *mut _);
     }
 

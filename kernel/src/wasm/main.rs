@@ -424,7 +424,6 @@ pub fn run(buffer: &[u8]) -> Result<(), Error> {
     let compile_result = Box::new(compile(buffer)?);
     let domain = ProtectionDomain::new().map_err(Error::MemoryError)?;
 
-    // TODO: PCID
     let compile_result = Box::into_raw(compile_result);
     let thread = unsafe {
         Thread::create(

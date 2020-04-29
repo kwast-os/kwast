@@ -28,7 +28,9 @@ use arch::interrupts;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
+use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
+use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 use core::slice;
@@ -121,16 +123,32 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     interrupts::setup_timer();
 
     // Handle boot modules.
-    for module in boot_modules {
-        handle_module(module).unwrap_or_else(|| {
-            println!("Failed to handle module {:?}", module);
-        });
-    }
+    //for module in boot_modules {
+    //    handle_module(module).unwrap_or_else(|| {
+    //        println!("Failed to handle module {:?}", module);
+    //    });
+    //}
 
     scheduler::thread_yield();
+    let mut i = 0;
+    while i < 130 {
+        unsafe {
+            let entry = VirtAddr::new(thread_test as usize);
+            let t = Thread::create(ProtectionDomain::new().unwrap(), entry, i).unwrap();
+            scheduler::add_and_schedule_thread(t);
+        }
+        i += 1;
+    }
+
     loop {
         arch::halt();
     }
+}
+
+extern "C" fn thread_test(arg: u64) {
+    println!("hi {}", arg);
+    //scheduler::thread_exit(0);
+    loop {}
 }
 
 /// Kernel test main, called after arch init is done.

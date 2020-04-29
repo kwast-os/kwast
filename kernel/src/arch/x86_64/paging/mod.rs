@@ -5,10 +5,12 @@ use super::address::{PhysAddr, VirtAddr};
 use self::entry::Entry;
 pub use self::entry::EntryFlags;
 use self::table::{Level4, Table};
+use crate::arch::asid::Asid;
 use crate::mm::mapper::{MemoryError, MemoryMapper, MemoryResult};
 use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::MappableVma;
 use crate::tasking::scheduler::with_core_scheduler;
+use core::fmt::{Debug, Error, Formatter};
 use core::intrinsics::unlikely;
 
 mod entry;
@@ -41,8 +43,14 @@ pub struct ActiveMapping {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct CpuPageMapping(PhysAddr);
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct CpuPageMapping(u64);
+
+impl Debug for CpuPageMapping {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "CpuPageMapping({:#x})", self.0)
+    }
+}
 
 /// Entry modifier helper.
 pub struct EntryModifier<'a> {
@@ -52,8 +60,25 @@ pub struct EntryModifier<'a> {
 
 /// Invalidates page.
 #[inline(always)]
-unsafe fn invalidate(addr: u64) {
+unsafe fn invalidate_page(addr: u64) {
     asm!("invlpg ($0)" : : "r" (addr) : "memory");
+}
+
+/// Invalidates a PCID.
+unsafe fn invalidate_pcid(pcid: u64) {
+    debug_assert!(pcid < 4096);
+    let ty: u64 = 1;
+    let arg: [u64; 2] = [pcid, 0];
+    asm!("invpcid ($1), $0" : : "r" (ty), "r" (&arg) : "memory");
+}
+
+/// Invalidates an Address Space Identifier.
+#[inline]
+pub fn invalidate_asid(asid: Asid) {
+    // Safety: invalidating only has an effect on performance, not correctness.
+    unsafe {
+        invalidate_pcid(asid.as_u64());
+    }
 }
 
 /// Switches to another page mapping.
@@ -78,7 +103,7 @@ impl CpuPageMapping {
     /// Cpu page mapping as physical address representation.
     #[inline]
     pub fn as_phys_addr(self) -> PhysAddr {
-        self.0
+        PhysAddr::new((self.0 & !((1 << 63) | 0xfff)) as usize)
     }
 }
 
@@ -96,7 +121,7 @@ impl<'a> EntryModifier<'a> {
         // See Intel Volume 3: "4.10.4.3 Optional Invalidation" (and footnote)
         if was_present {
             unsafe {
-                invalidate(self.addr);
+                invalidate_page(self.addr);
             }
         }
     }
@@ -160,7 +185,7 @@ impl MemoryMapper for ActiveMapping {
                 }
                 mapping.unmap_single(p4.address());
 
-                Ok(CpuPageMapping(cr3))
+                Ok(CpuPageMapping(cr3.as_u64()))
             })
         })
     }
@@ -302,7 +327,7 @@ impl ActiveMapping {
 
                     // Sadly, we have to invalidate here too...
                     unsafe {
-                        invalidate(vaddr.as_u64());
+                        invalidate_page(vaddr.as_u64());
                     }
                 }
 
@@ -312,7 +337,7 @@ impl ActiveMapping {
 
         e.clear();
         unsafe {
-            invalidate(vaddr.as_u64());
+            invalidate_page(vaddr.as_u64());
         }
 
         p1.decrease_used_count();
@@ -372,5 +397,13 @@ impl ActiveMapping {
             entry: &mut p1.entries[vaddr.p1_index()],
             addr: vaddr.as_u64(),
         })
+    }
+}
+
+impl CpuPageMapping {
+    /// Applies an Asid to a cpu page mapping.
+    #[inline]
+    pub fn with_asid(self, asid: Asid) -> CpuPageMapping {
+        CpuPageMapping((1 << 63) | self.0 | asid.as_u64())
     }
 }

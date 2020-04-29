@@ -1,9 +1,9 @@
+use crate::arch::asid::AsidManager;
 use crate::tasking::scheduler;
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 
 /// Per-CPU data.
 #[repr(C, align(128))] // 128 = false sharing threshold
-#[derive(Debug)]
 pub struct CpuData {
     /// Self reference.
     reference: usize,
@@ -11,6 +11,9 @@ pub struct CpuData {
     preempt_count: u32,
     /// Should schedule flag.
     should_schedule: Cell<u32>,
+    /// Address Space Identifier stuff.
+    asid_enable: Cell<bool>,
+    asid_manager: RefCell<AsidManager>,
 }
 
 impl CpuData {
@@ -21,6 +24,8 @@ impl CpuData {
             reference: 0,
             preempt_count: 0,
             should_schedule: Cell::new(0),
+            asid_enable: Cell::new(false),
+            asid_manager: RefCell::new(AsidManager::new()),
         }
     }
 
@@ -37,7 +42,7 @@ impl CpuData {
     }
 
     /// Prepare to set the per-CPU data.
-    pub fn prepare_to_set(&mut self) {
+    pub fn prepare_to_set(&mut self, asid_enable: bool) {
         // Assembly code also trusts on this.
         debug_assert_eq!(
             offset_of!(CpuData, preempt_count),
@@ -46,5 +51,15 @@ impl CpuData {
         debug_assert_eq!(offset_of!(CpuData, should_schedule), 12);
         debug_assert_eq!(self.reference, 0);
         self.reference = self as *mut _ as usize;
+        self.asid_enable.set(asid_enable);
+    }
+
+    /// Gets a mutable reference to the asid manager.
+    pub fn asid_manager(&self) -> Option<&RefCell<AsidManager>> {
+        if self.asid_enable.get() {
+            Some(&self.asid_manager)
+        } else {
+            None
+        }
     }
 }

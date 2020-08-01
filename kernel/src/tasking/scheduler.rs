@@ -96,7 +96,7 @@ impl Scheduler {
         &mut self,
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
-    ) -> (VirtAddr, CpuPageMapping) {
+    ) -> NextThreadState {
         // Cleanup old thread.
         if let Some(garbage) = self.garbage {
             with_common_write(|common| common.remove_thread(garbage));
@@ -134,7 +134,7 @@ impl Scheduler {
         self.current_thread.restore_simd();
         let domain = self.get_current_thread().domain();
         domain.assign_asid_if_necessary();
-        (
+        NextThreadState(
             self.current_thread.stack.get_current_location(),
             domain.cpu_page_mapping(),
         )
@@ -173,12 +173,15 @@ pub fn thread_exit(exit_code: u32) -> ! {
     }
 }
 
+#[repr(C)]
+struct NextThreadState(VirtAddr, CpuPageMapping);
+
 /// Saves the old state and gets the next state.
 #[no_mangle]
 extern "C" fn next_thread_state(
     switch_reason: SwitchReason,
     old_stack: VirtAddr,
-) -> (VirtAddr, CpuPageMapping) {
+) -> NextThreadState {
     with_core_scheduler(|scheduler| scheduler.next_thread_state(switch_reason, old_stack))
 }
 

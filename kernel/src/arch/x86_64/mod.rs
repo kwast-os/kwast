@@ -182,7 +182,7 @@ pub fn late_init() {
 /// Halt instruction. Waits for interrupt.
 pub fn halt() {
     unsafe {
-        asm!("hlt" :::: "volatile");
+        llvm_asm!("hlt" :::: "volatile");
     }
 }
 
@@ -205,7 +205,7 @@ fn set_per_cpu_data(ptr: *mut CpuData) {
 pub fn get_per_cpu_data() -> &'static CpuData {
     unsafe {
         let value: *mut CpuData;
-        asm!("mov %gs:0, $0" : "=r" (value));
+        llvm_asm!("mov %gs:0, $0" : "=r" (value));
         &*value
     }
 }
@@ -214,28 +214,28 @@ pub fn get_per_cpu_data() -> &'static CpuData {
 unsafe fn wrmsr(reg: u32, value: u64) {
     let lo = value as u32;
     let hi = (value >> 32) as u32;
-    asm!("wrmsr" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
+    llvm_asm!("wrmsr" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
 }
 
 /// Read CR4
 fn cr4_read() -> u64 {
     unsafe {
         let value: u64;
-        asm!("mov %cr4, $0" : "=r" (value));
+        llvm_asm!("mov %cr4, $0" : "=r" (value));
         value
     }
 }
 
 /// Write new CR4
 unsafe fn cr4_write(value: u64) {
-    asm!("mov $0, %cr4" :: "r" (value) : "memory" : "volatile");
+    llvm_asm!("mov $0, %cr4" :: "r" (value) : "memory" : "volatile");
 }
 
 /// Write extended control register.
 unsafe fn xsetbv(reg: u32, value: u64) {
     let lo = value as u32;
     let hi = (value >> 32) as u32;
-    asm!("xsetbv" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
+    llvm_asm!("xsetbv" :: "{ecx}" (reg), "{eax}" (lo), "{edx}" (hi) : "memory" : "volatile");
 }
 
 /// Enable preemption.
@@ -243,7 +243,7 @@ unsafe fn xsetbv(reg: u32, value: u64) {
 pub fn preempt_enable() {
     debug_assert_eq!(CpuData::preempt_count_offset(), 8);
     unsafe {
-        asm!("decl %gs:8" ::: "memory" : "volatile");
+        llvm_asm!("decl %gs:8" ::: "memory" : "volatile");
     }
 }
 
@@ -252,13 +252,13 @@ pub fn preempt_enable() {
 pub fn preempt_disable() {
     debug_assert_eq!(CpuData::preempt_count_offset(), 8);
     unsafe {
-        asm!("incl %gs:8" ::: "memory" : "volatile");
+        llvm_asm!("incl %gs:8" ::: "memory" : "volatile");
     }
 }
 
 /// Invalid opcode.
 pub fn invalid_opcode() {
     unsafe {
-        asm!("ud2" :::: "volatile");
+        llvm_asm!("ud2" :::: "volatile");
     }
 }

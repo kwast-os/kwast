@@ -243,12 +243,14 @@ type WasmResult<T> = Result<T, Errno>;
 type WasmStatus = WasmResult<()>;
 
 bitflags! {
+    #[repr(C)]
     struct LookupFlags: u32 {
         const SYMLINK_FOLLOW = 1 << 0;
     }
 }
 
 bitflags! {
+    #[repr(C)]
     struct OFlags: u16 {
         const CREAT = 1 << 0;
         const DIRECTORY = 1 << 1;
@@ -258,6 +260,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[repr(C)]
     struct FdFlags: u16 {
         const APPEND = 1 << 0;
         const DSYNC = 1 << 1;
@@ -268,6 +271,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[repr(C)]
     struct Rights: u64 {
         const FD_DATASYNC = 1 << 0;
         const FD_READ = 1 << 1;

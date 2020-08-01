@@ -61,7 +61,7 @@ pub struct EntryModifier<'a> {
 /// Invalidates page.
 #[inline(always)]
 unsafe fn invalidate_page(addr: u64) {
-    asm!("invlpg ($0)" : : "r" (addr) : "memory");
+    llvm_asm!("invlpg ($0)" : : "r" (addr) : "memory");
 }
 
 /// Invalidates an Address Space Identifier (PCID on x64).µ
@@ -72,7 +72,7 @@ pub fn invalidate_asid(asid_number: u64) {
     let arg: [u64; 2] = [asid_number, 0];
     // Safety: only has a performance impact on wrong use, not a correctness issue.
     unsafe {
-        asm!("invpcid ($1), $0" : : "r" (ty), "r" (&arg) : "memory");
+        llvm_asm!("invpcid ($1), $0" : : "r" (ty), "r" (&arg) : "memory");
     }
 }
 
@@ -80,7 +80,7 @@ pub fn invalidate_asid(asid_number: u64) {
 #[inline(always)]
 pub unsafe fn cpu_page_mapping_switch_to(mapping: CpuPageMapping) {
     if get_cpu_page_mapping() != mapping {
-        asm!("movq $0, %cr3" : : "r" (mapping) : "memory" : "volatile");
+        llvm_asm!("movq $0, %cr3" : : "r" (mapping) : "memory" : "volatile");
     }
 }
 
@@ -89,7 +89,7 @@ pub unsafe fn cpu_page_mapping_switch_to(mapping: CpuPageMapping) {
 pub fn get_cpu_page_mapping() -> CpuPageMapping {
     let cr3: CpuPageMapping;
     unsafe {
-        asm!("movq %cr3, $0" : "=r" (cr3) : : "memory" : "volatile");
+        llvm_asm!("movq %cr3, $0" : "=r" (cr3) : : "memory" : "volatile");
     }
     cr3
 }

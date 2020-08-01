@@ -7,7 +7,7 @@ pub unsafe fn compare_exchange_acquire_relaxed_hle(
 ) -> Result<bool, bool> {
     let previous: bool;
 
-    asm!("xacquire; lock cmpxchgb $3, $0" : "=*m" (ptr), "={eax}" (previous) : "{eax}" (current), "r" (new) : "memory" : "volatile");
+    llvm_asm!("xacquire; lock cmpxchgb $3, $0" : "=*m" (ptr), "={eax}" (previous) : "{eax}" (current), "r" (new) : "memory" : "volatile");
 
     if previous == current {
         Ok(previous)
@@ -19,5 +19,5 @@ pub unsafe fn compare_exchange_acquire_relaxed_hle(
 /// Atomic store with release ordering, using hardware lock elision.
 #[inline(always)]
 pub unsafe fn store_release_hle(ptr: *mut bool, val: bool) {
-    asm!("xrelease; movb $1, $0" :: "*m" (ptr), "I" (val) : "memory" : "volatile");
+    llvm_asm!("xrelease; movb $1, $0" :: "*m" (ptr), "I" (val) : "memory" : "volatile");
 }

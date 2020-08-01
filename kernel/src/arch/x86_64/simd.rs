@@ -144,35 +144,35 @@ fn simd_invalid_routine(_region: *mut u8) {
 
 /// SIMD save routine using FXSAVE.
 unsafe fn simd_routine_fxsave(region: *mut u8) {
-    asm!("fxsave ($0)" :: "r" (region) : "memory");
+    llvm_asm!("fxsave ($0)" :: "r" (region) : "memory");
 }
 
 /// SIMD save routine using XSAVE.
 unsafe fn simd_routine_xsave(region: *mut u8) {
-    asm!("xsave ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xsave ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }
 
 /// SIMD save routine using XSAVEOPT.
 unsafe fn simd_routine_xsaveopt(region: *mut u8) {
-    asm!("xsaveopt ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xsaveopt ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }
 
 /// SIMD save routine using XSAVES.
 unsafe fn simd_routine_xsaves(region: *mut u8) {
-    asm!("xsaves ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xsaves ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }
 
 /// SIMD save routine using FXRSTOR.
 unsafe fn simd_routine_fxrstor(region: *mut u8) {
-    asm!("fxrstor ($0)" :: "r" (region) : "memory");
+    llvm_asm!("fxrstor ($0)" :: "r" (region) : "memory");
 }
 
 /// SIMD save routine using XRSTOR.
 unsafe fn simd_routine_xrstor(region: *mut u8) {
-    asm!("xrstor ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xrstor ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }
 
 /// SIMD save routine using XRSTORS.
 unsafe fn simd_routine_xrstors(region: *mut u8) {
-    asm!("xrstors ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xrstors ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
 }

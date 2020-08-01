@@ -95,7 +95,7 @@ impl IDT {
         };
 
         unsafe {
-            asm!("lidt ($0)" :: "r" (&desc));
+            llvm_asm!("lidt ($0)" :: "r" (&desc));
         }
     }
 
@@ -189,13 +189,13 @@ pub fn setup_timer() {
 
 pub fn enable() {
     unsafe {
-        asm!("sti" :::: "volatile");
+        llvm_asm!("sti" :::: "volatile");
     }
 }
 
 pub fn disable() {
     unsafe {
-        asm!("cli" :::: "volatile");
+        llvm_asm!("cli" :::: "volatile");
     }
 }
 
@@ -203,7 +203,7 @@ pub fn disable() {
 pub fn irq_save_and_stop() -> IrqState {
     unsafe {
         let state: IrqState;
-        asm!("pushf; pop $0; cli" : "=r" (state) : : "memory" : "volatile");
+        llvm_asm!("pushf; pop $0; cli" : "=r" (state) : : "memory" : "volatile");
         state
     }
 }
@@ -211,7 +211,7 @@ pub fn irq_save_and_stop() -> IrqState {
 /// Restores an old IRQ state.
 pub fn irq_restore(state: IrqState) {
     unsafe {
-        asm!("push $0; popf" : : "r" (state) : "memory" : "volatile");
+        llvm_asm!("push $0; popf" : : "r" (state) : "memory" : "volatile");
     }
 }
 
@@ -279,7 +279,7 @@ extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
 extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, _err: PageFaultError) {
     let addr: VirtAddr;
     unsafe {
-        asm!("movq %cr2, $0" : "=r" (addr));
+        llvm_asm!("movq %cr2, $0" : "=r" (addr));
     }
 
     crate::mm::page_fault(addr, frame.rip);

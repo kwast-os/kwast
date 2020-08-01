@@ -1,13 +1,12 @@
 #![no_std]
 #![feature(
-    asm,
+    llvm_asm,
     abi_x86_interrupt,
     core_intrinsics,
     ptr_internals,
     alloc_error_handler,
     lang_items,
     atomic_mut_ptr,
-    assoc_int_consts,
     const_in_array_repeat_expressions
 )]
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]

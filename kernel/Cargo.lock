@@ -146,6 +146,7 @@ dependencies = [
  "memoffset",
  "multiboot2",
  "raw-cpuid",
+ "rlibc",
  "spin 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "volatile",
  "wasm-call",
@@ -239,6 +240,12 @@ dependencies = [
  "cc",
  "rustc_version",
 ]
+
+[[package]]
+name = "rlibc"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc874b127765f014d792f16763a81245ab80500e2ad921ed4ee9e82481ee08fe"
 
 [[package]]
 name = "rustc_version"

@@ -48,7 +48,7 @@ run: iso
 	@qemu-system-$(ARCH) -cdrom $(ISO_IMAGE) $(QEMUFLAGS)
 
 rust:
-	@cd kernel; RUST_TARGET_PATH=$(shell pwd) cargo xbuild --target $(ARCH)-kwast.json $(KERNEL_CARGOFLAGS)
+	@cd kernel; RUST_TARGET_PATH=$(shell pwd) cargo build --target $(ARCH)-kwast.json $(KERNEL_CARGOFLAGS)
 
 $(KERNEL): rust $(RUST_OBJECT) $(ASM_OBJECTS) $(LD_SCRIPT)
 	@$(LD) $(LDFLAGS) -o $(KERNEL) $(ASM_OBJECTS) $(RUST_OBJECT)

@@ -29,6 +29,7 @@ opt-level = 2
 panic = "abort"
 
 [dependencies]
+rlibc = "1.0.0"
 wasm-call = { path = "../lib/wasm-call" }
 raw-cpuid = "^7.0"
 volatile = "^0.2.6"

@@ -46,10 +46,9 @@ These instructions help you get started with building the source and getting it 
 You can setup your toolchain using the following steps:
 ```bash
 # (Inside the project root folder.)
-# You'll need to get the rust nightly and install cargo-xbuild:
+# You'll need to get the rust nightly and install the wasi toolchain:
 rustup component add rust-src
 rustup target add wasm32-wasi
-cargo install cargo-xbuild
 
 # You'll also need a cross-compile binutils, I wrote a bash script that builds this for you.
 cd toolchain

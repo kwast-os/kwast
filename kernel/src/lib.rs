@@ -15,6 +15,8 @@
 #[macro_use]
 extern crate alloc;
 
+extern crate rlibc;
+
 #[macro_use]
 extern crate memoffset;
 

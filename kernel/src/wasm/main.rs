@@ -522,8 +522,6 @@ fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
             )
             .map_err(Error::WasmError)?;
 
-        // println!("{:?}", ctx.func);
-
         let info = ctx.compile(&*isa).map_err(Error::CodegenError)?;
         total_size += info.total_size as usize;
         contexts.push(ctx);

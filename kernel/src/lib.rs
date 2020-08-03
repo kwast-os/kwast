@@ -99,7 +99,7 @@ fn handle_module(module: BootModule) -> Option<()> {
         // TODO: we should probably have a manifest file which describes what services should be
         //       in the same domain.
         let domain = ProtectionDomain::new().expect("domain");
-        // let domain = with_core_scheduler(|s| s.get_current_thread().domain().clone());
+        //let domain = with_core_scheduler(|s| s.get_current_thread().domain().clone());
         wasm::main::run(file.as_slice(), domain).unwrap_or_else(|e| {
             println!("Could not start: {:?}", e);
         });

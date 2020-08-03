@@ -44,16 +44,16 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -62,6 +62,7 @@ dependencies = [
  "cranelift-entity",
  "hashbrown",
  "log",
+ "regalloc",
  "smallvec",
  "target-lexicon",
  "thiserror",
@@ -69,8 +70,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -78,18 +79,18 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 dependencies = [
  "cranelift-codegen",
  "hashbrown",
@@ -100,8 +101,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -110,8 +111,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.62.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.62.0#2686b3ec4ddafe2af6137e6e86fefe62a5f23672"
+version = "0.66.0"
+source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#60c7f6b6622b652273a030b528890edcc0c6783e"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -119,7 +120,7 @@ dependencies = [
  "hashbrown",
  "log",
  "thiserror",
- "wasmparser 0.51.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmparser 0.59.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -242,10 +243,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "regalloc"
+version = "0.0.28"
+source = "git+https://github.com/kwast-os/regalloc.rs?branch=0.0.27#bd0f064bc70b9aa0c261cfaafd7cf65343219e81"
+dependencies = [
+ "hashbrown",
+ "log",
+ "rustc-hash",
+ "smallvec",
+]
+
+[[package]]
 name = "rlibc"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc874b127765f014d792f16763a81245ab80500e2ad921ed4ee9e82481ee08fe"
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc_version"
@@ -308,16 +326,16 @@ checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
 
 [[package]]
 name = "thiserror"
-version = "1.0.14"
-source = "git+https://github.com/kwast-os/thiserror#f76bb9ae9ef896ffc158a898ae371f446fb2768f"
+version = "1.0.20"
+source = "git+https://github.com/kwast-os/thiserror#c576cfc7ac231172faa43d8fa0f1a40360ba848c"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.14"
-source = "git+https://github.com/kwast-os/thiserror#f76bb9ae9ef896ffc158a898ae371f446fb2768f"
+version = "1.0.20"
+source = "git+https://github.com/kwast-os/thiserror#c576cfc7ac231172faa43d8fa0f1a40360ba848c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -353,15 +371,15 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.51.4"
-source = "git+https://github.com/kwast-os/wasmparser?branch=0.51.4#e933c5dbf59d59175309900df9b8aeba57fb9efa"
+version = "0.59.0"
+source = "git+https://github.com/kwast-os/wasm-tools?branch=0.59.0#6a5f64dc50ebd255f4a698b4706f8ce2935c10f7"
 dependencies = [
  "hashbrown",
 ]
 
 [[package]]
 name = "wasmparser"
-version = "0.51.4"
+version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeb1956b19469d1c5e63e459d29e7b5aa0f558d9f16fcef09736f8a265e6c10a"
-replace = "wasmparser 0.51.4 (git+https://github.com/kwast-os/wasmparser?branch=0.51.4)"
+checksum = "a950e6a618f62147fd514ff445b2a0b53120d382751960797f85f058c7eda9b9"
+replace = "wasmparser 0.59.0 (git+https://github.com/kwast-os/wasm-tools?branch=0.59.0)"

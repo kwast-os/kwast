@@ -1,6 +1,7 @@
 use crate::arch;
 use crate::arch::address::VirtAddr;
-use crate::arch::paging::get_cpu_page_mapping;
+use crate::arch::paging::{get_cpu_page_mapping, ActiveMapping};
+use crate::mm::mapper::MemoryMapper;
 use crate::tasking::scheduler::{self, with_core_scheduler};
 use core::intrinsics::unlikely;
 
@@ -23,9 +24,11 @@ pub fn page_fault(fault_addr: VirtAddr, ip: VirtAddr) {
     if unlikely(failed) {
         if fault_addr.as_usize() < arch::USER_START || ip.as_usize() < arch::USER_START {
             // Kernel fault.
+            // TODO: show cause (detect stack overflow for example)
             panic!(
-                "Pagefault in kernel, faulting address: {:?}, IP: {:?}, PAGEMAP: {:?}",
+                "Pagefault in kernel, faulting address: {:?} -> {:?}, IP: {:?}, PAGEMAP: {:?}",
                 fault_addr,
+                unsafe { ActiveMapping::get_unlocked().translate(fault_addr) },
                 ip,
                 get_cpu_page_mapping()
             );

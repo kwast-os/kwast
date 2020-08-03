@@ -16,8 +16,8 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_wasm::{
-    FuncEnvironment, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex,
-    TableIndex, TargetEnvironment, WasmError, WasmResult,
+    FuncEnvironment, FuncIndex, FunctionBuilder, GlobalIndex, GlobalVariable, MemoryIndex,
+    SignatureIndex, TableIndex, TargetEnvironment, WasmError, WasmResult,
 };
 
 /// Used to handle transformations on functions.
@@ -367,7 +367,8 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     fn translate_table_grow(
         &mut self,
         _pos: FuncCursor,
-        _table_index: u32,
+        _table_index: TableIndex,
+        _table: Table,
         _delta: Value,
         _init_value: Value,
     ) -> WasmResult<Value> {
@@ -376,8 +377,9 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
     fn translate_table_get(
         &mut self,
-        _pos: FuncCursor,
-        _table_index: u32,
+        _builder: &mut FunctionBuilder,
+        _table_index: TableIndex,
+        _table: Table,
         _index: Value,
     ) -> WasmResult<Value> {
         Self::reference_types_unsupported()
@@ -385,8 +387,9 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
     fn translate_table_set(
         &mut self,
-        _pos: FuncCursor,
-        _table_index: u32,
+        _builder: &mut FunctionBuilder,
+        _table_index: TableIndex,
+        _table: Table,
         _value: Value,
         _index: Value,
     ) -> WasmResult<()> {
@@ -410,7 +413,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
     fn translate_table_fill(
         &mut self,
         _pos: FuncCursor,
-        _table_index: u32,
+        _table_index: TableIndex,
         _dst: Value,
         _val: Value,
         _len: Value,
@@ -435,7 +438,11 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         Self::bulk_memory_unsupported()
     }
 
-    fn translate_ref_func(&mut self, _pos: FuncCursor, _func_index: u32) -> WasmResult<Value> {
+    fn translate_ref_func(
+        &mut self,
+        _pos: FuncCursor,
+        _func_index: FuncIndex,
+    ) -> WasmResult<Value> {
         Self::reference_types_unsupported()
     }
 

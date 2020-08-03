@@ -9,7 +9,7 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_wasm::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleEnvironment,
     ModuleTranslationState, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmError,
-    WasmResult,
+    WasmFuncType, WasmResult,
 };
 use hashbrown::HashMap;
 
@@ -129,7 +129,11 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv<'data> {
         Ok(())
     }
 
-    fn declare_signature(&mut self, mut sig: Signature) -> WasmResult<()> {
+    fn declare_signature(
+        &mut self,
+        _wasm_func_type: WasmFuncType,
+        mut sig: Signature,
+    ) -> WasmResult<()> {
         sig.params.insert(
             0,
             AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),

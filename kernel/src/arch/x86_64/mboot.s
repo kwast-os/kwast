@@ -210,7 +210,7 @@ tss_end:
 .section .bss, "aw", @nobits
 .global STACK_BOTTOM
 STACK_BOTTOM:
-.skip 32768
+.skip 32768*4
 STACK_TOP:
 .global INTERRUPT_STACK_BOTTOM
 INTERRUPT_STACK_BOTTOM:

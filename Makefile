@@ -25,7 +25,7 @@ KERNEL_CARGOFLAGS += --release
 USER_CARGOFLAGS += --release
 endif
 
-.PHONY: all clean run rust iso initrd dirs
+.PHONY: all clean run rust check iso initrd dirs
 
 all: $(KERNEL)
 
@@ -49,6 +49,9 @@ run: iso
 
 rust:
 	@cd kernel; RUST_TARGET_PATH=$(shell pwd) cargo build --target $(ARCH)-kwast.json $(KERNEL_CARGOFLAGS)
+
+check:
+	@cd kernel; cargo c --target $(ARCH)-kwast.json $(KERNEL_CARGOFLAGS)
 
 $(KERNEL): rust $(RUST_OBJECT) $(ASM_OBJECTS) $(LD_SCRIPT)
 	@$(LD) $(LDFLAGS) -o $(KERNEL) $(ASM_OBJECTS) $(RUST_OBJECT)

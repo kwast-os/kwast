@@ -62,7 +62,7 @@ impl Scheduler {
             idle_protection_domain,
         ));
 
-        with_common_write(|common| common.add_thread(idle_thread.clone()));
+        with_common_mut(|common| common.add_thread(idle_thread.clone()));
 
         Self {
             run_queue: VecDeque::new(),
@@ -99,7 +99,7 @@ impl Scheduler {
     ) -> NextThreadState {
         // Cleanup old thread.
         if let Some(garbage) = self.garbage {
-            with_common_write(|common| common.remove_thread(garbage));
+            with_common_mut(|common| common.remove_thread(garbage));
             self.garbage = None;
         }
 
@@ -193,12 +193,12 @@ static mut SCHEDULER_COMMON: RwLock<Option<SchedulerCommon>> = RwLock::new(None)
 /// Adds and schedules a thread.
 pub fn add_and_schedule_thread(thread: Thread) {
     let thread = Arc::new(thread);
-    with_common_write(|common| common.add_thread(thread.clone()));
+    with_common_mut(|common| common.add_thread(thread.clone()));
     with_core_scheduler(|scheduler| scheduler.queue_thread(thread));
 }
 
-/// With common scheduler data. Writable.
-fn with_common_write<F, T>(f: F) -> T
+/// With common scheduler data. Mutable.
+fn with_common_mut<F, T>(f: F) -> T
 where
     F: FnOnce(&mut SchedulerCommon) -> T,
 {
@@ -206,7 +206,7 @@ where
 }
 
 /// With common scheduler data. Read-only.
-fn with_common_read<F, T>(f: F) -> T
+fn with_common<F, T>(f: F) -> T
 where
     F: FnOnce(&SchedulerCommon) -> T,
 {

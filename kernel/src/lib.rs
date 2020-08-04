@@ -33,7 +33,6 @@ use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
-use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 

@@ -6,6 +6,7 @@
 
 use crate::arch::address::VirtAddr;
 use crate::tasking::scheduler::{self, with_core_scheduler};
+use crate::wasm::file::FileIdx;
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::VmContext;
 use alloc::collections::BTreeMap;
@@ -358,21 +359,26 @@ impl AbiFunctions for VmContext {
         environc.cell(self)?.set(1);
         // This is the sum of the string lengths in bytes (including \0 terminators)
         let abcdefg = "RUST_BACKTRACE=1";
-        environ_buf_size.cell(self)?.set(1 + abcdefg.bytes().len() as u32 /* TODO: make safe */);
+        environ_buf_size
+            .cell(self)?
+            .set(1 + abcdefg.bytes().len() as u32 /* TODO: make safe */);
         Ok(())
     }
 
     fn environ_get(&self, environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> WasmStatus {
         // The bytes should be all after each other consecutively in `environ_buf`.
         let abcdefg = "RUST_BACKTRACE=1";
-        let mut slice = environ_buf.slice(&self, (1 + abcdefg.bytes().len()) as u32 /* TODO: make safe */)?;
+        let slice = environ_buf.slice(
+            &self,
+            (1 + abcdefg.bytes().len()) as u32, /* TODO: make safe */
+        )?;
         for (byte, cell) in abcdefg.bytes().zip(slice.iter()) {
             cell.set(byte);
         }
         slice[slice.len() - 1].set(0);
 
         // Write pointers to the environment variables in the buffer.
-        let mut slice = environ.slice(&self, 1)?;
+        let slice = environ.slice(&self, 1)?;
         slice[0].set(WasmPtr::from(environ_buf.offset));
 
         Ok(())
@@ -433,8 +439,20 @@ impl AbiFunctions for VmContext {
 
     fn fd_prestat_dir_name(&self, fd: Fd, _path: WasmPtr<u8>, path_len: Size) -> WasmStatus {
         println!("fd_prestat_dir_name {} {}", fd, path_len);
-        // TODO
-        Ok(())
+
+        with_core_scheduler(|s| {
+            let tbl = s.get_current_thread().file_descriptor_table();
+            let fd = tbl.get(fd as FileIdx).ok_or(Errno::BadF)?;
+            // TODO: check if it's a directory, if it's not: return ENOTDIR
+            let pre_open_path = fd.pre_open_path().ok_or(Errno::NotSup)?;
+            if pre_open_path.len() + 1 > path_len as usize {
+                Err(Errno::NameTooLong)
+            } else {
+                println!("{:?}", pre_open_path);
+                unimplemented!(); // TODO
+                Ok(())
+            }
+        })
     }
 
     fn path_open(

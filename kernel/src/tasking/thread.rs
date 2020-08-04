@@ -8,6 +8,7 @@ use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::RwLock;
 use crate::tasking::protection_domain::ProtectionDomain;
+use crate::wasm::file::FileDescriptorTable;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use core::cell::Cell;
 
@@ -44,6 +45,7 @@ pub struct Thread {
     _vmctx_container: Cell<Option<VmContextContainer>>,
     simd_state: SimdState,
     domain: ProtectionDomain,
+    file_descriptor_table: FileDescriptorTable,
 }
 
 impl Thread {
@@ -70,6 +72,9 @@ impl Thread {
 
     /// Creates a new thread from given parameters.
     pub fn new(stack: Stack, domain: ProtectionDomain) -> Self {
+        // TODO
+        let fdt = FileDescriptorTable::new();
+
         Self {
             stack,
             heap: RwLock::new(LazilyMappedVma::dummy()),
@@ -78,6 +83,7 @@ impl Thread {
             _vmctx_container: Cell::new(None),
             domain,
             simd_state: SimdState::new(),
+            file_descriptor_table: fdt,
         }
     }
 
@@ -92,6 +98,12 @@ impl Thread {
         self.code.set(code_vma);
         *self.heap.write() = heap_vma;
         self._vmctx_container.replace(Some(vmctx_container));
+    }
+
+    /// Gets the file descriptor table.
+    #[inline]
+    pub fn file_descriptor_table(&self) -> &FileDescriptorTable {
+        &self.file_descriptor_table
     }
 
     /// Gets the thread id.

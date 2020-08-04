@@ -113,7 +113,7 @@ start:
 
     // Enable the FPU
     mov %cr0, %eax
-    and $(~(1 << 1)), %ax
+    and $(~(1 << 2)), %ax
     or $(1 << 1), %ax
     mov %eax, %cr0
     fninit

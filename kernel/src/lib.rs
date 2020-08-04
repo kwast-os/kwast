@@ -136,25 +136,9 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         });
     }
 
-    let mut i = 0;
-    while i < 90 {
-        unsafe {
-            let entry = VirtAddr::new(thread_test as usize);
-            let t = Thread::create(ProtectionDomain::new().unwrap(), entry, i).unwrap();
-            scheduler::add_and_schedule_thread(t);
-        }
-        i += 1;
-    }
-
     loop {
         arch::halt();
     }
-}
-
-extern "C" fn thread_test(arg: u64) {
-    println!("hi {}", arg);
-    scheduler::thread_yield();
-    scheduler::thread_exit(0);
 }
 
 /// Kernel test main, called after arch init is done.

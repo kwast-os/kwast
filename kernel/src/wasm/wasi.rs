@@ -185,6 +185,14 @@ struct WasmPtr<T> {
 }
 
 impl<T> WasmPtr<T> {
+    /// Creates a WasmPtr from an offset.
+    pub fn from(offset: u32) -> Self {
+        Self {
+            offset,
+            _phantom: PhantomData,
+        }
+    }
+
     /// Internal helper function to get a real pointer or an error from a WasmPtr.
     fn get_ptr_and_verify(&self, ctx: &VmContext, size: usize) -> WasmResult<*const u8> {
         let alignment = align_of::<T>() as u32;
@@ -347,15 +355,25 @@ impl AbiFunctions for VmContext {
         environc: WasmPtr<Size>,
         environ_buf_size: WasmPtr<Size>,
     ) -> WasmStatus {
-        println!("environ_sizes_get");
-        environc.cell(self)?.set(0);
-        environ_buf_size.cell(self)?.set(0);
+        environc.cell(self)?.set(1);
+        // This is the sum of the string lengths in bytes (including \0 terminators)
+        let abcdefg = "RUST_BACKTRACE=1";
+        environ_buf_size.cell(self)?.set(1 + abcdefg.bytes().len() as u32 /* TODO: make safe */);
         Ok(())
     }
 
-    fn environ_get(&self, _environ: WasmPtr<WasmPtr<u8>>, _environ_buf: WasmPtr<u8>) -> WasmStatus {
-        // TODO
-        println!("environ_get");
+    fn environ_get(&self, environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> WasmStatus {
+        // The bytes should be all after each other consecutively in `environ_buf`.
+        let abcdefg = "RUST_BACKTRACE=1";
+        let mut slice = environ_buf.slice(&self, (1 + abcdefg.bytes().len()) as u32 /* TODO: make safe */)?;
+        for (byte, cell) in abcdefg.bytes().zip(slice.iter()) {
+            cell.set(byte);
+        }
+
+        // Write pointers to the environment variables in the buffer.
+        let mut slice = environ.slice(&self, 1)?;
+        slice[0].set(WasmPtr::from(environ_buf.offset));
+
         Ok(())
     }
 

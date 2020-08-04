@@ -3,7 +3,6 @@ use crate::tasking::scheme::Scheme;
 use alloc::boxed::Box;
 use alloc::collections::btree_map::Entry;
 use alloc::collections::BTreeMap;
-use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use spin::Once;
 

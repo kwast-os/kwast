@@ -64,3 +64,9 @@ impl FileDescriptorTable {
         self.files.get(idx).unwrap_or(&None).as_ref()
     }
 }
+
+impl Default for FileDescriptorTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}

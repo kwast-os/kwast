@@ -7,7 +7,5 @@ impl Scheme {
     }
 
     // TODO
-    pub fn open(&self) {
-
-    }
+    pub fn open(&self) {}
 }

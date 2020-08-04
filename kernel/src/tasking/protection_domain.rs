@@ -167,10 +167,7 @@ impl Drop for ProtectionDomain {
                         )?;
                         Ok(vaddr)
                     })
-                    .and_then(|vaddr| {
-                        mapping.unmap_single(vaddr);
-                        Ok(())
-                    });
+                    .map(|vaddr| mapping.unmap_single(vaddr));
             });
         });
     }

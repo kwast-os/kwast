@@ -268,3 +268,9 @@ impl VmaAllocator {
         vma.unmap(mapping);
     }
 }
+
+impl Default for VmaAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -1,4 +1,4 @@
-use alloc::collections::VecDeque;
+use alloc::collections::{BTreeSet, VecDeque};
 
 use hashbrown::HashMap;
 
@@ -18,6 +18,7 @@ use core::mem::swap;
 enum SwitchReason {
     RegularSwitch = 0,
     Exit = 1,
+    Block = 2,
 }
 
 /// Common data for all per-core schedulers.
@@ -29,6 +30,7 @@ pub struct SchedulerCommon {
 pub struct Scheduler {
     // TODO: handle this so we can add without locking the whole scheduler, currently this is no issue because you can only schedule on the current cpu
     run_queue: VecDeque<Arc<Thread>>,
+    blocked_threads: BTreeSet<Arc<Thread>>,
     garbage: Option<ThreadId>,
     current_thread: Arc<Thread>,
     idle_thread: Arc<Thread>,
@@ -66,6 +68,7 @@ impl Scheduler {
 
         Self {
             run_queue: VecDeque::new(),
+            blocked_threads: BTreeSet::new(),
             garbage: None,
             current_thread: idle_thread.clone(),
             idle_thread,
@@ -91,6 +94,28 @@ impl Scheduler {
         &self.current_thread
     }
 
+    /// Wakes up a thread.
+    /// Returns true if woken up.
+    pub fn wakeup(&mut self, thread_id: ThreadId) -> bool {
+        if let Some(thread) = self.blocked_threads.take(&thread_id) {
+            self.run_queue.push_front(thread);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Wakes up a thread and switches to it.
+    /// Returns true if woken up.
+    pub fn wakeup_and_yield(&mut self, thread_id: ThreadId) -> bool {
+        if self.wakeup(thread_id) {
+            thread_yield();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Sets the scheduler up for switching to the next thread and gets the next thread stack address.
     fn next_thread_state(
         &mut self,
@@ -110,17 +135,22 @@ impl Scheduler {
             next_thread
         };
 
-        match switch_reason {
-            // Regular switch.
-            SwitchReason::RegularSwitch => {
-                old_thread.save_simd();
-                old_thread.stack.set_current_location(old_stack);
+        if switch_reason != SwitchReason::Exit {
+            old_thread.save_simd();
+            old_thread.stack.set_current_location(old_stack);
+        }
 
+        match switch_reason {
+            SwitchReason::RegularSwitch => {
                 if !Arc::ptr_eq(&old_thread, &self.idle_thread) {
                     self.run_queue.push_back(old_thread);
                 }
             }
-            // Exit the thread.
+
+            SwitchReason::Block => {
+                self.blocked_threads.insert(old_thread);
+            }
+
             SwitchReason::Exit => {
                 debug_assert!(self.garbage.is_none());
                 unsafe {
@@ -157,6 +187,12 @@ fn switch_to_next(switch_reason: SwitchReason) {
 #[inline]
 pub fn thread_yield() {
     switch_to_next(SwitchReason::RegularSwitch);
+}
+
+/// Blocks the current thread.
+#[inline]
+pub fn thread_block() {
+    switch_to_next(SwitchReason::Block);
 }
 
 /// Exit the thread.

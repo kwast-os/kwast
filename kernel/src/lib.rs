@@ -33,6 +33,8 @@ use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
+use crate::tasking::scheduler::with_core_scheduler;
+use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 
@@ -128,6 +130,15 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     interrupts::setup_timer();
     scheduler::thread_yield();
 
+    // TODO: debug code
+    let tid = unsafe {
+        let entry = VirtAddr::new(thread_test as usize);
+        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
+        let tid = t.id();
+        scheduler::add_and_schedule_thread(t);
+        tid
+    };
+
     // Handle boot modules.
     for module in boot_modules {
         handle_module(module).unwrap_or_else(|| {
@@ -135,9 +146,18 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         });
     }
 
+    with_core_scheduler(|s| s.wakeup_and_yield(tid));
+
     loop {
         arch::halt();
     }
+}
+
+extern "C" fn thread_test(arg: u64) {
+    println!("hi {}", arg);
+    scheduler::thread_block();
+    println!("hi2 {}", arg);
+    scheduler::thread_exit(0);
 }
 
 /// Kernel test main, called after arch init is done.

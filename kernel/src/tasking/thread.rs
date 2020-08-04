@@ -10,6 +10,9 @@ use crate::sync::spinlock::RwLock;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::wasm::file::FileDescriptorTable;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
+use alloc::sync::Arc;
+use bitflags::_core::cmp::Ordering;
+use core::borrow::Borrow;
 use core::cell::Cell;
 
 /// Stack size in bytes.
@@ -34,6 +37,11 @@ impl ThreadId {
         use core::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(0);
         Self(NEXT.fetch_add(1, Ordering::SeqCst))
+    }
+}
+impl Default for ThreadId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -163,6 +171,32 @@ impl Thread {
     #[inline]
     pub fn restore_simd(&self) {
         self.simd_state.restore();
+    }
+}
+
+impl PartialEq for Thread {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Thread {}
+
+impl PartialOrd for Thread {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl Ord for Thread {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl Borrow<ThreadId> for Arc<Thread> {
+    fn borrow(&self) -> &ThreadId {
+        &self.id
     }
 }
 

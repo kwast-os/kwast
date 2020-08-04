@@ -369,6 +369,7 @@ impl AbiFunctions for VmContext {
         for (byte, cell) in abcdefg.bytes().zip(slice.iter()) {
             cell.set(byte);
         }
+        slice[slice.len() - 1].set(0);
 
         // Write pointers to the environment variables in the buffer.
         let mut slice = environ.slice(&self, 1)?;

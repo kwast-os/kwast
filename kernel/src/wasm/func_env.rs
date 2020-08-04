@@ -236,6 +236,7 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
         // That means in case of an empty entry, this check will always fail, so will always trap.
         // That means we don't have to check for the null address of the empty entry,
         // because the signature check will fail anyway.
+        // You can see this as "the empty entry always has an invalid signature".
         let valid = pos.ins().icmp_imm(
             IntCC::Equal,
             current_sig_idx,

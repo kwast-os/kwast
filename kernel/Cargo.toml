@@ -32,7 +32,6 @@ panic = "abort"
 rlibc = "1.0.0"
 wasm-call = { path = "../lib/wasm-call" }
 raw-cpuid = "^7.0"
-volatile = "^0.2.6"
 bit_field = "^0.10.0"
 bitflags = "^1.2.1"
 multiboot2 = "^0.8.1"

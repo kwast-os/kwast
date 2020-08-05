@@ -19,7 +19,6 @@ pub mod paging;
 pub mod port;
 pub mod simd;
 pub mod tasking;
-pub mod vga_text;
 
 // For tests
 pub mod qemu;

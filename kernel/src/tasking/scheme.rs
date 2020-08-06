@@ -11,7 +11,7 @@ pub type SchemePtr = Weak<RwLock<Scheme>>;
 
 #[derive(Debug)]
 pub struct Scheme {
-    ptr: SchemePtr,
+    pub(crate) ptr: SchemePtr,
 }
 
 impl Scheme {
@@ -28,7 +28,7 @@ impl Scheme {
 
     /// Open a file handle to the scheme itself.
     pub fn open_self(&self) -> FileDescriptor {
-        FileDescriptor::from(self.ptr.clone(), FileHandle::Own)
+        FileDescriptor::from(&self, FileHandle::Own)
     }
 }
 

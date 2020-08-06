@@ -1,4 +1,4 @@
-use crate::tasking::scheme::SchemePtr;
+use crate::tasking::scheme::{Scheme, SchemePtr};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -33,9 +33,9 @@ pub struct FileDescriptorTable {
 
 impl FileDescriptor {
     /// Creates a file descriptor from scheme data.
-    pub fn from(scheme: SchemePtr, handle: FileHandle) -> Self {
+    pub fn from(scheme: &Scheme, handle: FileHandle) -> Self {
         Self {
-            scheme,
+            scheme: scheme.ptr.clone(),
             handle,
             pre_open_path: None,
         }

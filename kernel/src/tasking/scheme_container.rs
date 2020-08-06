@@ -3,7 +3,7 @@ use crate::tasking::scheme::Scheme;
 use alloc::boxed::Box;
 use alloc::collections::btree_map::Entry;
 use alloc::collections::BTreeMap;
-use alloc::sync::{Arc, Weak};
+use alloc::sync::Arc;
 use spin::Once;
 
 /// Error that can occur when inserting a new scheme.
@@ -15,7 +15,7 @@ pub enum SchemeInsertionError {
 
 pub struct SchemeContainer {
     /// Maps a name to an id.
-    name_scheme_map: BTreeMap<Box<[u8]>, Arc<Scheme>>,
+    name_scheme_map: BTreeMap<Box<[u8]>, Arc<RwLock<Scheme>>>,
 }
 
 impl SchemeContainer {
@@ -29,18 +29,20 @@ impl SchemeContainer {
     /// Inserts a new scheme.
     pub fn insert(&mut self, name: Box<[u8]>, scheme: Scheme) -> Result<(), SchemeInsertionError> {
         match self.name_scheme_map.entry(name) {
-            Entry::Occupied(_) => return Err(SchemeInsertionError::NameAlreadyTaken),
-            Entry::Vacant(v) => v.insert(Arc::new(scheme)),
-        };
-
-        Ok(())
+            Entry::Occupied(_) => Err(SchemeInsertionError::NameAlreadyTaken),
+            Entry::Vacant(v) => {
+                let scheme = Arc::new(RwLock::new(scheme));
+                let weak = Arc::downgrade(&scheme);
+                scheme.write().set_ptr(weak);
+                v.insert(scheme);
+                Ok(())
+            }
+        }
     }
 
     /// Gets a scheme by name.
-    pub fn get(&mut self, name: Box<[u8]>) -> Option<Weak<Scheme>> {
-        self.name_scheme_map
-            .get(&name)
-            .map(|scheme| Arc::downgrade(scheme))
+    pub fn get(&self, name: Box<[u8]>) -> Option<Arc<RwLock<Scheme>>> {
+        self.name_scheme_map.get(&name).cloned()
     }
 }
 
@@ -49,11 +51,11 @@ static SCHEMES: Once<RwLock<SchemeContainer>> = Once::new();
 /// Gets the schemes.
 pub fn schemes() -> &'static RwLock<SchemeContainer> {
     SCHEMES.call_once(|| {
-        // TODO
         let mut container = SchemeContainer::new();
+
         container
-            .insert(Box::new(*b"test"), Scheme::new())
-            .expect("add test");
+            .insert(Box::new([]), Scheme::new())
+            .expect("add self");
 
         RwLock::new(container)
     })

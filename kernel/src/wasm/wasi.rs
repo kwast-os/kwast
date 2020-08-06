@@ -5,21 +5,23 @@
 #![allow(clippy::identity_op)]
 
 use crate::arch::address::VirtAddr;
+use crate::tasking::file::{FileDescriptor, FileIdx};
 use crate::tasking::scheduler::{self, with_core_scheduler};
-use crate::wasm::file::FileIdx;
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::VmContext;
 use alloc::collections::BTreeMap;
 use bitflags::bitflags;
 use core::cell::Cell;
+use core::convert::TryFrom;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
-use core::slice;
+use core::{iter, slice};
 use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
 use lazy_static::lazy_static;
 
 #[repr(u16)]
 #[allow(dead_code)]
+#[derive(Debug)]
 pub enum Errno {
     /// No error occurred.
     Success,
@@ -239,6 +241,22 @@ impl<T> WasmPtr<T> {
     }
 }
 
+impl WasmPtr<u8> {
+    /// Write from source slice and add a null byte.
+    pub fn write_from_slice_with_null(
+        &self,
+        ctx: &VmContext,
+        len: Size,
+        src: &[u8],
+    ) -> WasmResult<()> {
+        let slice = self.slice(ctx, len)?;
+        for (dst, src) in slice.iter().zip(src.iter().chain(iter::once(&0))) {
+            dst.set(*src);
+        }
+        Ok(())
+    }
+}
+
 /// Size type.
 type Size = u32;
 
@@ -422,35 +440,32 @@ impl AbiFunctions for VmContext {
     }
 
     fn fd_prestat_get(&self, fd: Fd, prestat: WasmPtr<PreStat>) -> WasmStatus {
-        println!("{} {:?}", fd, prestat.offset);
-        // TODO
-        if fd == 3 {
-            prestat.cell(self)?.set(PreStat {
-                tag: 0,
-                inner: PreStatInner {
-                    dir: PreStatDir { pr_name_len: 1 },
-                },
-            });
-            Ok(())
-        } else {
-            Err(Errno::BadF)
-        }
+        self.with_fd(fd, |fd| {
+            // TODO: check if it's a directory, if it's not: return ENOTDIR
+            let pre_open_path = fd.pre_open_path().ok_or(Errno::NotSup)?;
+            if let Ok(pr_name_len) = u32::try_from(pre_open_path.len() + 1) {
+                prestat.cell(self)?.set(PreStat {
+                    tag: 0,
+                    inner: PreStatInner {
+                        dir: PreStatDir { pr_name_len },
+                    },
+                });
+                println!("write {}", pr_name_len);
+                Ok(())
+            } else {
+                Err(Errno::NameTooLong)
+            }
+        })
     }
 
-    fn fd_prestat_dir_name(&self, fd: Fd, _path: WasmPtr<u8>, path_len: Size) -> WasmStatus {
-        println!("fd_prestat_dir_name {} {}", fd, path_len);
-
-        with_core_scheduler(|s| {
-            let tbl = s.get_current_thread().file_descriptor_table();
-            let fd = tbl.get(fd as FileIdx).ok_or(Errno::BadF)?;
+    fn fd_prestat_dir_name(&self, fd: Fd, path: WasmPtr<u8>, path_len: Size) -> WasmStatus {
+        self.with_fd(fd, |fd| {
             // TODO: check if it's a directory, if it's not: return ENOTDIR
             let pre_open_path = fd.pre_open_path().ok_or(Errno::NotSup)?;
             if pre_open_path.len() + 1 > path_len as usize {
                 Err(Errno::NameTooLong)
             } else {
-                println!("{:?}", pre_open_path);
-                unimplemented!(); // TODO
-                Ok(())
+                path.write_from_slice_with_null(self, path_len, pre_open_path)
             }
         })
     }
@@ -474,6 +489,19 @@ impl AbiFunctions for VmContext {
 
     fn proc_exit(&self, exit_code: ExitCode) {
         scheduler::thread_exit(exit_code);
+    }
+}
+
+impl VmContext {
+    /// Execute with fd context.
+    fn with_fd<F, T>(&self, fd: Fd, f: F) -> WasmResult<T>
+    where
+        F: FnOnce(&FileDescriptor) -> WasmResult<T>,
+    {
+        with_core_scheduler(|s| {
+            let tbl = s.get_current_thread().file_descriptor_table();
+            f(tbl.get(fd as FileIdx).ok_or(Errno::BadF)?)
+        })
     }
 }
 

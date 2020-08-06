@@ -1,24 +1,30 @@
-use crate::tasking::scheme::Scheme;
+use crate::tasking::scheme::SchemePtr;
 use alloc::boxed::Box;
-use alloc::sync::Weak;
 use alloc::vec::Vec;
 
+/// Maximum amount of files a single table can have opened.
 const MAX_FILES: usize = 32;
 
 /// File index in file descriptor table.
 pub type FileIdx = usize;
 
 /// File handle used in a scheme (per-scheme).
-pub type FileHandleInScheme = usize;
+#[derive(Debug)]
+pub enum FileHandle {
+    Inner(usize),
+    Own,
+}
 
+#[derive(Debug)]
 pub struct FileDescriptor {
-    scheme: Weak<Scheme>,
-    handle: FileHandleInScheme,
+    scheme: SchemePtr,
+    handle: FileHandle,
     /// Files can be pre-opened and even mapped to a different name.
     /// Keep track of this because WASI needs it.
     pre_open_path: Option<Box<[u8]>>,
 }
 
+#[derive(Debug)]
 pub struct FileDescriptorTable {
     /// File descriptor table.
     /// Note: there can be holes, which is why we need Option.
@@ -26,9 +32,23 @@ pub struct FileDescriptorTable {
 }
 
 impl FileDescriptor {
+    /// Creates a file descriptor from scheme data.
+    pub fn from(scheme: SchemePtr, handle: FileHandle) -> Self {
+        Self {
+            scheme,
+            handle,
+            pre_open_path: None,
+        }
+    }
+
     /// Pre open path.
     pub fn pre_open_path(&self) -> Option<&[u8]> {
         self.pre_open_path.as_ref().map(|path| &path[..])
+    }
+
+    /// Sets the pre open path.
+    pub fn set_pre_open_path(&mut self, path: Box<[u8]>) {
+        self.pre_open_path = Some(path);
     }
 }
 
@@ -45,6 +65,11 @@ impl FileDescriptorTable {
     /// Insert file into lowest available index.
     pub fn insert_lowest(&mut self, fd: FileDescriptor) -> Option<FileIdx> {
         for (idx, file) in self.files.iter_mut().enumerate() {
+            // TODO: debug
+            if idx < 3 {
+                continue;
+            }
+
             if file.is_none() {
                 *file = Some(fd);
                 return Some(idx);

@@ -1,7 +1,6 @@
 //! WebAssembly runtime
 //! Used https://github.com/bytecodealliance/wasmtime/tree/master/crates/jit/src as a reference.
 
-pub mod file;
 mod func_env;
 pub mod main;
 mod module_env;

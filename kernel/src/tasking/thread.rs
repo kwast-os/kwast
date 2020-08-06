@@ -7,9 +7,11 @@ use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::RwLock;
+use crate::tasking::file::FileDescriptorTable;
 use crate::tasking::protection_domain::ProtectionDomain;
-use crate::wasm::file::FileDescriptorTable;
+use crate::tasking::scheme_container::schemes;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use bitflags::_core::cmp::Ordering;
 use core::borrow::Borrow;
@@ -81,7 +83,18 @@ impl Thread {
     /// Creates a new thread from given parameters.
     pub fn new(stack: Stack, domain: ProtectionDomain) -> Self {
         // TODO
-        let fdt = FileDescriptorTable::new();
+        let mut fdt = FileDescriptorTable::new();
+        fdt.insert_lowest({
+            let mut tmp = schemes()
+                .read()
+                .get(Box::new([]))
+                .expect("self scheme")
+                .read()
+                .open_self();
+            tmp.set_pre_open_path(Box::new(*b"."));
+            tmp
+        });
+        println!("{:#?}", fdt);
 
         Self {
             stack,

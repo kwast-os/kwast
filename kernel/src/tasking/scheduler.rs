@@ -5,12 +5,13 @@ use hashbrown::HashMap;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
 use crate::mm::vma_allocator::MappedVma;
-use crate::sync::spinlock::RwLock;
+use crate::sync::spinlock::{RwLock, PreemptCounterInfluence};
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::thread::{Stack, Thread, ThreadId};
 use crate::util::unchecked::UncheckedUnwrap;
 use alloc::sync::Arc;
 use core::mem::swap;
+use spin::SchedulerInfluence;
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -97,6 +98,7 @@ impl Scheduler {
     /// Wakes up a thread.
     /// Returns true if woken up.
     pub fn wakeup(&mut self, thread_id: ThreadId) -> bool {
+        PreemptCounterInfluence::activate();
         if let Some(thread) = self.blocked_threads.take(&thread_id) {
             self.run_queue.push_front(thread);
             true
@@ -129,7 +131,7 @@ impl Scheduler {
         }
 
         // Decide which thread to run next.
-        let old_thread = {
+        let old_thread = { // TODO: issue: can't run the same thread twice in a row
             let mut next_thread = self.next_thread();
             swap(&mut self.current_thread, &mut next_thread);
             next_thread

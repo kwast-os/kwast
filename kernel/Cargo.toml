@@ -46,4 +46,4 @@ cranelift-native = { git = "https://github.com/kwast-os/wasmtime", package="cran
 
 [replace]
 "wasmparser:0.59.0" = { git = "https://github.com/kwast-os/wasm-tools", "branch" = "0.59.0" }
-"spin:0.5.2" = { git = "https://github.com/kwast-os/spin-rs", rev = "728a0de" }
+"spin:0.5.2" = { git = "https://github.com/kwast-os/spin-rs", rev = "8541336" }

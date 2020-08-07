@@ -39,7 +39,7 @@ use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 
 #[macro_use]
-mod macros;
+mod util;
 #[macro_use]
 mod arch;
 mod mm;
@@ -47,7 +47,6 @@ mod sync;
 mod tasking;
 #[cfg(feature = "integration-test")]
 mod tests;
-mod util;
 mod wasm;
 
 #[panic_handler]

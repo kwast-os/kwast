@@ -14,14 +14,6 @@ use bitflags::_core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering;
 use spin::Once;
 
-#[derive(Debug, PartialEq)]
-#[repr(u64)]
-#[allow(dead_code)]
-enum SwitchReason {
-    RegularSwitch = 0,
-    Exit = 1,
-}
-
 /// Common data for all per-core schedulers.
 pub struct SchedulerCommon {
     threads: HashMap<ThreadId, Arc<Thread>>,
@@ -190,11 +182,7 @@ impl Scheduler {
     }
 
     /// Sets the scheduler up for switching to the next thread and gets the next thread stack address.
-    fn next_thread_state(
-        &self,
-        switch_reason: SwitchReason,
-        old_stack: VirtAddr,
-    ) -> NextThreadState {
+    fn next_thread_state(&self, old_stack: VirtAddr) -> NextThreadState {
         // Cleanup old thread.
         // Relaxed ordering is fine because this is only for this core.
         let garbage = self.garbage.swap(ThreadId::zero(), Ordering::Relaxed);
@@ -211,25 +199,25 @@ impl Scheduler {
             self.current_thread.swap(next_thread, Ordering::AcqRel)
         };
 
-        match switch_reason {
-            SwitchReason::RegularSwitch => {
-                old_thread.save_simd();
-                old_thread.stack.set_current_location(old_stack);
+        let old_thread_status = old_thread.status();
 
-                // TODO: migrate from SwitchReason to ThreadStatus
+        if !matches!(old_thread_status, ThreadStatus::Exit(_)) {
+            old_thread.save_simd();
+            old_thread.stack.set_current_location(old_stack);
+        }
+
+        match old_thread_status {
+            ThreadStatus::Runnable => {
                 if !Arc::ptr_eq(&old_thread, &self.idle_thread) {
-                    match old_thread.status() {
-                        ThreadStatus::Runnable => {
-                            queues.run_queue.push_back(old_thread);
-                        }
-                        ThreadStatus::Blocked => {
-                            queues.blocked_threads.insert(old_thread);
-                        }
-                    };
+                    queues.run_queue.push_back(old_thread);
                 }
             }
 
-            SwitchReason::Exit => {
+            ThreadStatus::Blocked => {
+                queues.blocked_threads.insert(old_thread);
+            }
+
+            ThreadStatus::Exit(_) => {
                 debug_assert_eq!(self.garbage.load(Ordering::Relaxed), ThreadId::zero());
                 unsafe {
                     // Safety: We call this from a safe place and we are not referencing thread memory here.
@@ -237,7 +225,7 @@ impl Scheduler {
                 }
                 self.garbage.store(old_thread.id(), Ordering::Relaxed);
             }
-        }
+        };
 
         self.with_current_thread(|current_thread| {
             current_thread.restore_simd();
@@ -253,20 +241,20 @@ impl Scheduler {
 
 /// Switches to the next thread.
 #[inline]
-fn switch_to_next(switch_reason: SwitchReason) {
+fn switch_to_next() {
     extern "C" {
-        fn _switch_to_next(switch_reason: SwitchReason);
+        fn _switch_to_next();
     }
 
     unsafe {
-        _switch_to_next(switch_reason);
+        _switch_to_next();
     }
 }
 
 /// Yield the current thread.
 #[inline]
 pub fn thread_yield() {
-    switch_to_next(SwitchReason::RegularSwitch);
+    switch_to_next();
 }
 
 /// Mark current thread as blocked for the next context switch.
@@ -281,6 +269,7 @@ pub fn thread_exit(exit_code: u32) -> ! {
         fn _thread_exit() -> !;
     }
 
+    with_current_thread(|thread| thread.set_status(ThreadStatus::Exit(exit_code)));
     println!("thread exit: {}", exit_code);
 
     unsafe {
@@ -293,11 +282,8 @@ struct NextThreadState(VirtAddr, CpuPageMapping);
 
 /// Saves the old state and gets the next state.
 #[no_mangle]
-extern "C" fn next_thread_state(
-    switch_reason: SwitchReason,
-    old_stack: VirtAddr,
-) -> NextThreadState {
-    with_core_scheduler(|scheduler| scheduler.next_thread_state(switch_reason, old_stack))
+extern "C" fn next_thread_state(old_stack: VirtAddr) -> NextThreadState {
+    with_core_scheduler(|scheduler| scheduler.next_thread_state(old_stack))
 }
 
 // TODO: make this per core once we go multicore

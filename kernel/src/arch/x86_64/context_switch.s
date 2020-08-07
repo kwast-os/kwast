@@ -2,7 +2,7 @@
 .type next_thread_state, @function
 
 // AMD64 ABI tells us that only rbx, rbp, r12 - r15 need to be preserved by the callee.
-// _switch_to_next(switch_reason)
+// _switch_to_next()
 .global _switch_to_next
 .type _switch_to_next, @function
 _switch_to_next:
@@ -20,8 +20,7 @@ _switch_to_next:
     // The interrupt flag will be restored because of the popfq later.
     cli
 
-    movq %rsp, %rsi
-    // rdi already contains `switch_reason`
+    movq %rsp, %rdi
     call next_thread_state
     movq %rax, %rsp
     movq %cr3, %rax
@@ -82,13 +81,11 @@ irq0:
 _thread_exit:
     // We want to free the memory areas of this thread. This includes the stack.
     // We can use the "interrupt stack" temporarily, because it's per-core and we are guaranteed to leave it alone
-    // when the next thread is selected.
+    // when the next thread is selected. An NMI does not use this IST.
     cli
     .extern INTERRUPT_STACK_TOP
     movq $INTERRUPT_STACK_TOP, %rsp
 
-    // Switch reason: exit (see scheduler.rs)
-    movl $1, %edi
     call _switch_to_next
 
     // Should not get here

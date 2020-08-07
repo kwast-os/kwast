@@ -57,6 +57,7 @@ impl Default for ThreadId {
 pub enum ThreadStatus {
     Runnable,
     Blocked,
+    Exit(u32),
 }
 
 struct StaticWasmThreadData {

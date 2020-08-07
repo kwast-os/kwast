@@ -185,9 +185,10 @@ impl Scheduler {
     fn next_thread_state(&self, old_stack: VirtAddr) -> NextThreadState {
         // Cleanup old thread.
         // Relaxed ordering is fine because this is only for this core.
-        let garbage = self.garbage.swap(ThreadId::zero(), Ordering::Relaxed);
+        let garbage = self.garbage.load(Ordering::Relaxed);
         if garbage != ThreadId::zero() {
             with_common_mut(|common| common.remove_thread(garbage));
+            self.garbage.store(ThreadId::zero(), Ordering::Relaxed);
         }
 
         let mut queues = self.queues.lock();

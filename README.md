@@ -1,6 +1,6 @@
 # Kwast
 
-[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Build Status](https://travis-ci.com/kwast-os/kwast.svg?branch=master)](https://travis-ci.com/kwast-os/kwast)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Build Status](https://travis-ci.com/kwast-os/kwast.svg?branch=main)](https://travis-ci.com/kwast-os/kwast)
 
 **Kwast** (will be) an operating system, written in Rust, running WebAssembly. It uses a microkernel architecture for flexibility.
 
@@ -82,9 +82,9 @@ make iso BUILD=release # (or run)
 
 ## <a name="built_with"> Built with </a>
 
-* [Cranelift](https://github.com/bytecodealliance/cranelift) - Code generator used to parse & run WebAssembly. Kwast uses a fork of Cranelift to let it work in a no_std environment.
+* [Cranelift](https://github.com/bytecodealliance/wasmtime/tree/main/cranelift) - Code generator used to parse & run WebAssembly. Kwast uses a fork of Cranelift to let it work in a no_std environment.
 
-* To integrate Cranelift, [wasmtime](https://github.com/bytecodealliance/wasmtime/) has been used as a reference implementation, which is licensed under the [Apache License 2.0](https://github.com/bytecodealliance/wasmtime/blob/master/LICENSE).
+* To integrate Cranelift, [wasmtime](https://github.com/bytecodealliance/wasmtime/) has been used as a reference implementation, which is licensed under the [Apache License 2.0](https://github.com/bytecodealliance/wasmtime/blob/main/LICENSE).
 
 ## <a name="similar_projects"> Similar projects </a>
 * [Nebulet](https://github.com/nebulet/nebulet) - A microkernel that implements a WebAssembly "usermode" that runs in Ring 0

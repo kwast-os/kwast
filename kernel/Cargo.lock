@@ -315,9 +315,9 @@ replace = "spin 0.5.2 (git+https://github.com/kwast-os/spin-rs?rev=728a0de)"
 
 [[package]]
 name = "syn"
-version = "1.0.37"
+version = "1.0.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "239f255b9e3429350f188c27b807fc9920a15eb9145230ff1a7d054c08fec319"
+checksum = "e69abc24912995b3038597a7a593be5053eb0fb44f3cc5beec0deb421790c1f4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -333,7 +333,7 @@ checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
 [[package]]
 name = "thiserror"
 version = "1.0.20"
-source = "git+https://github.com/kwast-os/thiserror#c576cfc7ac231172faa43d8fa0f1a40360ba848c"
+source = "git+https://github.com/kwast-os/thiserror#f1c7c865b93bfd20556d5ec8641cddb264e58dfc"
 dependencies = [
  "thiserror-impl",
 ]
@@ -341,7 +341,7 @@ dependencies = [
 [[package]]
 name = "thiserror-impl"
 version = "1.0.20"
-source = "git+https://github.com/kwast-os/thiserror#c576cfc7ac231172faa43d8fa0f1a40360ba848c"
+source = "git+https://github.com/kwast-os/thiserror#f1c7c865b93bfd20556d5ec8641cddb264e58dfc"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -5,66 +5,18 @@ use hashbrown::HashMap;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
 use crate::mm::vma_allocator::MappedVma;
+use crate::sync::atomic::AtomicArc;
 use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::thread::{Stack, Thread, ThreadId, ThreadStatus};
 use alloc::sync::Arc;
 use atomic::Atomic;
-use bitflags::_core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering;
 use spin::Once;
 
 /// Common data for all per-core schedulers.
 pub struct SchedulerCommon {
     threads: HashMap<ThreadId, Arc<Thread>>,
-}
-
-/// Some magic to avoid a lock on a critical variable like current_thread.
-struct AtomicArc<T> {
-    inner: AtomicPtr<T>,
-}
-
-impl<T> AtomicArc<T> {
-    /// Create from Arc<T>.
-    pub fn from_arc(arc: Arc<T>) -> Self {
-        Self {
-            // AtomicPtr wants a *mut, but we only have *const.
-            // We should remember to only use this as a *const.
-            inner: AtomicPtr::new(Arc::into_raw(arc) as *mut _),
-        }
-    }
-
-    /// Swaps with another Arc, returning the old value.
-    pub fn swap(&self, other: Arc<T>, ordering: Ordering) -> Arc<T> {
-        assert_ne!(ordering, Ordering::Relaxed);
-
-        // See comment from `from_arc`.
-        let old = self.inner.swap(Arc::into_raw(other) as *mut _, ordering) as *const _;
-
-        // Safety:
-        //  * Raw pointer was created previously by `Arc::into_raw` with the same type.
-        //  * Only dropped once.
-        unsafe { Arc::from_raw(old) }
-    }
-
-    /// Loads the value into an Arc. This does _not_ increase the strong count because it's not
-    /// possible. The caller should guarantee the use of this is safe.
-    ///
-    /// This is unsafe in the general case because it allows for
-    ///  * Dropping the same Arc<T> more than once.
-    ///  * Get an invalid Arc<T> if the strong count is not at least zero during method execution and
-    ///    use of the Arc<T>.
-    ///  * Strong count is not increased.
-    pub unsafe fn load(&self, ordering: Ordering) -> Arc<T> {
-        assert_ne!(ordering, Ordering::Relaxed);
-
-        // See comment from `from_arc`.
-        let old = self.inner.load(ordering) as *const _;
-
-        // The only safety here is that we know the raw pointer was created previously
-        // by `Arc::into_raw` with the same type.
-        Arc::from_raw(old)
-    }
 }
 
 /// Per-core queues.
@@ -128,6 +80,7 @@ impl Scheduler {
     }
 
     /// Gets the next thread to run.
+    /// Returns the old thread.
     fn next_thread(&self, queues: &mut Queues) -> Arc<Thread> {
         if let Some(thread) = queues.run_queue.pop_front() {
             thread
@@ -141,7 +94,26 @@ impl Scheduler {
     where
         F: FnOnce(&Arc<Thread>) -> T,
     {
-        // TODO: explain safety
+        // Safety:
+        //
+        // Loading would be unsafe if the Arc<Thread> instance is/becomes not valid during the
+        // duration of this method.
+        // We know that the strong count must be at least 2:
+        //  * one in the common schedule structure
+        //  * one because it's inside the current_thread.
+        // We won't drop this, which keeps the strong count the same.
+        //
+        // If the one in the common schedule structure disappears, that means the thread will never
+        // be scheduled again, so the current code path that holds the value won't be executed again.
+        // So that case is fine.
+        //
+        // The only way the one from current_thread would be dropped is when the thread exits,
+        // otherwise it's been moved to a runqueue / blockqueue / ...
+        // If the thread exits, there is no problem ffor the same reason why the common schedule argument
+        // holds: if the thread is exited, we won't be able to execute this path.
+        //
+        // This means the Arc<Thread> instance will never get strong count zero and be dropped
+        // during the duration of this method.
         unsafe {
             let arc = self.current_thread.load(Ordering::Acquire);
             let ret = f(&arc);
@@ -193,12 +165,17 @@ impl Scheduler {
 
         let mut queues = self.queues.lock();
 
-        // Decide which thread to run next.
-        let old_thread = {
-            // TODO: issue: can't run the same thread twice in a row
-            let next_thread = self.next_thread(&mut queues);
-            self.current_thread.swap(next_thread, Ordering::AcqRel)
-        };
+        // Problem: when there is only one thread to execute:
+        //  * the queue is now empty
+        //  * current_thread contains that only thread
+        // Which means that if we were to safely swap, we would have nothing to swap to except
+        // the idle thread.
+        // Instead, we load the thread here.
+        //
+        // Safety:
+        // This invalidates the contents of current_thread. We are not allowed to touch it until a
+        // matching store happens (which we do later).
+        let old_thread = unsafe { self.current_thread.load(Ordering::Acquire) };
 
         let old_thread_status = old_thread.status();
 
@@ -220,13 +197,25 @@ impl Scheduler {
 
             ThreadStatus::Exit(_) => {
                 debug_assert_eq!(self.garbage.load(Ordering::Relaxed), ThreadId::zero());
+                // Safety: We call this from a safe place and we are not referencing thread memory here.
                 unsafe {
-                    // Safety: We call this from a safe place and we are not referencing thread memory here.
                     old_thread.unmap_memory();
                 }
                 self.garbage.store(old_thread.id(), Ordering::Relaxed);
             }
         };
+
+        let next_thread = self.next_thread(&mut queues);
+
+        // Safety: this could lead to a memory leak if the old value is never read.
+        //         We did read the old value (it's in old_thread).
+        //         old_thread is either:
+        //          * dropped like it should be in case of exit
+        //          * added back to the runqueue, which means it's moved and won't be dropped here
+        //          * inside of next_thread, which means it went through the runqueue and thus has been moved
+        unsafe {
+            self.current_thread.store(next_thread, Ordering::Release);
+        }
 
         self.with_current_thread(|current_thread| {
             current_thread.restore_simd();

@@ -2,7 +2,7 @@ use crate::arch;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{get_cpu_page_mapping, ActiveMapping};
 use crate::mm::mapper::MemoryMapper;
-use crate::tasking::scheduler::{self, with_core_scheduler};
+use crate::tasking::scheduler::{self, with_current_thread};
 use core::intrinsics::unlikely;
 
 mod alloc;
@@ -19,8 +19,8 @@ pub unsafe fn init(reserved_end: VirtAddr) {
 
 /// Page fault handler.
 pub fn page_fault(fault_addr: VirtAddr, ip: VirtAddr) {
-    let failed =
-        !with_core_scheduler(|scheduler| scheduler.get_current_thread().page_fault(fault_addr));
+    let failed = !with_current_thread(|thread| thread.page_fault(fault_addr));
+
     if unlikely(failed) {
         if fault_addr.as_usize() < arch::USER_START || ip.as_usize() < arch::USER_START {
             // Kernel fault.

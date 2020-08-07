@@ -9,13 +9,11 @@ const MAX_FILES: usize = 32;
 pub type FileIdx = usize;
 
 /// File handle used in a scheme (per-scheme).
-#[derive(Debug)]
 pub enum FileHandle {
     Inner(usize),
     Own,
 }
 
-#[derive(Debug)]
 pub struct FileDescriptor {
     scheme: SchemePtr,
     handle: FileHandle,
@@ -24,7 +22,6 @@ pub struct FileDescriptor {
     pre_open_path: Option<Box<[u8]>>,
 }
 
-#[derive(Debug)]
 pub struct FileDescriptorTable {
     /// File descriptor table.
     /// Note: there can be holes, which is why we need Option.

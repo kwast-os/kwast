@@ -84,8 +84,6 @@ pub fn kernel_run(reserved_end: VirtAddr, _boot_modules: impl BootModuleProvider
 
 /// Handle module.
 fn handle_module(module: BootModule) -> Option<()> {
-    println!("{:?}", module);
-
     // Safety: module data is correct.
     let tar = unsafe {
         Tar::from_slice(slice::from_raw_parts(
@@ -155,7 +153,8 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 
 extern "C" fn thread_test(arg: u64) {
     println!("hi {}", arg);
-    scheduler::thread_block();
+    scheduler::thread_mark_as_blocked();
+    scheduler::thread_yield();
     println!("hi2 {}", arg);
     scheduler::thread_exit(0);
 }

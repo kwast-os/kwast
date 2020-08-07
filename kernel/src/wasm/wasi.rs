@@ -6,7 +6,7 @@
 
 use crate::arch::address::VirtAddr;
 use crate::tasking::file::{FileDescriptor, FileIdx};
-use crate::tasking::scheduler::{self, with_core_scheduler};
+use crate::tasking::scheduler::{self, with_current_thread};
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::VmContext;
 use alloc::collections::BTreeMap;
@@ -200,8 +200,7 @@ impl<T> WasmPtr<T> {
     fn get_ptr_and_verify(&self, ctx: &VmContext, size: usize) -> WasmResult<*const u8> {
         let alignment = align_of::<T>() as u32;
         if self.offset % alignment != 0
-            || self.offset as usize + size
-                > with_core_scheduler(|s| s.get_current_thread().heap_size())
+            || self.offset as usize + size > with_current_thread(|thread| thread.heap_size())
         {
             Err(Errno::Fault)
         } else {
@@ -482,12 +481,17 @@ impl AbiFunctions for VmContext {
         fd_flags: FdFlags,
         fd: WasmPtr<Fd>,
     ) -> WasmStatus {
+        // TODO: handle the flags and rights
         println!("path_open: {} {}", dir_fd, path.str(self, path_len)?);
-        // TODO
-        Err(Errno::Inval)
+
+        self.with_fd(dir_fd, |dir_fd| {
+            // TODO
+            Ok(())
+        })
     }
 
     fn proc_exit(&self, exit_code: ExitCode) {
+        //println!("proc exit");
         scheduler::thread_exit(exit_code);
     }
 }
@@ -498,8 +502,8 @@ impl VmContext {
     where
         F: FnOnce(&FileDescriptor) -> WasmResult<T>,
     {
-        with_core_scheduler(|s| {
-            let tbl = s.get_current_thread().file_descriptor_table();
+        with_current_thread(|thread| {
+            let tbl = thread.file_descriptor_table();
             f(tbl.get(fd as FileIdx).ok_or(Errno::BadF)?)
         })
     }

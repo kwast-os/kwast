@@ -5,13 +5,14 @@ use hashbrown::HashMap;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
 use crate::mm::vma_allocator::MappedVma;
-use crate::sync::spinlock::{RwLock, PreemptCounterInfluence};
+use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::tasking::protection_domain::ProtectionDomain;
-use crate::tasking::thread::{Stack, Thread, ThreadId};
-use crate::util::unchecked::UncheckedUnwrap;
+use crate::tasking::thread::{Stack, Thread, ThreadId, ThreadStatus};
 use alloc::sync::Arc;
-use core::mem::swap;
-use spin::SchedulerInfluence;
+use atomic::Atomic;
+use bitflags::_core::sync::atomic::AtomicPtr;
+use core::sync::atomic::Ordering;
+use spin::Once;
 
 #[derive(Debug, PartialEq)]
 #[repr(u64)]
@@ -19,7 +20,6 @@ use spin::SchedulerInfluence;
 enum SwitchReason {
     RegularSwitch = 0,
     Exit = 1,
-    Block = 2,
 }
 
 /// Common data for all per-core schedulers.
@@ -27,27 +27,82 @@ pub struct SchedulerCommon {
     threads: HashMap<ThreadId, Arc<Thread>>,
 }
 
-/// Per-core scheduler.
-pub struct Scheduler {
-    // TODO: handle this so we can add without locking the whole scheduler, currently this is no issue because you can only schedule on the current cpu
+/// Some magic to avoid a lock on a critical variable like current_thread.
+struct AtomicArc<T> {
+    inner: AtomicPtr<T>,
+}
+
+impl<T> AtomicArc<T> {
+    /// Create from Arc<T>.
+    pub fn from_arc(arc: Arc<T>) -> Self {
+        Self {
+            // AtomicPtr wants a *mut, but we only have *const.
+            // We should remember to only use this as a *const.
+            inner: AtomicPtr::new(Arc::into_raw(arc) as *mut _),
+        }
+    }
+
+    /// Swaps with another Arc, returning the old value.
+    pub fn swap(&self, other: Arc<T>, ordering: Ordering) -> Arc<T> {
+        assert_ne!(ordering, Ordering::Relaxed);
+
+        // See comment from `from_arc`.
+        let old = self.inner.swap(Arc::into_raw(other) as *mut _, ordering) as *const _;
+
+        // Safety:
+        //  * Raw pointer was created previously by `Arc::into_raw` with the same type.
+        //  * Only dropped once.
+        unsafe { Arc::from_raw(old) }
+    }
+
+    /// Loads the value into an Arc. This does _not_ increase the strong count because it's not
+    /// possible. The caller should guarantee the use of this is safe.
+    ///
+    /// This is unsafe in the general case because it allows for
+    ///  * Dropping the same Arc<T> more than once.
+    ///  * Get an invalid Arc<T> if the strong count is not at least zero during method execution and
+    ///    use of the Arc<T>.
+    ///  * Strong count is not increased.
+    pub unsafe fn load(&self, ordering: Ordering) -> Arc<T> {
+        assert_ne!(ordering, Ordering::Relaxed);
+
+        // See comment from `from_arc`.
+        let old = self.inner.load(ordering) as *const _;
+
+        // The only safety here is that we know the raw pointer was created previously
+        // by `Arc::into_raw` with the same type.
+        Arc::from_raw(old)
+    }
+}
+
+/// Per-core queues.
+struct Queues {
     run_queue: VecDeque<Arc<Thread>>,
     blocked_threads: BTreeSet<Arc<Thread>>,
-    garbage: Option<ThreadId>,
-    current_thread: Arc<Thread>,
+}
+
+/// Per-core scheduler.
+pub struct Scheduler {
+    queues: Spinlock<Queues>,
+    garbage: Atomic<ThreadId>,
+    current_thread: AtomicArc<Thread>,
     idle_thread: Arc<Thread>,
 }
 
 impl SchedulerCommon {
     /// New scheduler common data.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             threads: HashMap::new(),
         }
     }
 
     /// Adds a thread.
-    pub fn add_thread(&mut self, thread: Arc<Thread>) {
-        self.threads.insert(thread.id(), thread);
+    pub fn add_thread(&mut self, thread: Thread) -> Arc<Thread> {
+        let id = thread.id();
+        let thread = Arc::new(thread);
+        self.threads.insert(id, thread.clone());
+        thread
     }
 
     /// Removes a thread.
@@ -60,47 +115,57 @@ impl Scheduler {
     /// New scheduler.
     fn new(idle_protection_domain: ProtectionDomain) -> Self {
         // This will be overwritten on the first context switch with data from the current running code.
-        let idle_thread = Arc::new(Thread::new(
-            Stack::new(MappedVma::dummy()),
-            idle_protection_domain,
-        ));
+        let idle_thread = Thread::new(Stack::new(MappedVma::dummy()), idle_protection_domain);
 
-        with_common_mut(|common| common.add_thread(idle_thread.clone()));
+        let idle_thread = with_common_mut(|common| common.add_thread(idle_thread));
 
         Self {
-            run_queue: VecDeque::new(),
-            blocked_threads: BTreeSet::new(),
-            garbage: None,
-            current_thread: idle_thread.clone(),
+            queues: Spinlock::new(Queues {
+                run_queue: VecDeque::new(),
+                blocked_threads: BTreeSet::new(),
+            }),
+            garbage: Atomic::new(ThreadId::zero()),
+            current_thread: AtomicArc::from_arc(idle_thread.clone()),
             idle_thread,
         }
     }
 
     /// Adds a thread to the runqueue.
-    pub fn queue_thread(&mut self, thread: Arc<Thread>) {
-        self.run_queue.push_back(thread);
+    pub fn queue_thread(&self, thread: Arc<Thread>) {
+        self.queues.lock().run_queue.push_back(thread);
     }
 
     /// Gets the next thread to run.
-    fn next_thread(&mut self) -> Arc<Thread> {
-        if let Some(thread) = self.run_queue.pop_front() {
+    fn next_thread(&self, queues: &mut Queues) -> Arc<Thread> {
+        if let Some(thread) = queues.run_queue.pop_front() {
             thread
         } else {
             self.idle_thread.clone()
         }
     }
 
-    /// Gets the current thread.
-    pub fn get_current_thread(&self) -> &Arc<Thread> {
-        &self.current_thread
+    /// Execute something with the current thread reference.
+    pub fn with_current_thread<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&Arc<Thread>) -> T,
+    {
+        // TODO: explain safety
+        unsafe {
+            let arc = self.current_thread.load(Ordering::Acquire);
+            let ret = f(&arc);
+            core::mem::forget(arc);
+            ret
+        }
     }
 
     /// Wakes up a thread.
     /// Returns true if woken up.
-    pub fn wakeup(&mut self, thread_id: ThreadId) -> bool {
-        PreemptCounterInfluence::activate();
-        if let Some(thread) = self.blocked_threads.take(&thread_id) {
-            self.run_queue.push_front(thread);
+    pub fn wakeup(&self, thread_id: ThreadId) -> bool {
+        let mut queues = self.queues.lock();
+
+        if let Some(thread) = queues.blocked_threads.take(&thread_id) {
+            thread.set_status(ThreadStatus::Runnable);
+            queues.run_queue.push_front(thread);
             true
         } else {
             false
@@ -109,7 +174,7 @@ impl Scheduler {
 
     /// Wakes up a thread and switches to it.
     /// Returns true if woken up.
-    pub fn wakeup_and_yield(&mut self, thread_id: ThreadId) -> bool {
+    pub fn wakeup_and_yield(&self, thread_id: ThreadId) -> bool {
         if self.wakeup(thread_id) {
             thread_yield();
             true
@@ -118,58 +183,71 @@ impl Scheduler {
         }
     }
 
+    /// Mark a thread as blocked.
+    /// Will take effect next context switch.
+    pub fn mark_as_blocked(&self) {
+        self.with_current_thread(|thread| thread.set_status(ThreadStatus::Blocked));
+    }
+
     /// Sets the scheduler up for switching to the next thread and gets the next thread stack address.
     fn next_thread_state(
-        &mut self,
+        &self,
         switch_reason: SwitchReason,
         old_stack: VirtAddr,
     ) -> NextThreadState {
         // Cleanup old thread.
-        if let Some(garbage) = self.garbage {
+        // Relaxed ordering is fine because this is only for this core.
+        let garbage = self.garbage.swap(ThreadId::zero(), Ordering::Relaxed);
+        if garbage != ThreadId::zero() {
             with_common_mut(|common| common.remove_thread(garbage));
-            self.garbage = None;
         }
+
+        let mut queues = self.queues.lock();
 
         // Decide which thread to run next.
-        let old_thread = { // TODO: issue: can't run the same thread twice in a row
-            let mut next_thread = self.next_thread();
-            swap(&mut self.current_thread, &mut next_thread);
-            next_thread
+        let old_thread = {
+            // TODO: issue: can't run the same thread twice in a row
+            let next_thread = self.next_thread(&mut queues);
+            self.current_thread.swap(next_thread, Ordering::AcqRel)
         };
-
-        if switch_reason != SwitchReason::Exit {
-            old_thread.save_simd();
-            old_thread.stack.set_current_location(old_stack);
-        }
 
         match switch_reason {
             SwitchReason::RegularSwitch => {
+                old_thread.save_simd();
+                old_thread.stack.set_current_location(old_stack);
+
+                // TODO: migrate from SwitchReason to ThreadStatus
                 if !Arc::ptr_eq(&old_thread, &self.idle_thread) {
-                    self.run_queue.push_back(old_thread);
+                    match old_thread.status() {
+                        ThreadStatus::Runnable => {
+                            queues.run_queue.push_back(old_thread);
+                        }
+                        ThreadStatus::Blocked => {
+                            queues.blocked_threads.insert(old_thread);
+                        }
+                    };
                 }
             }
 
-            SwitchReason::Block => {
-                self.blocked_threads.insert(old_thread);
-            }
-
             SwitchReason::Exit => {
-                debug_assert!(self.garbage.is_none());
+                debug_assert_eq!(self.garbage.load(Ordering::Relaxed), ThreadId::zero());
                 unsafe {
                     // Safety: We call this from a safe place and we are not referencing thread memory here.
                     old_thread.unmap_memory();
                 }
-                self.garbage = Some(old_thread.id());
+                self.garbage.store(old_thread.id(), Ordering::Relaxed);
             }
         }
 
-        self.current_thread.restore_simd();
-        let domain = self.get_current_thread().domain();
-        domain.assign_asid_if_necessary();
-        NextThreadState(
-            self.current_thread.stack.get_current_location(),
-            domain.cpu_page_mapping(),
-        )
+        self.with_current_thread(|current_thread| {
+            current_thread.restore_simd();
+            let domain = current_thread.domain();
+            domain.assign_asid_if_necessary();
+            NextThreadState(
+                current_thread.stack.get_current_location(),
+                domain.cpu_page_mapping(),
+            )
+        })
     }
 }
 
@@ -191,10 +269,9 @@ pub fn thread_yield() {
     switch_to_next(SwitchReason::RegularSwitch);
 }
 
-/// Blocks the current thread.
-#[inline]
-pub fn thread_block() {
-    switch_to_next(SwitchReason::Block);
+/// Mark current thread as blocked for the next context switch.
+pub fn thread_mark_as_blocked() {
+    with_core_scheduler(|s| s.mark_as_blocked());
 }
 
 /// Exit the thread.
@@ -224,14 +301,13 @@ extern "C" fn next_thread_state(
 }
 
 // TODO: make this per core once we go multicore
-static mut SCHEDULER: Option<Scheduler> = None;
+static SCHEDULER: Once<Scheduler> = Once::new();
 
-static mut SCHEDULER_COMMON: RwLock<Option<SchedulerCommon>> = RwLock::new(None);
+static SCHEDULER_COMMON: Once<RwLock<SchedulerCommon>> = Once::new();
 
 /// Adds and schedules a thread.
 pub fn add_and_schedule_thread(thread: Thread) {
-    let thread = Arc::new(thread);
-    with_common_mut(|common| common.add_thread(thread.clone()));
+    let thread = with_common_mut(|common| common.add_thread(thread));
     with_core_scheduler(|scheduler| scheduler.queue_thread(thread));
 }
 
@@ -240,7 +316,7 @@ fn with_common_mut<F, T>(f: F) -> T
 where
     F: FnOnce(&mut SchedulerCommon) -> T,
 {
-    unsafe { f(SCHEDULER_COMMON.write().as_mut().unchecked_unwrap()) }
+    f(&mut *SCHEDULER_COMMON.call_once(scheduler_common_new).write())
 }
 
 /// With common scheduler data. Read-only.
@@ -248,21 +324,40 @@ fn with_common<F, T>(f: F) -> T
 where
     F: FnOnce(&SchedulerCommon) -> T,
 {
-    unsafe { f(SCHEDULER_COMMON.read().as_ref().unchecked_unwrap()) }
+    f(&*SCHEDULER_COMMON.call_once(scheduler_common_new).read())
 }
 
 /// Execute something using this core scheduler.
 pub fn with_core_scheduler<F, T>(f: F) -> T
 where
-    F: FnOnce(&mut Scheduler) -> T,
+    F: FnOnce(&Scheduler) -> T,
 {
-    unsafe { f(SCHEDULER.as_mut().unchecked_unwrap()) }
+    // This is local to the current core.
+    f(&SCHEDULER.call_once(scheduler_core_new))
 }
 
-/// Inits scheduler. May only be called once per core.
-pub unsafe fn init() {
-    debug_assert!(SCHEDULER.is_none());
-    *SCHEDULER_COMMON.write() = Some(SchedulerCommon::new());
-    let idle_protection_domain = ProtectionDomain::from_existing_mapping(get_cpu_page_mapping());
-    SCHEDULER = Some(Scheduler::new(idle_protection_domain));
+/// Execute something using the current thread reference.
+pub fn with_current_thread<F, T>(f: F) -> T
+where
+    F: FnOnce(&Arc<Thread>) -> T,
+{
+    with_core_scheduler(|s| s.with_current_thread(f))
+}
+
+/// Factory for scheduler common inner type.
+fn scheduler_common_new() -> RwLock<SchedulerCommon> {
+    RwLock::new(SchedulerCommon::new())
+}
+
+/// Factory for scheduler common inner type.
+fn scheduler_core_new() -> Scheduler {
+    let idle_protection_domain =
+        unsafe { ProtectionDomain::from_existing_mapping(get_cpu_page_mapping()) };
+    Scheduler::new(idle_protection_domain)
+}
+
+/// Inits scheduler.
+pub fn init() {
+    SCHEDULER_COMMON.call_once(scheduler_common_new);
+    SCHEDULER.call_once(scheduler_core_new);
 }

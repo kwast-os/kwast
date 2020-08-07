@@ -1,3 +1,4 @@
+use crate::arch::x86_64::address::VirtAddr;
 use crate::arch::x86_64::{cr4_read, cr4_write, xsetbv};
 use alloc::alloc::{alloc, dealloc, handle_alloc_error};
 use core::alloc::Layout;
@@ -22,7 +23,7 @@ static mut SIMD_INIT: *const u8 = null();
 /// SIMD state
 #[repr(transparent)]
 pub struct SimdState {
-    ptr: *mut u8,
+    ptr: VirtAddr,
 }
 
 impl SimdState {
@@ -31,27 +32,35 @@ impl SimdState {
         let ptr = alloc_simd_save_region();
         unsafe {
             copy_nonoverlapping(SIMD_INIT, ptr, SIMD_SAVE_SIZE as usize);
-            Self { ptr }
+            Self {
+                ptr: VirtAddr::from(ptr),
+            }
         }
+    }
+
+    /// Gets the raw pointer.
+    #[inline]
+    fn raw_ptr(&self) -> *mut u8 {
+        self.ptr.as_mut::<u8>()
     }
 
     /// Save SIMD region.
     #[inline]
     pub fn save(&self) {
-        unsafe { SIMD_SAVE_ROUTINE(self.ptr) }
+        unsafe { SIMD_SAVE_ROUTINE(self.raw_ptr()) }
     }
 
     /// Restore SIMD region.
     #[inline]
     pub fn restore(&self) {
-        unsafe { SIMD_RESTORE_ROUTINE(self.ptr) }
+        unsafe { SIMD_RESTORE_ROUTINE(self.raw_ptr()) }
     }
 }
 
 impl Drop for SimdState {
     fn drop(&mut self) {
         unsafe {
-            dealloc(self.ptr, simd_layout());
+            dealloc(self.raw_ptr(), simd_layout());
         }
     }
 }

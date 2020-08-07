@@ -9,7 +9,7 @@ use crate::arch::asid::Asid;
 use crate::mm::mapper::{MemoryError, MemoryMapper, MemoryResult};
 use crate::mm::pmm::with_pmm;
 use crate::mm::vma_allocator::MappableVma;
-use crate::tasking::scheduler::with_core_scheduler;
+use crate::tasking::scheduler::with_current_thread;
 use core::fmt::{Debug, Error, Formatter};
 use core::intrinsics::unlikely;
 
@@ -141,8 +141,8 @@ impl MemoryMapper for ActiveMapping {
     fn get_new() -> Result<CpuPageMapping, MemoryError> {
         // We need to make a temporary mapping to set up the initial state of the PML4.
         // We will do it in the current thread's protection domain.
-        with_core_scheduler(|s| {
-            let domain = s.get_current_thread().domain();
+        with_current_thread(|thread| {
+            let domain = thread.domain();
             domain.with(|vma, mapping| {
                 // Temporarily map the new PML4 in the current address space.
                 let mut p4 = vma.create_vma(PAGE_SIZE)?.map(

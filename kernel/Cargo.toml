@@ -30,6 +30,7 @@ panic = "abort"
 
 [dependencies]
 rlibc = "1.0.0"
+atomic = { version = "0.4", features = ["nightly"] }
 wasm-call = { path = "../lib/wasm-call" }
 raw-cpuid = "^7.0"
 bit_field = "^0.10.0"

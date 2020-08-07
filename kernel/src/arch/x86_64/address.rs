@@ -110,6 +110,11 @@ impl VirtAddr {
         Self(addr)
     }
 
+    /// Creates a new virtual address from a raw pointer.
+    pub fn from<T>(ptr: *mut T) -> Self {
+        Self::new(ptr as usize)
+    }
+
     /// Creates a new virtual address that points to null.
     pub const fn null() -> Self {
         Self(0)

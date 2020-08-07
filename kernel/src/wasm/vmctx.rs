@@ -61,7 +61,7 @@ pub struct VmContext {
 type VmGlobal = [u8; 8];
 
 pub struct VmContextContainer {
-    ptr: *mut VmContext,
+    ptr: VirtAddr,
     num_imported_funcs: u32,
     num_globals: u32,
     tables: Vec<Table>,
@@ -183,7 +183,7 @@ impl VmContextContainer {
         *heap_ptr = heap;
 
         Self {
-            ptr: ptr as *mut _,
+            ptr: VirtAddr::from(ptr),
             num_imported_funcs,
             num_globals,
             tables,
@@ -192,14 +192,20 @@ impl VmContextContainer {
 
     /// Gets the pointer to the context.
     pub fn ptr(&self) -> *const VmContext {
-        self.ptr
+        self.ptr.as_const::<VmContext>()
+    }
+
+    /// Gets the raw u8 mutable pointer to the context.
+    pub fn ptr_mut_u8(&mut self) -> *mut u8 {
+        self.ptr.as_mut::<u8>()
     }
 
     /// Gets the function imports as a slice.
     /// Unsafe because you might be able to get multiple mutable references.
     pub unsafe fn function_imports_as_mut_slice(&mut self) -> &mut [VmFunctionImportEntry] {
         // Safety: we allocated the memory correctly and the bounds are correct at this point.
-        let ptr = (self.ptr as *mut u8)
+        let ptr = self
+            .ptr_mut_u8()
             .offset(VmContext::imported_funcs_offset(self.num_globals) as isize)
             as *mut VmFunctionImportEntry;
         slice::from_raw_parts_mut(ptr, self.num_imported_funcs as usize)
@@ -214,7 +220,7 @@ impl VmContextContainer {
     pub fn write_tables_to_vmctx(&mut self) {
         // Safety: we allocated the memory correctly and the bounds are correct at this point.
         let vm_tables = unsafe {
-            let ptr = (self.ptr as *mut u8).offset(VmContext::tables_offset(
+            let ptr = self.ptr_mut_u8().offset(VmContext::tables_offset(
                 self.num_globals,
                 self.num_imported_funcs,
             )) as *mut VmTable;
@@ -230,7 +236,9 @@ impl VmContextContainer {
     /// Unsafe because index might be outside bounds.
     pub unsafe fn set_global(&mut self, idx: u32, global: &Global) {
         debug_assert!(idx < self.num_globals);
-        let ptr = (self.ptr as *mut u8).offset(VmContext::global_entry_offset(idx));
+        let ptr = self
+            .ptr_mut_u8()
+            .offset(VmContext::global_entry_offset(idx));
 
         match global.initializer {
             GlobalInit::I32Const(v) => (ptr as *mut i32).write(v),
@@ -250,7 +258,7 @@ impl Drop for VmContextContainer {
     fn drop(&mut self) {
         unsafe {
             dealloc(
-                self.ptr.cast(),
+                self.ptr_mut_u8(),
                 Self::layout(
                     self.num_globals,
                     self.num_imported_funcs,

@@ -1,4 +1,4 @@
-use crate::tasking::scheduler::with_core_scheduler;
+use crate::tasking::scheduler::with_current_thread;
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::{VmContext, WASM_PAGE_SIZE};
 use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
@@ -46,12 +46,12 @@ lazy_static! {
 /// memory.size
 pub fn runtime_memory_size(_vmctx: &VmContext, idx: MemoryIndex) -> u32 {
     assert_eq!(idx.as_u32(), 0);
-    let heap_size = with_core_scheduler(|s| s.get_current_thread().heap_size());
+    let heap_size = with_current_thread(|thread| thread.heap_size());
     (heap_size / WASM_PAGE_SIZE) as u32
 }
 
 /// memory.grow
 pub fn runtime_memory_grow(_vmctx: &VmContext, idx: MemoryIndex, wasm_pages: u32) -> u32 {
     assert_eq!(idx.as_u32(), 0);
-    with_core_scheduler(|s| s.get_current_thread().heap_grow(wasm_pages))
+    with_current_thread(|thread| thread.heap_grow(wasm_pages))
 }

@@ -6,16 +6,16 @@ use crate::arch::simd::SimdState;
 use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
-use crate::sync::spinlock::RwLock;
+use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::tasking::file::FileDescriptorTable;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheme_container::schemes;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use bitflags::_core::cmp::Ordering;
+use atomic::Atomic;
 use core::borrow::Borrow;
-use core::cell::Cell;
+use core::cmp::Ordering;
 
 /// Stack size in bytes.
 const STACK_SIZE: usize = 1024 * 256;
@@ -25,8 +25,8 @@ const AMOUNT_GUARD_PAGES: usize = 2;
 
 /// The stack of a thread.
 pub struct Stack {
-    vma: Cell<MappedVma>,
-    current_location: Cell<VirtAddr>,
+    vma: MappedVma,
+    current_location: Atomic<VirtAddr>,
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -40,21 +40,38 @@ impl ThreadId {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         Self(NEXT.fetch_add(1, Ordering::SeqCst))
     }
+
+    /// Thread id 0, useful for markers / sentinels if you know that thread id 0 won't be used.
+    pub const fn zero() -> Self {
+        Self(0)
+    }
 }
+
 impl Default for ThreadId {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum ThreadStatus {
+    Runnable,
+    Blocked,
+}
+
+struct StaticWasmThreadData {
+    code: MappedVma,
+    _vmctx_container: VmContextContainer,
+}
+
 pub struct Thread {
     pub stack: Stack,
-    heap: RwLock<LazilyMappedVma>, // TODO: Something lighter? since this is only an issue with shared heaps
-    code: Cell<MappedVma>,
     id: ThreadId,
-    _vmctx_container: Cell<Option<VmContextContainer>>,
+    heap: RwLock<LazilyMappedVma>, // or something lighter? since this is only an issue with shared heaps
+    static_wasm_data: Spinlock<Option<StaticWasmThreadData>>,
     simd_state: SimdState,
     domain: ProtectionDomain,
+    status: Atomic<ThreadStatus>,
     file_descriptor_table: FileDescriptorTable,
 }
 
@@ -94,16 +111,15 @@ impl Thread {
             tmp.set_pre_open_path(Box::new(*b"."));
             tmp
         });
-        println!("{:#?}", fdt);
 
         Self {
             stack,
             heap: RwLock::new(LazilyMappedVma::dummy()),
-            code: Cell::new(MappedVma::dummy()),
             id: ThreadId::new(),
-            _vmctx_container: Cell::new(None),
+            static_wasm_data: Spinlock::new(None),
             domain,
             simd_state: SimdState::new(),
+            status: Atomic::new(ThreadStatus::Runnable),
             file_descriptor_table: fdt,
         }
     }
@@ -116,9 +132,11 @@ impl Thread {
         heap_vma: LazilyMappedVma,
         vmctx_container: VmContextContainer,
     ) {
-        self.code.set(code_vma);
         *self.heap.write() = heap_vma;
-        self._vmctx_container.replace(Some(vmctx_container));
+        *self.static_wasm_data.lock() = Some(StaticWasmThreadData {
+            code: code_vma,
+            _vmctx_container: vmctx_container,
+        });
     }
 
     /// Gets the file descriptor table.
@@ -151,13 +169,13 @@ impl Thread {
     /// while memory of this thread is still used somewhere.
     pub unsafe fn unmap_memory(&self) {
         self.domain.with(|vma, mapping| {
-            let code = self.code.replace(MappedVma::dummy());
-            vma.destroy_vma(mapping, &code);
-            let stack = self.stack.vma.replace(MappedVma::dummy());
-            vma.destroy_vma(mapping, &stack);
-            let mut heap_guard = self.heap.write();
-            vma.destroy_vma(mapping, &*heap_guard);
-            *heap_guard = LazilyMappedVma::dummy();
+            if let Some(ref mut data) = *self.static_wasm_data.lock() {
+                vma.destroy_vma(mapping, &data.code);
+            }
+            vma.destroy_vma(mapping, &self.stack.vma);
+            let mut heap = self.heap.write();
+            vma.destroy_vma(mapping, &*heap);
+            *heap = LazilyMappedVma::dummy();
         });
     }
 
@@ -184,6 +202,16 @@ impl Thread {
     #[inline]
     pub fn restore_simd(&self) {
         self.simd_state.restore();
+    }
+
+    /// Sets the status.
+    pub fn set_status(&self, new_status: ThreadStatus) {
+        self.status.store(new_status, atomic::Ordering::Release);
+    }
+
+    /// Gets the status.
+    pub fn status(&self) -> ThreadStatus {
+        self.status.load(atomic::Ordering::Acquire)
     }
 }
 
@@ -213,14 +241,6 @@ impl Borrow<ThreadId> for Arc<Thread> {
     }
 }
 
-impl Drop for Thread {
-    fn drop(&mut self) {
-        debug_assert_eq!(self.heap.get_mut().size(), 0);
-        debug_assert_eq!(self.stack.vma.get_mut().size(), 0);
-        debug_assert_eq!(self.code.get_mut().size(), 0);
-    }
-}
-
 impl Stack {
     /// Creates a stack.
     pub fn create(
@@ -243,15 +263,15 @@ impl Stack {
     pub fn new(vma: MappedVma) -> Self {
         let current_location = vma.address() + vma.size();
         Self {
-            vma: Cell::new(vma),
-            current_location: Cell::new(current_location),
+            vma,
+            current_location: Atomic::new(current_location),
         }
     }
 
     /// Gets the current location.
     #[inline]
     pub fn get_current_location(&self) -> VirtAddr {
-        self.current_location.get()
+        self.current_location.load(atomic::Ordering::Acquire)
     }
 
     /// Sets the current location.
@@ -262,14 +282,18 @@ impl Stack {
         //    "the address {:?} does not belong to the thread's stack",
         //    location,
         //);
-        self.current_location.replace(location);
+        self.current_location
+            .store(location, atomic::Ordering::Release);
     }
 
     /// Pushes a value on the stack.
+    /// Unsafety: might go out of bounds, might push invalid value, might data race.
+    /// Data race can be prevented if the stack is not shared yet (e.g. on trampoline setup).
     pub unsafe fn push<T>(&mut self, value: T) {
-        let current = self.current_location.get_mut();
-        *current -= size_of::<T>();
+        let mut current = self.get_current_location();
+        current -= size_of::<T>();
         let ptr = current.as_mut();
         *ptr = value;
+        self.set_current_location(current);
     }
 }

@@ -7,9 +7,9 @@ use crate::arch::{get_per_cpu_data, preempt_disable, preempt_enable};
 use crate::mm::mapper::{MemoryError, MemoryMapper};
 use crate::mm::vma_allocator::VmaAllocator;
 use crate::sync::spinlock::Spinlock;
-use crate::tasking::scheduler::with_core_scheduler;
+use crate::tasking::scheduler::with_current_thread;
 use alloc::sync::Arc;
-use core::cell::Cell;
+use atomic::Atomic;
 use core::ops::DerefMut;
 
 /// Hardware memory protection domain.
@@ -22,7 +22,7 @@ struct ProtectionDomainInner {
     mapping: CpuPageMapping,
     asid: bool,
     // TODO: expand on multi-core systems
-    current_asid: Cell<Asid>,
+    current_asid: Atomic<Asid>,
 }
 
 /// Temporary switch guard. Returns to old page mapping when dropped.
@@ -65,7 +65,7 @@ impl ProtectionDomain {
             vma_allocator: Spinlock::new(VmaAllocator::new()),
             mapping,
             asid,
-            current_asid: Cell::new(current_asid),
+            current_asid: Atomic::new(current_asid),
         }))
     }
 
@@ -73,9 +73,11 @@ impl ProtectionDomain {
     pub fn assign_asid_if_necessary(&self) {
         if let Some(asid_manager) = get_per_cpu_data().asid_manager() {
             let mut asid_manager = asid_manager.borrow_mut();
-            let old = self.0.current_asid.get();
+            let old = self.0.current_asid.load(atomic::Ordering::Acquire);
             if !asid_manager.is_valid(old) {
-                self.0.current_asid.set(asid_manager.alloc(old));
+                self.0
+                    .current_asid
+                    .store(asid_manager.alloc(old), atomic::Ordering::Release);
             }
         }
     }
@@ -89,7 +91,9 @@ impl ProtectionDomain {
     #[inline]
     pub fn cpu_page_mapping(&self) -> CpuPageMapping {
         if self.0.asid {
-            self.0.mapping.with_asid(self.0.current_asid.get())
+            self.0
+                .mapping
+                .with_asid(self.0.current_asid.load(atomic::Ordering::Acquire))
         } else {
             self.0.mapping
         }
@@ -125,35 +129,35 @@ impl ProtectionDomain {
 
         if self.can_avoid_locks() {
             let inner = unsafe { &mut *self.0.vma_allocator.get_cell().get() };
+            // Safety: only we can access the active mapping, since we're the only thread.
+            //         Otherwise can_avoid_locks would've returned false.
             f(inner, &mut unsafe { ActiveMapping::get_unlocked() })
         } else {
             let mut inner = self.0.vma_allocator.lock();
             let inner = inner.deref_mut();
+            // Safety: inner lock also covers the active mapping.
             f(inner, &mut unsafe { ActiveMapping::get_unlocked() })
         }
     }
 }
 
-impl Drop for ProtectionDomain {
+impl Drop for ProtectionDomainInner {
     fn drop(&mut self) {
-        // Don't free when there are still references.
-        if Arc::strong_count(&self.0) != 1 {
-            return;
-        }
-
-        debug_assert_ne!(self.0.mapping, get_cpu_page_mapping());
+        debug_assert_ne!(self.mapping, get_cpu_page_mapping());
 
         // Free the old asid.
         if let Some(asid_manager) = get_per_cpu_data().asid_manager() {
-            asid_manager.borrow_mut().free(self.0.current_asid.get());
+            asid_manager
+                .borrow_mut()
+                .free(self.current_asid.load(atomic::Ordering::Release));
         }
 
         // The PMM expects a virtual address because it needs to update the list.
         // We can use the mapping system to map a page without allocating a frame,
         // and then unmapping _with_ freeing the frame.
-        with_core_scheduler(|s| {
-            s.get_current_thread().domain().with(|vma, mapping| {
-                let paddr = self.0.mapping.as_phys_addr();
+        with_current_thread(|thread| {
+            thread.domain().with(|vma, mapping| {
+                let paddr = self.mapping.as_phys_addr();
 
                 let _ = vma
                     .alloc_region(PAGE_SIZE)

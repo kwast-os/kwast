@@ -18,7 +18,7 @@ use crate::mm::mapper::MemoryError;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::tasking::protection_domain::ProtectionDomain;
-use crate::tasking::scheduler::{add_and_schedule_thread, with_core_scheduler};
+use crate::tasking::scheduler::{add_and_schedule_thread, with_current_thread};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{
@@ -125,8 +125,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
     /// Emit code.
     fn emit(&mut self) -> Result<(MappedVma, LazilyMappedVma, Vec<RelocSink>), Error> {
-        let (code_vma, heap_vma) = with_core_scheduler(|s| {
-            s.get_current_thread().domain().with(|vma, mapping| {
+        let (code_vma, heap_vma) = with_current_thread(|thread| {
+            thread.domain().with(|vma, mapping| {
                 // Create code area, will be made executable read-only later.
                 let code_vma = {
                     let len = align_up(self.compile_result.total_size);
@@ -264,16 +264,14 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         // self.print_code_as_hex(&code_vma);
 
         // Now the code is written, change it to read-only & executable.
-        {
-            with_core_scheduler(|s| {
-                s.get_current_thread().domain().with(|_vma, mapping| {
-                    let flags = EntryFlags::PRESENT;
-                    mapping
-                        .change_flags_range(code_vma.address(), code_vma.size(), flags)
-                        .map_err(Error::MemoryError)
-                })
-            })?;
-        }
+        with_current_thread(|thread| {
+            thread.domain().with(|_vma, mapping| {
+                let flags = EntryFlags::PRESENT;
+                mapping
+                    .change_flags_range(code_vma.address(), code_vma.size(), flags)
+                    .map_err(Error::MemoryError)
+            })
+        })?;
 
         let start_func = self.compile_result.start_func.ok_or(Error::NoStart)?;
         let start_address = self.get_func_address(&code_vma, start_func);
@@ -449,10 +447,10 @@ extern "C" fn start_from_compile_result(compile_result: *mut CompileResult) {
             let func: extern "C" fn(*const VmContext) =
                 unsafe { mem::transmute(wasm_instance.start_address.as_usize()) };
 
-            with_core_scheduler(|s| {
+            with_current_thread(|thread| {
                 // Safety: this is a new thread without existing wasm data.
                 unsafe {
-                    s.get_current_thread().set_wasm_data(
+                    thread.set_wasm_data(
                         wasm_instance.code_vma,
                         wasm_instance.heap_vma,
                         wasm_instance.vmctx_container,

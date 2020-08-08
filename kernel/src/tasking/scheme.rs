@@ -89,10 +89,7 @@ impl Scheme {
     pub fn test(&self, data: i32) {
         let cmd = self.command_receive();
         let response = Some(Box::new(data));
-        // TODO: safe variant
-        unsafe {
-            cmd.response.store(response, Ordering::Release);
-        }
+        cmd.response.swap(response, Ordering::AcqRel);
         scheduler::wakeup_and_yield(cmd.sender);
     }
 }

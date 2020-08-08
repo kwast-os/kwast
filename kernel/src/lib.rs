@@ -31,12 +31,14 @@ use arch::interrupts;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
+use crate::sync::cond_var_single::CondVarSingle;
+use crate::sync::spinlock::Spinlock;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::with_core_scheduler;
 use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
+use spin::Once;
 
 #[macro_use]
 mod util;
@@ -106,6 +108,8 @@ fn handle_module(module: BootModule) -> Option<()> {
     Some(())
 }
 
+static cond_var_test: Once<CondVarSingle> = Once::new();
+
 /// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
 fn kernel_main(boot_modules: impl BootModuleProvider) {
@@ -128,7 +132,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     scheduler::thread_yield();
 
     // TODO: debug code
-    let tid = unsafe {
+    unsafe {
         let entry = VirtAddr::new(thread_test as usize);
         let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
         let tid = t.id();
@@ -143,7 +147,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         });
     }
 
-    with_core_scheduler(|s| s.wakeup_and_yield(tid));
+    cond_var_test.call_once(|| CondVarSingle::new()).notify();
 
     loop {
         arch::halt();
@@ -151,9 +155,11 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 }
 
 extern "C" fn thread_test(arg: u64) {
+    let lol = Spinlock::new(123);
+    let guard = lol.lock();
+
     println!("hi {}", arg);
-    scheduler::thread_mark_as_blocked();
-    scheduler::thread_yield();
+    cond_var_test.call_once(|| CondVarSingle::new()).wait(guard);
     println!("hi2 {}", arg);
     scheduler::thread_exit(0);
 }

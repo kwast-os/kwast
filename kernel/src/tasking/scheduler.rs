@@ -53,6 +53,17 @@ impl SchedulerCommon {
     pub fn remove_thread(&mut self, id: ThreadId) {
         self.threads.remove(&id);
     }
+
+    /// Executes something with the thread and scheduler of that thread.
+    pub fn with_thread<F, T>(&self, id: ThreadId, f: F) -> Option<T>
+    where
+        F: FnOnce(&Scheduler, &Arc<Thread>) -> T,
+    {
+        // TODO: multicore
+        self.threads
+            .get(&id)
+            .map(|thread| with_core_scheduler(|s| f(s, thread)))
+    }
 }
 
 impl Scheduler {
@@ -60,7 +71,6 @@ impl Scheduler {
     fn new(idle_protection_domain: ProtectionDomain) -> Self {
         // This will be overwritten on the first context switch with data from the current running code.
         let idle_thread = Thread::new(Stack::new(MappedVma::dummy()), idle_protection_domain);
-
         let idle_thread = with_common_mut(|common| common.add_thread(idle_thread));
 
         Self {
@@ -145,12 +155,6 @@ impl Scheduler {
         } else {
             false
         }
-    }
-
-    /// Mark a thread as blocked.
-    /// Will take effect next context switch.
-    pub fn mark_as_blocked(&self) {
-        self.with_current_thread(|thread| thread.set_status(ThreadStatus::Blocked));
     }
 
     /// Sets the scheduler up for switching to the next thread and gets the next thread stack address.
@@ -247,11 +251,6 @@ pub fn thread_yield() {
     switch_to_next();
 }
 
-/// Mark current thread as blocked for the next context switch.
-pub fn thread_mark_as_blocked() {
-    with_core_scheduler(|s| s.mark_as_blocked());
-}
-
 /// Exit the thread.
 #[inline]
 pub fn thread_exit(exit_code: u32) -> ! {
@@ -296,19 +295,18 @@ where
 }
 
 /// With common scheduler data. Read-only.
-fn with_common<F, T>(f: F) -> T
+pub fn with_common_scheduler<F, T>(f: F) -> T
 where
     F: FnOnce(&SchedulerCommon) -> T,
 {
     f(&*SCHEDULER_COMMON.call_once(scheduler_common_new).read())
 }
 
-/// Execute something using this core scheduler.
+/// Execute something using this core-local scheduler.
 pub fn with_core_scheduler<F, T>(f: F) -> T
 where
     F: FnOnce(&Scheduler) -> T,
 {
-    // This is local to the current core.
     f(&SCHEDULER.call_once(scheduler_core_new))
 }
 

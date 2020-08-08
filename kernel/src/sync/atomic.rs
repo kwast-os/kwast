@@ -6,6 +6,7 @@ pub struct AtomicArc<T> {
     inner: AtomicPtr<T>,
 }
 
+#[allow(dead_code)]
 impl<T> AtomicArc<T> {
     /// Create from Arc<T>.
     pub fn from_arc(arc: Arc<T>) -> Self {

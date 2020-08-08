@@ -31,8 +31,7 @@ use arch::interrupts;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
-use crate::sync::cond_var_single::CondVarSingle;
-use crate::sync::spinlock::Spinlock;
+use crate::sync::wait_queue::WaitQueue;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
 use crate::tasking::thread::Thread;
@@ -108,7 +107,7 @@ fn handle_module(module: BootModule) -> Option<()> {
     Some(())
 }
 
-static cond_var_test: Once<CondVarSingle> = Once::new();
+static WAIT_QUEUE: Once<WaitQueue<i32>> = Once::new();
 
 /// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
@@ -139,6 +138,22 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         scheduler::add_and_schedule_thread(t);
         tid
     };
+    // TODO: debug code
+    unsafe {
+        let entry = VirtAddr::new(thread2_test as usize);
+        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
+        let tid = t.id();
+        scheduler::add_and_schedule_thread(t);
+        tid
+    };
+    // TODO: debug code
+    unsafe {
+        let entry = VirtAddr::new(thread3_test as usize);
+        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
+        let tid = t.id();
+        scheduler::add_and_schedule_thread(t);
+        tid
+    };
 
     // Handle boot modules.
     for module in boot_modules {
@@ -147,20 +162,39 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         });
     }
 
-    cond_var_test.call_once(|| CondVarSingle::new()).notify();
-
     loop {
         arch::halt();
     }
 }
 
-extern "C" fn thread_test(arg: u64) {
-    let lol = Spinlock::new(123);
-    let guard = lol.lock();
+extern "C" fn thread2_test(arg: u64) {
+    let mut i = 0;
+    let a = WAIT_QUEUE.call_once(WaitQueue::new);
+    loop {
+        a.push_back(i);
+        i += 1;
+        scheduler::thread_yield();
+    }
+    scheduler::thread_exit(0);
+}
 
-    println!("hi {}", arg);
-    cond_var_test.call_once(|| CondVarSingle::new()).wait(guard);
-    println!("hi2 {}", arg);
+extern "C" fn thread3_test(arg: u64) {
+    let a = WAIT_QUEUE.call_once(WaitQueue::new);
+    let mut i = 0;
+    loop {
+        a.push_back(i);
+        i -= 1;
+        scheduler::thread_yield();
+    }
+    scheduler::thread_exit(0);
+}
+
+extern "C" fn thread_test(arg: u64) {
+    let a = WAIT_QUEUE.call_once(WaitQueue::new);
+    loop {
+        let x = a.pop_front();
+        println!("hi {} {:?}", arg, x);
+    }
     scheduler::thread_exit(0);
 }
 

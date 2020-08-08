@@ -23,11 +23,7 @@ impl CondVarSingle {
     pub fn notify(&self) {
         let tid = self.waiter.swap(ThreadId::zero(), Ordering::Acquire);
         if tid != ThreadId::zero() {
-            with_common_scheduler(|s| {
-                s.with_thread(tid, |scheduler, _thread| {
-                    scheduler.wakeup_and_yield(tid);
-                })
-            });
+            with_common_scheduler(|s| s.scheduler_for(tid)).map(|s| s.wakeup_and_yield(tid));
         }
     }
 

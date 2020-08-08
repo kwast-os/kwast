@@ -54,15 +54,14 @@ impl SchedulerCommon {
         self.threads.remove(&id);
     }
 
-    /// Executes something with the thread and scheduler of that thread.
-    pub fn with_thread<F, T>(&self, id: ThreadId, f: F) -> Option<T>
-    where
-        F: FnOnce(&Scheduler, &Arc<Thread>) -> T,
-    {
+    /// Gets the scheduler for a thread.
+    pub fn scheduler_for(&self, id: ThreadId) -> Option<&'static Scheduler> {
         // TODO: multicore
-        self.threads
-            .get(&id)
-            .map(|thread| with_core_scheduler(|s| f(s, thread)))
+        if self.threads.contains_key(&id) {
+            Some(SCHEDULER.call_once(scheduler_core_new))
+        } else {
+            None
+        }
     }
 }
 

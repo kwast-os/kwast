@@ -1,4 +1,3 @@
-use crate::util::unchecked::UncheckedUnwrap;
 use alloc::boxed::Box;
 use core::cmp;
 use core::cmp::Ordering;
@@ -54,7 +53,7 @@ impl Node {
 
     /// Left rotation. Returns the new root.
     fn rotate_left(mut root: Box<Node>) -> Box<Node> {
-        let mut new_root = unsafe { root.right.take().unchecked_unwrap() };
+        let mut new_root = root.right.take().unwrap();
         root.right = new_root.left.take();
         root.update_fields();
         new_root.left = Some(root);
@@ -64,7 +63,7 @@ impl Node {
 
     /// Right rotation. Returns the new root.
     fn rotate_right(mut root: Box<Node>) -> Box<Node> {
-        let mut new_root = unsafe { root.left.take().unchecked_unwrap() };
+        let mut new_root = root.left.take().unwrap();
         root.left = new_root.right.take();
         root.update_fields();
         new_root.right = Some(root);
@@ -80,7 +79,7 @@ impl Node {
             // Subtree is left heavy.
 
             // Must exist, otherwise this balance factor is impossible.
-            let left = unsafe { root.left.take().unchecked_unwrap() };
+            let left = root.left.take().expect("left heavy");
             if left.balance_factor() == -1 {
                 root.left = Some(Self::rotate_left(left));
             } else {
@@ -92,7 +91,7 @@ impl Node {
             // Subtree is right heavy.
 
             // Must exist, otherwise this balance factor is impossible.
-            let right = unsafe { root.right.take().unchecked_unwrap() };
+            let right = root.right.take().expect("right heavy");
             if right.balance_factor() == 1 {
                 root.right = Some(Self::rotate_right(right));
             } else {
@@ -218,16 +217,13 @@ impl AVLIntervalTree {
         let res = choices
             .iter()
             .filter(|(_, len)| len >= &wanted_len)
-            .min_by_key(|(_, len)| len);
-
-        // We ensured earlier that at least one of them must have enough space left.
-        let res = unsafe { res.unchecked_unwrap() };
+            .min_by_key(|(_, len)| len)
+            .expect("caller ensured enough space was left");
 
         match res.0 {
-            // See safety of `res`.
             Choice::Left => {
                 let (left, result) = Self::find_len_helper(
-                    unsafe { root.left.take().unchecked_unwrap() },
+                    root.left.take().expect("left is filtered"),
                     wanted_len,
                 );
                 root.left = left;
@@ -236,7 +232,7 @@ impl AVLIntervalTree {
             }
             Choice::Right => {
                 let (right, result) = Self::find_len_helper(
-                    unsafe { root.right.take().unchecked_unwrap() },
+                    root.right.take().expect("right is filtered"),
                     wanted_len,
                 );
                 root.right = right;

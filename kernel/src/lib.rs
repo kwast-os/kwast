@@ -12,10 +12,13 @@
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]
 
+extern crate rlibc;
+
+#[macro_use]
+extern crate static_assertions;
+
 #[macro_use]
 extern crate alloc;
-
-extern crate rlibc;
 
 #[macro_use]
 extern crate memoffset;
@@ -31,13 +34,13 @@ use arch::interrupts;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
-use crate::sync::wait_queue::WaitQueue;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
+use crate::tasking::scheme_container::schemes;
 use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
-use spin::Once;
+use alloc::boxed::Box;
 
 #[macro_use]
 mod util;
@@ -107,8 +110,6 @@ fn handle_module(module: BootModule) -> Option<()> {
     Some(())
 }
 
-static WAIT_QUEUE: Once<WaitQueue<i32>> = Once::new();
-
 /// Kernel main, called after initialization is done.
 #[cfg(not(feature = "integration-test"))]
 fn kernel_main(boot_modules: impl BootModuleProvider) {
@@ -134,25 +135,13 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     unsafe {
         let entry = VirtAddr::new(thread_test as usize);
         let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
-        let tid = t.id();
         scheduler::add_and_schedule_thread(t);
-        tid
     };
     // TODO: debug code
     unsafe {
         let entry = VirtAddr::new(thread2_test as usize);
         let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
-        let tid = t.id();
         scheduler::add_and_schedule_thread(t);
-        tid
-    };
-    // TODO: debug code
-    unsafe {
-        let entry = VirtAddr::new(thread3_test as usize);
-        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
-        let tid = t.id();
-        scheduler::add_and_schedule_thread(t);
-        tid
     };
 
     // Handle boot modules.
@@ -168,32 +157,19 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 }
 
 extern "C" fn thread2_test(arg: u64) {
+    let self_scheme = schemes().read().get(Box::new([])).unwrap();
     let mut i = 0;
-    let a = WAIT_QUEUE.call_once(WaitQueue::new);
     loop {
-        a.push_back(i);
+        self_scheme.test(i);
         i += 1;
-        scheduler::thread_yield();
-    }
-    scheduler::thread_exit(0);
-}
-
-extern "C" fn thread3_test(arg: u64) {
-    let a = WAIT_QUEUE.call_once(WaitQueue::new);
-    let mut i = 0;
-    loop {
-        a.push_back(i);
-        i -= 1;
-        scheduler::thread_yield();
     }
     scheduler::thread_exit(0);
 }
 
 extern "C" fn thread_test(arg: u64) {
-    let a = WAIT_QUEUE.call_once(WaitQueue::new);
+    let self_scheme = schemes().read().get(Box::new([])).unwrap();
     loop {
-        let x = a.pop_front();
-        println!("hi {} {:?}", arg, x);
+        self_scheme.open();
     }
     scheduler::thread_exit(0);
 }

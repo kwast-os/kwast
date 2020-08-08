@@ -29,8 +29,9 @@ opt-level = 2
 panic = "abort"
 
 [dependencies]
+static_assertions = "1.1.0"
 rlibc = "1.0.0"
-atomic = { version = "0.4", features = ["nightly"] }
+atomic = { version = "0.4", features = ["nightly"] } # 0.5 seems to have a bug where it doesn't detect the atomic types properly
 wasm-call = { path = "../lib/wasm-call" }
 raw-cpuid = "^7.0"
 bit_field = "^0.10.0"

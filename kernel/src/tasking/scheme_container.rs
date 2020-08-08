@@ -15,7 +15,7 @@ pub enum SchemeInsertionError {
 
 pub struct SchemeContainer {
     /// Maps a name to an id.
-    name_scheme_map: BTreeMap<Box<[u8]>, Arc<RwLock<Scheme>>>,
+    name_scheme_map: BTreeMap<Box<[u8]>, Arc<Scheme>>,
 }
 
 impl SchemeContainer {
@@ -31,9 +31,9 @@ impl SchemeContainer {
         match self.name_scheme_map.entry(name) {
             Entry::Occupied(_) => Err(SchemeInsertionError::NameAlreadyTaken),
             Entry::Vacant(v) => {
-                let scheme = Arc::new(RwLock::new(scheme));
+                let scheme = Arc::new(scheme);
                 let weak = Arc::downgrade(&scheme);
-                scheme.write().set_ptr(weak);
+                scheme.set_ptr(weak);
                 v.insert(scheme);
                 Ok(())
             }
@@ -41,7 +41,7 @@ impl SchemeContainer {
     }
 
     /// Gets a scheme by name.
-    pub fn get(&self, name: Box<[u8]>) -> Option<Arc<RwLock<Scheme>>> {
+    pub fn get(&self, name: Box<[u8]>) -> Option<Arc<Scheme>> {
         self.name_scheme_map.get(&name).cloned()
     }
 }

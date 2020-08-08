@@ -9,6 +9,8 @@ _switch_to_next:
     pushfq
     cmpl $0, %gs:8 // Check if preempt_count != 0
     jnz .flag
+    movb $0, %gs:12 // It's possible the flag will be set on enter, this will cause issues with locks executed inside the scheduler
+                    // So instead of clearing this in the `check_should_schedule`, we do this here.
     pushq %rbx
     pushq %rbp
     pushq %r12

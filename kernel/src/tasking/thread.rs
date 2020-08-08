@@ -33,6 +33,8 @@ pub struct Stack {
 #[repr(transparent)]
 pub struct ThreadId(u64);
 
+const_assert!(Atomic::<ThreadId>::is_lock_free());
+
 impl ThreadId {
     /// Create new thread id.
     pub fn new() -> Self {
@@ -53,12 +55,15 @@ impl Default for ThreadId {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(C, align(8))]
 pub enum ThreadStatus {
     Runnable,
     Blocked,
     Exit(u32),
 }
+
+const_assert!(Atomic::<ThreadStatus>::is_lock_free());
 
 struct StaticWasmThreadData {
     code: MappedVma,
@@ -107,7 +112,6 @@ impl Thread {
                 .read()
                 .get(Box::new([]))
                 .expect("self scheme")
-                .read()
                 .open_self();
             tmp.set_pre_open_path(Box::new(*b"."));
             tmp
@@ -208,6 +212,17 @@ impl Thread {
     /// Sets the status.
     pub fn set_status(&self, new_status: ThreadStatus) {
         self.status.store(new_status, atomic::Ordering::Release);
+    }
+
+    /// Compare exchange status.
+    pub fn status_compare_exchange(
+        &self,
+        current: ThreadStatus,
+        new: ThreadStatus,
+        success: atomic::Ordering,
+        failure: atomic::Ordering,
+    ) -> Result<ThreadStatus, ThreadStatus> {
+        self.status.compare_exchange(current, new, success, failure)
     }
 
     /// Gets the status.

@@ -1,13 +1,17 @@
 use crate::arch::paging::invalidate_asid;
+use atomic::Atomic;
 
 pub type AsidGeneration = u32;
 
 /// Address Space Identifier
 #[derive(Debug, Copy, Clone)]
+#[repr(C, align(8))]
 pub struct Asid {
     generation: AsidGeneration,
     number: u16,
 }
+
+const_assert!(Atomic::<Asid>::is_lock_free());
 
 impl Asid {
     /// Gets the 64-bit representation of the asid.

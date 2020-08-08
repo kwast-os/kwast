@@ -24,7 +24,7 @@ pub fn page_fault(fault_addr: VirtAddr, ip: VirtAddr) {
     if unlikely(failed) {
         if fault_addr.as_usize() < arch::USER_START || ip.as_usize() < arch::USER_START {
             // Kernel fault.
-            // TODO: show cause (detect stack overflow for example)
+            // TODO: show cause (recognize stack overflow for example)
             panic!(
                 "Pagefault in kernel, faulting address: {:?} -> {:?}, IP: {:?}, PAGEMAP: {:?}",
                 fault_addr,

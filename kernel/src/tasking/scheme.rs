@@ -1,9 +1,13 @@
-use crate::sync::spinlock::RwLock;
+use crate::arch::{preempt_disable, preempt_enable};
+use crate::sync::atomic::AtomicOptionBox;
+use crate::sync::thread_block_guard::ThreadBlockGuard;
+use crate::sync::wait_queue::WaitQueue;
 use crate::tasking::file::{FileDescriptor, FileHandle};
-use crate::tasking::scheduler::with_current_thread;
+use crate::tasking::scheduler::{self, with_current_thread};
 use crate::tasking::thread::ThreadId;
-use alloc::collections::VecDeque;
-use alloc::sync::Weak;
+use alloc::boxed::Box;
+use alloc::sync::{Arc, Weak};
+use core::sync::atomic::Ordering;
 
 /// Type of file handle.
 enum Handle {
@@ -18,19 +22,20 @@ enum CommandData {
     Open,
 }
 
-struct Command {
+pub struct Command {
     sender: ThreadId,
     data: CommandData,
+    response: Arc<AtomicOptionBox<i32>>,
 }
 
-pub type SchemePtr = Weak<RwLock<Scheme>>;
+pub type SchemePtr = Weak<Scheme>;
 
 pub struct Scheme {
     /// Weak pointer to ourself.
     /// Needed to be able to easily create file descriptors.
     pub(crate) ptr: SchemePtr,
     /// Command queue.
-    command_queue: VecDeque<Command>,
+    command_queue: WaitQueue<Command>,
 }
 
 impl Scheme {
@@ -38,14 +43,15 @@ impl Scheme {
     pub fn new() -> Self {
         Self {
             ptr: Weak::new(),
-            command_queue: VecDeque::new(),
+            command_queue: WaitQueue::new(),
         }
     }
 
     /// Sets the internal pointer.
-    pub fn set_ptr(&mut self, ptr: SchemePtr) {
+    pub fn set_ptr(&self, ptr: SchemePtr) {
         assert!(self.ptr.upgrade().is_none());
-        self.ptr = ptr;
+        // TODO
+        //self.ptr = ptr;
     }
 
     /// Open a file handle to the scheme itself.
@@ -53,19 +59,41 @@ impl Scheme {
         FileDescriptor::from(&self, FileHandle::Own)
     }
 
-    pub fn open(&mut self) {
+    pub fn open(&self) {
         let sender = with_current_thread(|thread| thread.id());
-        self.command_queue.push_back(Command {
-            sender,
-            data: CommandData::Open,
-        });
+        let response = Arc::new(AtomicOptionBox::from(None));
 
-        // TODO: wakeup receiver
-        // TODO: if this gets pre-empted between "wakeup receiver" and "block this" we will be stuck locked
-        //       because the wakeup signal will be sent before this thread gets blocked
-        //scheduler::thread_block();
+        // Blocks the thread, sends the command and notifies the receiving thread.
+        {
+            preempt_disable();
+            let _block_guard = ThreadBlockGuard::activate();
+            self.command_queue.push_back(Command {
+                sender,
+                data: CommandData::Open,
+                response: response.clone(),
+            });
+            preempt_enable();
+        }
+
+        // We have waken up
+        let response = response.swap(None, Ordering::AcqRel);
+        println!("response: {:?}", response);
 
         // TODO
+    }
+
+    pub fn command_receive(&self) -> Command {
+        self.command_queue.pop_front()
+    }
+
+    pub fn test(&self, data: i32) {
+        let cmd = self.command_receive();
+        let response = Some(Box::new(data));
+        // TODO: safe variant
+        unsafe {
+            cmd.response.store(response, Ordering::Release);
+        }
+        scheduler::wakeup_and_yield(cmd.sender);
     }
 }
 

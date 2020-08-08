@@ -143,7 +143,12 @@ pub extern "C" fn entry(mboot_addr: usize) {
                 paging_flags |= EntryFlags::NX;
             }
 
-            // println!("{:#x}-{:#x} {:?}", x.start_address(), x.end_address(), x.flags());
+            println!(
+                "{:#x}-{:#x} {:?}",
+                x.start_address(),
+                x.end_address(),
+                x.flags()
+            );
 
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping

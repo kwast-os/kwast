@@ -5,12 +5,13 @@ use hashbrown::HashMap;
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
 use crate::mm::vma_allocator::MappedVma;
-use crate::sync::atomic::AtomicArc;
+use crate::sync::atomic::{AtomicArc, AtomicManagedPtr};
 use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::thread::{Stack, Thread, ThreadId, ThreadStatus};
 use alloc::sync::Arc;
 use atomic::Atomic;
+use bitflags::_core::mem::ManuallyDrop;
 use core::sync::atomic::Ordering;
 use spin::Once;
 
@@ -54,14 +55,24 @@ impl SchedulerCommon {
         self.threads.remove(&id);
     }
 
-    /// Gets the scheduler for a thread.
-    pub fn scheduler_for(&self, id: ThreadId) -> Option<&'static Scheduler> {
-        // TODO: multicore
-        if self.threads.contains_key(&id) {
-            Some(SCHEDULER.call_once(scheduler_core_new))
-        } else {
-            None
+    /// Wakes up a thread.
+    pub fn wakeup(&self, id: ThreadId) -> bool {
+        if let Some(thread) = self.threads.get(&id) {
+            if thread
+                .status_compare_exchange(
+                    ThreadStatus::Blocked,
+                    ThreadStatus::Runnable,
+                    Ordering::Acquire,
+                    Ordering::Relaxed,
+                )
+                .is_ok()
+            {
+                // TODO: multicore
+                return SCHEDULER.call_once(scheduler_core_new).move_wakeup(id);
+            }
         }
+
+        false
     }
 }
 
@@ -78,7 +89,7 @@ impl Scheduler {
                 blocked_threads: BTreeSet::new(),
             }),
             garbage: Atomic::new(ThreadId::zero()),
-            current_thread: AtomicArc::from_arc(idle_thread.clone()),
+            current_thread: AtomicManagedPtr::from(idle_thread.clone()),
             idle_thread,
         }
     }
@@ -89,7 +100,6 @@ impl Scheduler {
     }
 
     /// Gets the next thread to run.
-    /// Returns the old thread.
     fn next_thread(&self, queues: &mut Queues) -> Arc<Thread> {
         if let Some(thread) = queues.run_queue.pop_front() {
             thread
@@ -118,38 +128,25 @@ impl Scheduler {
         //
         // The only way the one from current_thread would be dropped is when the thread exits,
         // otherwise it's been moved to a runqueue / blockqueue / ...
-        // If the thread exits, there is no problem ffor the same reason why the common schedule argument
+        // If the thread exits, there is no problem for the same reason why the common schedule argument
         // holds: if the thread is exited, we won't be able to execute this path.
         //
         // This means the Arc<Thread> instance will never get strong count zero and be dropped
         // during the duration of this method.
         unsafe {
-            let arc = self.current_thread.load(Ordering::Acquire);
-            let ret = f(&arc);
-            core::mem::forget(arc);
-            ret
+            f(&ManuallyDrop::new(
+                self.current_thread.load(Ordering::Acquire),
+            ))
         }
     }
 
-    /// Wakes up a thread.
-    /// Returns true if woken up.
-    pub fn wakeup(&self, thread_id: ThreadId) -> bool {
+    /// Moves a thread from the blocked queue to the runqueue if it was in the blocked queue.
+    /// Returns true if it was in the blocked queue.
+    fn move_wakeup(&self, thread_id: ThreadId) -> bool {
         let mut queues = self.queues.lock();
 
         if let Some(thread) = queues.blocked_threads.take(&thread_id) {
-            thread.set_status(ThreadStatus::Runnable);
             queues.run_queue.push_front(thread);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Wakes up a thread and switches to it.
-    /// Returns true if woken up.
-    pub fn wakeup_and_yield(&self, thread_id: ThreadId) -> bool {
-        if self.wakeup(thread_id) {
-            thread_yield();
             true
         } else {
             false
@@ -200,7 +197,7 @@ impl Scheduler {
 
             ThreadStatus::Exit(_) => {
                 debug_assert_eq!(self.garbage.load(Ordering::Relaxed), ThreadId::zero());
-                // Safety: We call this from a safe place and we are not referencing thread memory here.
+                // Safety: We call this from an uninterrupted place and we are not referencing thread memory here.
                 unsafe {
                     old_thread.unmap_memory();
                 }
@@ -208,14 +205,26 @@ impl Scheduler {
             }
         };
 
+        /*print!("runqueue: ");
+        for x in &queues.run_queue {
+            print!("{:?} ", x.id());
+        }
+        println!();
+        print!("blocked: ");
+        for x in &queues.blocked_threads {
+            print!("{:?} ", x.id());
+        }
+        println!();*/
+
         let next_thread = self.next_thread(&mut queues);
 
-        // Safety: this could lead to a memory leak if the old value is never read.
-        //         We did read the old value (it's in old_thread).
-        //         old_thread is either:
-        //          * dropped like it should be in case of exit
-        //          * added back to the runqueue, which means it's moved and won't be dropped here
-        //          * inside of next_thread, which means it went through the runqueue and thus has been moved
+        // Safety:
+        // This could lead to a memory leak if the old value is never read.
+        // We did read the old value (it's in old_thread).
+        // old_thread is either:
+        //  * dropped like it should be in case of exit
+        //  * added back to the runqueue, which means it's moved and won't be dropped here
+        //  * inside of next_thread, which means it went through the runqueue and thus has been moved
         unsafe {
             self.current_thread.store(next_thread, Ordering::Release);
         }
@@ -248,6 +257,13 @@ fn switch_to_next() {
 #[inline]
 pub fn thread_yield() {
     switch_to_next();
+}
+
+/// Wakeup and yield.
+pub fn wakeup_and_yield(id: ThreadId) {
+    if with_common_scheduler(|s| s.wakeup(id)) {
+        thread_yield();
+    }
 }
 
 /// Exit the thread.

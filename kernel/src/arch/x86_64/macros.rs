@@ -7,7 +7,7 @@ macro_rules! println {
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {
-        #[cfg(debug_assertions)]
+        //#[cfg(debug_assertions)]
             $crate::arch::serial::_print(format_args!($($arg)*));
     }
 }

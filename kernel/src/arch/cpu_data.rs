@@ -10,7 +10,7 @@ pub struct CpuData {
     /// Preemption disable count. Zero means enabled.
     preempt_count: u32,
     /// Should schedule flag.
-    should_schedule: Cell<u32>,
+    should_schedule: u32,
     /// Address Space Identifier stuff.
     asid_enable: Cell<bool>,
     asid_manager: RefCell<AsidManager>,
@@ -23,7 +23,7 @@ impl CpuData {
             // Need to fill in once we know the address.
             reference: 0,
             preempt_count: 0,
-            should_schedule: Cell::new(0),
+            should_schedule: 0,
             asid_enable: Cell::new(false),
             asid_manager: RefCell::new(AsidManager::new()),
         }
@@ -36,7 +36,7 @@ impl CpuData {
 
     /// Should schedule now? Do if needed.
     pub fn check_should_schedule(&self) {
-        if self.should_schedule.replace(0) != 0 {
+        if self.should_schedule != 0 {
             scheduler::thread_yield();
         }
     }
@@ -44,12 +44,12 @@ impl CpuData {
     /// Prepare to set the per-CPU data.
     pub fn prepare_to_set(&mut self, asid_enable: bool) {
         // Assembly code also trusts on this.
-        debug_assert_eq!(
+        assert_eq!(
             offset_of!(CpuData, preempt_count),
             Self::preempt_count_offset()
         );
-        debug_assert_eq!(offset_of!(CpuData, should_schedule), 12);
-        debug_assert_eq!(self.reference, 0);
+        assert_eq!(offset_of!(CpuData, should_schedule), 12);
+        assert_eq!(self.reference, 0);
         self.reference = self as *mut _ as usize;
         self.asid_enable.set(asid_enable);
     }

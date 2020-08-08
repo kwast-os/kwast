@@ -26,11 +26,11 @@ impl<T> WaitQueue<T> {
 
     /// Pops an element from the front.
     /// Waits if no elements are available.
-    pub fn pop_front(&self) -> Option<T> {
+    pub fn pop_front(&self) -> T {
         loop {
             let mut guard = self.queue.lock();
             if let Some(t) = guard.pop_front() {
-                return Some(t);
+                return t;
             } else {
                 self.cond_var.wait(guard);
             }

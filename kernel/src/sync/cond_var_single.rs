@@ -1,7 +1,8 @@
 use crate::sync::spinlock::PreemptCounterInfluence;
+use crate::sync::thread_block_guard::ThreadBlockGuard;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::{with_common_scheduler, with_current_thread};
-use crate::tasking::thread::{ThreadId, ThreadStatus};
+use crate::tasking::scheduler::with_current_thread;
+use crate::tasking::thread::ThreadId;
 use atomic::{Atomic, Ordering};
 use spin::MutexGuard;
 
@@ -23,16 +24,16 @@ impl CondVarSingle {
     pub fn notify(&self) {
         let tid = self.waiter.swap(ThreadId::zero(), Ordering::Acquire);
         if tid != ThreadId::zero() {
-            with_common_scheduler(|s| s.scheduler_for(tid)).map(|s| s.wakeup_and_yield(tid));
+            scheduler::wakeup_and_yield(tid);
         }
     }
 
     /// Wait until notified.
     pub fn wait<T>(&self, guard: MutexGuard<T, PreemptCounterInfluence>) {
+        let _block_guard = ThreadBlockGuard::activate();
         with_current_thread(|thread| {
-            thread.set_status(ThreadStatus::Blocked);
             loop {
-                match self.waiter.compare_exchange(
+                match self.waiter.compare_exchange_weak(
                     ThreadId::zero(),
                     thread.id(),
                     Ordering::Acquire,
@@ -44,7 +45,6 @@ impl CondVarSingle {
             }
             drop(guard);
         });
-        scheduler::thread_yield();
     }
 }
 

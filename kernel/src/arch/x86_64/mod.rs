@@ -91,20 +91,22 @@ impl Iterator for ArchBootModuleProvider<'_> {
 /// Initializes arch-specific stuff.
 #[no_mangle]
 pub extern "C" fn entry(mboot_addr: usize) {
-    unsafe {
+    {
         let cpuid = CpuId::new();
         let use_pcid = cpuid.get_feature_info().expect("feature info").has_pcid()
             && cpuid
                 .get_extended_feature_info()
                 .map_or_else(|| false, |info| info.has_invpcid());
+        
+        unsafe {
+            if use_pcid {
+                cr4_write(cr4_read() | (1 << 17));
+            }
 
-        if use_pcid {
-            cr4_write(cr4_read() | (1 << 17));
+            // Not shared between cores, but we must be careful about what data we modify or read.
+            PER_CPU_DATA_BSP.prepare_to_set(use_pcid);
+            set_per_cpu_data(&mut PER_CPU_DATA_BSP as *mut _);
         }
-
-        // Not shared between cores, but we must be careful about what data we modify or read.
-        PER_CPU_DATA_BSP.prepare_to_set(use_pcid);
-        set_per_cpu_data(&mut PER_CPU_DATA_BSP as *mut _);
     }
 
     interrupts::init();

@@ -17,7 +17,7 @@ LDFLAGS     = -n -T $(LD_SCRIPT) -s --gc-sections
 LD          = $(ARCH)-elf-ld
 AS          = $(ARCH)-elf-as
 
-QEMUFLAGS  += -m 512 --enable-kvm -cpu max --serial mon:stdio
+QEMUFLAGS  += -m 512 --enable-kvm -cpu max --serial mon:stdio -device isa-debug-exit,iobase=0xf4,iosize=0x04
 
 USER_CARGOFLAGS =
 ifeq ($(BUILD), release)

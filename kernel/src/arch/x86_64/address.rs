@@ -1,8 +1,5 @@
 use core::fmt::{Debug, Error, Formatter};
 use core::ops::Add;
-
-use bit_field::BitField;
-
 use crate::arch::x86_64::paging::PAGE_SIZE;
 use core::ops::{AddAssign, Sub, SubAssign};
 
@@ -23,7 +20,7 @@ impl PhysAddr {
     pub fn new(addr: usize) -> Self {
         // Defined limit by the architecture spec.
         debug_assert_eq!(
-            addr.get_bits(52..64),
+            addr >> 52,
             0,
             "physical address cannot be more than 52-bits: {:#x}",
             addr
@@ -101,7 +98,7 @@ impl VirtAddr {
     pub fn new(addr: usize) -> Self {
         debug_assert!(
             {
-                let x = addr.get_bits(47..64);
+                let x = addr >> 47;
                 x == 0 || x == 0x1ffff
             },
             "Virtual address is not in canonical form: {:#x}",

@@ -26,6 +26,7 @@ panic = "abort"
 [profile.release]
 lto = true
 opt-level = 2
+codegen-units = 1
 panic = "abort"
 
 [dependencies]
@@ -34,7 +35,6 @@ rlibc = "1.0.0"
 atomic = { version = "0.4", features = ["nightly"] } # 0.5 seems to have a bug where it doesn't detect the atomic types properly
 wasm-call = { path = "../lib/wasm-call" }
 raw-cpuid = "^7.0"
-bit_field = "^0.10.0"
 bitflags = "^1.2.1"
 multiboot2 = "^0.8.1"
 spin = "0.5"

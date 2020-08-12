@@ -8,16 +8,15 @@ use core::mem::size_of;
 #[cfg(feature = "test-buddy")]
 pub fn test_main() {
     let mut mapping = unsafe { ActiveMapping::get_unlocked() };
-    let addr: usize = 0xFFF00000;
+    let addr = VirtAddr::new(0xFFF00000);
     mapping
         .map_range(
-            VirtAddr::new(addr),
+            addr,
             size_of::<Tree>(),
             EntryFlags::PRESENT | EntryFlags::WRITABLE,
         )
         .unwrap();
-    let tree = unsafe { &mut *(addr as *mut Tree) };
-    tree.init();
+    let tree = unsafe { Tree::from(addr) };
 
     assert_eq!(tree.alloc(3), Some(0));
     assert_eq!(tree.alloc(2), Some(8));

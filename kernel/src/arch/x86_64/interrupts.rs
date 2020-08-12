@@ -244,12 +244,9 @@ extern "x86-interrupt" fn exc_bound_range_exceeded(frame: &mut ISRStackFrame) {
 }
 
 extern "x86-interrupt" fn exc_invalid_opcode(frame: &mut ISRStackFrame) {
-    if frame.rip.as_usize() < USER_START {
-        panic!("Invalid opcode: {:#?}", frame);
-    } else {
-        println!("wasm trap, thread killed");
-        scheduler::thread_exit(u32::MAX); // TODO: exit code
-    }
+    // Can't check RIP because we do ud2 too in kernel code for userspace.
+    println!("wasm trap, thread killed");
+    scheduler::thread_exit(u32::MAX); // TODO: exit code
 }
 
 extern "x86-interrupt" fn exc_device_not_available(frame: &mut ISRStackFrame) {

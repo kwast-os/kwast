@@ -13,7 +13,6 @@ use raw_cpuid::CpuId;
 #[macro_use]
 pub mod macros;
 pub mod address;
-pub mod atomic;
 pub mod interrupts;
 pub mod paging;
 pub mod port;

@@ -5,6 +5,7 @@ use crate::mm::buddy;
 use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::sync::spinlock::Spinlock;
+use crate::tasking::scheduler::with_current_thread;
 use crate::util::unchecked::UncheckedUnwrap;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cmp;
@@ -414,15 +415,19 @@ impl<'t> SpaceManager<'t> {
         // Map space for the tree
         let flags =
             EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::GLOBAL;
-        // Safety: we are the only running thread right now, so no locking is required.
+
+        // Safety:
+        // We are the only running thread right now, so no locking is required.
+        // It's not possible to use the `thread.domain()` method anyway,
+        // because scheduling and threading is not up yet since it depends on this.
         let mut mapping = unsafe { ActiveMapping::get_unlocked() };
         mapping
             .map_range(tree_location, size_of::<Tree>(), flags)
             .expect("cannot map range for tree");
 
-        // Create the tree
-        let tree = unsafe { &mut *(tree_location.as_mut::<Tree>()) };
-        tree.init();
+        // Safety:
+        // We own this and mapped this. The size is big enough.
+        let tree = unsafe { Tree::from(tree_location) };
 
         Self {
             tree,
@@ -432,9 +437,11 @@ impl<'t> SpaceManager<'t> {
 
     /// This function should provide a safe way to get the active mapping. May lock.
     #[inline]
-    fn get_active_mapping() -> ActiveMapping {
-        // This is safe as long as we have a global heap lock.
-        // This is always the case right now.
+    fn get_active_mapping(&mut self) -> ActiveMapping {
+        // Safety:
+        // This is safe as long as we have a global heap lock,
+        // because we have our very own area in the page structures which cannot be affected
+        // by user processes directly.
         unsafe { ActiveMapping::get_unlocked() }
     }
 
@@ -457,7 +464,7 @@ impl<'t> SpaceManager<'t> {
             EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NX | EntryFlags::GLOBAL;
 
         if unlikely(
-            Self::get_active_mapping()
+            self.get_active_mapping()
                 .map_range(addr, size, flags)
                 .is_err(),
         ) {
@@ -474,7 +481,8 @@ impl<'t> SpaceManager<'t> {
         self.tree.dealloc(order, offset);
 
         let size = PAGE_SIZE << order;
-        Self::get_active_mapping().free_and_unmap_range(VirtAddr::new(ptr as usize), size);
+        self.get_active_mapping()
+            .free_and_unmap_range(VirtAddr::new(ptr as usize), size);
     }
 
     /// Creates a free slab of the requested order.

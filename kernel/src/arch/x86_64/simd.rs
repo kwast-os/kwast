@@ -69,7 +69,7 @@ impl Drop for SimdState {
 pub fn setup_simd() {
     let cpuid = CpuId::new();
 
-    // Set OSFXSR and OSXMMEXCPT bits, at least SSE2 is available
+    // Set OSFXSR and OSXMMEXCPT bits, at least SSE2 is available.
     let mut cr4 = cr4_read();
     cr4 |= (1 << 9) | (1 << 10);
 
@@ -80,7 +80,7 @@ pub fn setup_simd() {
         // Enable XSAVE
         cr4 |= 1 << 18;
 
-        // XCR0 will have x87 and SSE states for sure
+        // XCR0 will have x87 and SSE states for sure.
         #[allow(clippy::identity_op)]
         let mut xcr0 = (1 << 0) | (1 << 1);
 
@@ -99,15 +99,12 @@ pub fn setup_simd() {
             if state.has_xsaves_xrstors() {
                 SIMD_SAVE_ROUTINE = simd_routine_xsaves;
                 SIMD_RESTORE_ROUTINE = simd_routine_xrstors;
-                println!("Use xsaves");
             } else if state.has_xsaveopt() {
                 SIMD_SAVE_ROUTINE = simd_routine_xsaveopt;
                 SIMD_RESTORE_ROUTINE = simd_routine_xrstor;
-                println!("Use xsaveopt");
             } else {
                 SIMD_SAVE_ROUTINE = simd_routine_xsave;
                 SIMD_RESTORE_ROUTINE = simd_routine_xrstor;
-                println!("Use xsave");
             };
         }
     } else {
@@ -117,7 +114,6 @@ pub fn setup_simd() {
             SIMD_SAVE_ALIGN = 16;
             SIMD_SAVE_ROUTINE = simd_routine_fxsave;
             SIMD_RESTORE_ROUTINE = simd_routine_fxrstor;
-            println!("Use fxsave");
         }
     }
 
@@ -146,6 +142,11 @@ pub fn alloc_simd_save_region() -> *mut u8 {
     }
 }
 
+/// EDX:EAX works as a mask for XCR0.
+/// We don't need to store & restore the x87 state because we never ever use it.
+const ROUTINE_EAX: u32 = 0b110;
+const ROUTINE_EDX: u32 = 0;
+
 /// Invalid SIMD save routine.
 fn simd_invalid_routine(_region: *mut u8) {
     unreachable!("simd routine should be selected");
@@ -158,17 +159,17 @@ unsafe fn simd_routine_fxsave(region: *mut u8) {
 
 /// SIMD save routine using XSAVE.
 unsafe fn simd_routine_xsave(region: *mut u8) {
-    llvm_asm!("xsave ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xsave ($0)" :: "r" (region), "{eax}" (ROUTINE_EAX), "{edx}" (ROUTINE_EDX) : "memory");
 }
 
 /// SIMD save routine using XSAVEOPT.
 unsafe fn simd_routine_xsaveopt(region: *mut u8) {
-    llvm_asm!("xsaveopt ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xsaveopt ($0)" :: "r" (region), "{eax}" (ROUTINE_EAX), "{edx}" (ROUTINE_EDX) : "memory");
 }
 
 /// SIMD save routine using XSAVES.
 unsafe fn simd_routine_xsaves(region: *mut u8) {
-    llvm_asm!("xsaves ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xsaves ($0)" :: "r" (region), "{eax}" (ROUTINE_EAX), "{edx}" (ROUTINE_EDX) : "memory");
 }
 
 /// SIMD save routine using FXRSTOR.
@@ -178,10 +179,10 @@ unsafe fn simd_routine_fxrstor(region: *mut u8) {
 
 /// SIMD save routine using XRSTOR.
 unsafe fn simd_routine_xrstor(region: *mut u8) {
-    llvm_asm!("xrstor ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xrstor ($0)" :: "r" (region), "{eax}" (ROUTINE_EAX), "{edx}" (ROUTINE_EDX) : "memory");
 }
 
 /// SIMD save routine using XRSTORS.
 unsafe fn simd_routine_xrstors(region: *mut u8) {
-    llvm_asm!("xrstors ($0)" :: "r" (region), "{eax}" (0xFFFF_FFFFu32), "{edx}" (0xFFFF_FFFFu32) : "memory");
+    llvm_asm!("xrstors ($0)" :: "r" (region), "{eax}" (ROUTINE_EAX), "{edx}" (ROUTINE_EDX) : "memory");
 }

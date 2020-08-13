@@ -1,7 +1,9 @@
 //! Basic, read-only, in-memory tar support.
 
 use core::marker::PhantomData;
+use core::mem::size_of;
 use core::slice;
+use core::iter::repeat;
 
 /// Tar standard Posix header.
 #[repr(C, align(512))]
@@ -100,22 +102,16 @@ impl<'a> Iterator for TarIterator<'a> {
         }
 
         // Calculate checksum
-        let chksum = unsafe {
+        let chksum = {
             let chksum_offset = offset_of!(PosixHeader, chksum);
-            let mut sum = 0u32;
-            let ptr = self.ptr as *const u8;
-
-            for i in 0..chksum_offset {
-                sum += *ptr.add(i) as u32;
-            }
-
-            sum += 8 * b' ' as u32;
-
-            for i in chksum_offset + 8..512 {
-                sum += *ptr.add(i) as u32;
-            }
-
-            sum
+            let slice =
+                unsafe { slice::from_raw_parts(self.ptr as *const u8, size_of::<PosixHeader>()) };
+            slice[0..chksum_offset]
+                .iter()
+                .chain(repeat(&b' ').take(8))
+                .chain(slice[chksum_offset + 8..].iter())
+                .map(|x| *x as u32)
+                .sum::<u32>()
         };
 
         let header = unsafe { &*self.ptr };

@@ -149,7 +149,7 @@ impl Drop for ProtectionDomainInner {
         if let Some(asid_manager) = get_per_cpu_data().asid_manager() {
             asid_manager
                 .borrow_mut()
-                .free(self.current_asid.load(atomic::Ordering::Release));
+                .free(self.current_asid.load(atomic::Ordering::Acquire));
         }
 
         // The PMM expects a virtual address because it needs to update the list.

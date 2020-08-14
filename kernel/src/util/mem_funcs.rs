@@ -11,14 +11,14 @@ pub unsafe extern "C" fn memcpy(dst: *mut u8, src: *const u8, n: usize) -> *mut 
     let mut i = 0usize;
 
     // First try to align the destination and do byte copies.
-    while i < n && is_unaligned(dst) {
+    while i < n && is_unaligned(dst.add(i)) {
         *dst.add(i) = *src.add(i);
         i += 1;
     }
 
     // If we end up with an aligned source now, we can do full block copies.
-    if !is_unaligned(src) {
-        while i < n {
+    if !is_unaligned(src.add(i)) {
+        while i + SIZE < n {
             let src = src.add(i) as *mut usize;
             let dst = dst.add(i) as *mut usize;
             *dst = *src;
@@ -63,18 +63,19 @@ pub unsafe extern "C" fn memset(dst: *mut u8, data: i32, n: usize) -> *mut u8 {
     let data = data as u8;
 
     // First try aligning and do byte writes.
-    while i < n && is_unaligned(dst) {
+    while i < n && is_unaligned(dst.add(i)) {
         *dst.add(i) = data;
         i += 1;
     }
 
     // If we end up with an aligned source now, we can do full block copies.
-    if !is_unaligned(dst) {
-        let data = data as usize;
+    if !is_unaligned(dst.add(i)) {
+        let data = data as u8 as usize;
         let data = data << 8 | data;
         let data = data << 16 | data;
         let data = data << 32 | data;
-        while i < n {
+
+        while i + SIZE < n {
             let dst = dst.add(i) as *mut usize;
             *dst = data;
             i += SIZE;

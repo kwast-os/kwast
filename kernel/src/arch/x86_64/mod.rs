@@ -1,5 +1,8 @@
 use core::cmp::max;
 
+use crate::arch::acpi;
+use crate::arch::acpi::hpet::Hpet;
+use crate::arch::acpi::RootSdt;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::cpu_data::CpuData;
 use crate::arch::x86_64::paging::{ActiveMapping, EntryFlags};
@@ -37,6 +40,9 @@ extern "C" {
 
 /// Per-CPU data for the bootstrap processor.
 static mut PER_CPU_DATA_BSP: CpuData = CpuData::new();
+
+/// Hpet.
+static mut HPET: Option<Hpet> = None;
 
 struct ArchBootModuleProvider<'a> {
     module_iter: ModuleIter<'a>,
@@ -96,7 +102,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
             && cpuid
                 .get_extended_feature_info()
                 .map_or_else(|| false, |info| info.has_invpcid());
-        
+
         unsafe {
             if use_pcid {
                 cr4_write(cr4_read() | (1 << 17));
@@ -144,12 +150,12 @@ pub extern "C" fn entry(mboot_addr: usize) {
                 paging_flags |= EntryFlags::NX;
             }
 
-            println!(
-                "{:#x}-{:#x} {:?}",
-                x.start_address(),
-                x.end_address(),
-                x.flags()
-            );
+            //println!(
+            //    "{:#x}-{:#x} {:?}",
+            //    x.start_address(),
+            //    x.end_address(),
+            //    x.flags()
+            //);
 
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping
@@ -174,9 +180,32 @@ pub extern "C" fn entry(mboot_addr: usize) {
         mapping.free_and_unmap_single(interrupt_stack_bottom);
     }
 
-    // Run kernel main
     let reserved_end = VirtAddr::new(reserved_end).align_up();
+
+    // The bootloader verifies the checksum and revision for us.
+    let root_sdt = if let Some(rsdp) = mboot_struct.rsdp_v2_tag() {
+        RootSdt::Xsdt(PhysAddr::new(rsdp.xsdt_address()))
+    } else if let Some(rsdp) = mboot_struct.rsdp_v1_tag() {
+        RootSdt::Rsdt(PhysAddr::new(rsdp.rsdt_address()))
+    } else {
+        panic!("No RSDP table found");
+    };
+
+    let result = acpi::parse_tables(root_sdt, reserved_end);
+    unsafe {
+        let mut mapping = ActiveMapping::get_unlocked();
+        if let Some(hpet_data) = result.hpet {
+            HPET = Some(Hpet::from(&mut mapping, VirtAddr::new(0x1000), hpet_data));
+        }
+    }
+
     crate::kernel_run(reserved_end, boot_modules);
+}
+
+/// Gets the Hpet reference if there is one.
+pub fn hpet() -> Option<&'static Hpet> {
+    // Safety: read-only and only written to on bootup.
+    unsafe { HPET.as_ref() }
 }
 
 /// Late init.
@@ -191,15 +220,8 @@ pub fn halt() {
     }
 }
 
-/// Returns true if the architecture supports hardware lock elision.
-#[inline(always)]
-pub const fn supports_hle() -> bool {
-    // Instructions are backwards compatible.
-    true
-}
-
 /// Sets the per-CPU data pointer.
-fn set_per_cpu_data(ptr: *mut CpuData) {
+fn set_per_cpu_data(ptr: *const CpuData) {
     unsafe {
         wrmsr(0xC000_0101, ptr as u64);
     }
@@ -209,7 +231,7 @@ fn set_per_cpu_data(ptr: *mut CpuData) {
 #[inline(always)]
 pub fn get_per_cpu_data() -> &'static CpuData {
     unsafe {
-        let value: *mut CpuData;
+        let value: *const CpuData;
         llvm_asm!("mov %gs:0, $0" : "=r" (value));
         &*value
     }
@@ -258,6 +280,18 @@ pub fn preempt_disable() {
     debug_assert_eq!(CpuData::preempt_count_offset(), 8);
     unsafe {
         llvm_asm!("incl %gs:8" ::: "memory" : "volatile");
+    }
+}
+
+/// Check if the "should schedule" flag is set and switch if needed.
+#[inline]
+pub fn check_should_schedule() {
+    extern "C" {
+        fn _check_should_schedule();
+    }
+
+    unsafe {
+        _check_should_schedule();
     }
 }
 

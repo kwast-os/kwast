@@ -62,8 +62,6 @@ irq0:
     movb $32, %al
     outb %al, $32
 
-    // Switch reason: regular switch (see scheduler.rs)
-    xor %edi, %edi
     call _switch_to_next
 
     popq %r11
@@ -92,3 +90,12 @@ _thread_exit:
 
     // Should not get here
     ud2
+
+.global _check_should_schedule
+.type _check_should_schedule, @function
+_check_should_schedule:
+    cmpb $0, %gs:12
+    jnz 1f
+    ret
+1:
+    jmp _switch_to_next

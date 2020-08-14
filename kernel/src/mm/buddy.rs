@@ -1,7 +1,6 @@
 use crate::arch::address::VirtAddr;
 use core::cmp;
 use core::intrinsics::unlikely;
-use core::mem::transmute;
 use core::mem::MaybeUninit;
 
 /// Amount of top nodes.
@@ -37,12 +36,12 @@ impl Tree {
         // Limit scope of unsafety, this procedure is safe.
         fn fill_nodes(entries: &mut MaybeUninitEntries) {
             let mut size = (MAX_LEVEL + 1) as u8;
-            for i in 0..NODE_COUNT {
+            for (i, entry) in entries.iter_mut().enumerate() {
                 if is_pow2(i + 1) {
                     size -= 1;
                 }
 
-                entries[i] = MaybeUninit::new(size);
+                *entry = MaybeUninit::new(size);
             }
         }
 
@@ -55,7 +54,7 @@ impl Tree {
         // `MaybeUninit<u8>` and `u8` have the same ABI, size & alignment.
         // Thus, `Entries` and `MaybeUninitEntries` may be transmuted to each other.
         // `Tree` and `Entries` have the same ABI, size & alignment due to the repr(transparent).
-        transmute::<_, &mut Tree>(array)
+        &mut *(array as *mut _ as *mut Tree)
     }
 
     /// Left index of a node.

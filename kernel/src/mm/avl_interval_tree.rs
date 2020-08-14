@@ -222,10 +222,8 @@ impl AVLIntervalTree {
 
         match res.0 {
             Choice::Left => {
-                let (left, result) = Self::find_len_helper(
-                    root.left.take().expect("left is filtered"),
-                    wanted_len,
-                );
+                let (left, result) =
+                    Self::find_len_helper(root.left.take().expect("left is filtered"), wanted_len);
                 root.left = left;
                 root.update_max_len();
                 (Some(root), result)

@@ -16,6 +16,7 @@ use alloc::sync::Arc;
 use atomic::Atomic;
 use core::borrow::Borrow;
 use core::cmp::Ordering;
+use core::sync::atomic::AtomicI32;
 
 /// Stack size in bytes.
 const STACK_SIZE: usize = 1024 * 256;
@@ -79,6 +80,7 @@ pub struct Thread {
     domain: ProtectionDomain,
     status: Atomic<ThreadStatus>,
     file_descriptor_table: FileDescriptorTable,
+    pub abc: AtomicI32,
 }
 
 impl Thread {
@@ -126,6 +128,7 @@ impl Thread {
             simd_state: SimdState::new(),
             status: Atomic::new(ThreadStatus::Runnable),
             file_descriptor_table: fdt,
+            abc: AtomicI32::new(0),
         }
     }
 

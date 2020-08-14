@@ -1,7 +1,3 @@
-use alloc::collections::{BTreeSet, VecDeque};
-
-use hashbrown::HashMap;
-
 use crate::arch::address::VirtAddr;
 use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
 use crate::mm::vma_allocator::MappedVma;
@@ -9,15 +5,18 @@ use crate::sync::atomic::{AtomicArc, AtomicManagedPtr};
 use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::thread::{Stack, Thread, ThreadId, ThreadStatus};
+use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::sync::Arc;
 use atomic::Atomic;
+use bitflags::_core::intrinsics::unlikely;
 use bitflags::_core::mem::ManuallyDrop;
+use core::intrinsics::likely;
 use core::sync::atomic::Ordering;
 use spin::Once;
 
 /// Common data for all per-core schedulers.
 pub struct SchedulerCommon {
-    threads: HashMap<ThreadId, Arc<Thread>>,
+    threads: BTreeMap<ThreadId, Arc<Thread>>,
 }
 
 /// Per-core queues.
@@ -38,7 +37,7 @@ impl SchedulerCommon {
     /// New scheduler common data.
     fn new() -> Self {
         Self {
-            threads: HashMap::new(),
+            threads: BTreeMap::new(),
         }
     }
 
@@ -68,7 +67,10 @@ impl SchedulerCommon {
                 .is_ok()
             {
                 // TODO: multicore
-                return SCHEDULER.call_once(scheduler_core_new).move_wakeup(id);
+                return SCHEDULER
+                    .try_get()
+                    .expect("core scheduler for thread should exist")
+                    .move_wakeup(id);
             }
         }
 
@@ -158,7 +160,7 @@ impl Scheduler {
         // Cleanup old thread.
         // Relaxed ordering is fine because this is only for this core.
         let garbage = self.garbage.load(Ordering::Relaxed);
-        if garbage != ThreadId::zero() {
+        if unlikely(garbage != ThreadId::zero()) {
             with_common_mut(|common| common.remove_thread(garbage));
             self.garbage.store(ThreadId::zero(), Ordering::Relaxed);
         }
@@ -179,14 +181,14 @@ impl Scheduler {
 
         let old_thread_status = old_thread.status();
 
-        if !matches!(old_thread_status, ThreadStatus::Exit(_)) {
+        if likely(!matches!(old_thread_status, ThreadStatus::Exit(_))) {
             old_thread.save_simd();
             old_thread.stack.set_current_location(old_stack);
         }
 
         match old_thread_status {
             ThreadStatus::Runnable => {
-                if !Arc::ptr_eq(&old_thread, &self.idle_thread) {
+                if likely(!Arc::ptr_eq(&old_thread, &self.idle_thread)) {
                     queues.run_queue.push_back(old_thread);
                 }
             }
@@ -273,7 +275,15 @@ pub fn thread_exit(exit_code: u32) -> ! {
         fn _thread_exit() -> !;
     }
 
-    with_current_thread(|thread| thread.set_status(ThreadStatus::Exit(exit_code)));
+    with_core_scheduler(|s| {
+        s.with_current_thread(|thread| {
+            assert!(
+                !Arc::ptr_eq(thread, &s.idle_thread),
+                "Attempting to kill the idle thread"
+            );
+            thread.set_status(ThreadStatus::Exit(exit_code))
+        })
+    });
     println!("thread exit: {}", exit_code);
 
     unsafe {
@@ -306,7 +316,10 @@ fn with_common_mut<F, T>(f: F) -> T
 where
     F: FnOnce(&mut SchedulerCommon) -> T,
 {
-    f(&mut *SCHEDULER_COMMON.call_once(scheduler_common_new).write())
+    f(&mut *SCHEDULER_COMMON
+        .try_get()
+        .expect("common scheduler")
+        .write())
 }
 
 /// With common scheduler data. Read-only.
@@ -314,7 +327,7 @@ pub fn with_common_scheduler<F, T>(f: F) -> T
 where
     F: FnOnce(&SchedulerCommon) -> T,
 {
-    f(&*SCHEDULER_COMMON.call_once(scheduler_common_new).read())
+    f(&*SCHEDULER_COMMON.try_get().expect("common scheduler").read())
 }
 
 /// Execute something using this core-local scheduler.
@@ -322,7 +335,7 @@ pub fn with_core_scheduler<F, T>(f: F) -> T
 where
     F: FnOnce(&Scheduler) -> T,
 {
-    f(&SCHEDULER.call_once(scheduler_core_new))
+    f(&SCHEDULER.try_get().expect("core scheduler"))
 }
 
 /// Execute something using the current thread reference.
@@ -333,20 +346,12 @@ where
     with_core_scheduler(|s| s.with_current_thread(f))
 }
 
-/// Factory for scheduler common inner type.
-fn scheduler_common_new() -> RwLock<SchedulerCommon> {
-    RwLock::new(SchedulerCommon::new())
-}
-
-/// Factory for scheduler common inner type.
-fn scheduler_core_new() -> Scheduler {
-    let idle_protection_domain =
-        unsafe { ProtectionDomain::from_existing_mapping(get_cpu_page_mapping()) };
-    Scheduler::new(idle_protection_domain)
-}
-
 /// Inits scheduler.
 pub fn init() {
-    SCHEDULER_COMMON.call_once(scheduler_common_new);
-    SCHEDULER.call_once(scheduler_core_new);
+    SCHEDULER_COMMON.call_once(|| RwLock::new(SchedulerCommon::new()));
+    SCHEDULER.call_once(|| {
+        let idle_protection_domain =
+            unsafe { ProtectionDomain::from_existing_mapping(get_cpu_page_mapping()) };
+        Scheduler::new(idle_protection_domain)
+    });
 }

@@ -5,7 +5,6 @@ use crate::mm::buddy;
 use crate::mm::buddy::Tree;
 use crate::mm::mapper::MemoryMapper;
 use crate::sync::spinlock::Spinlock;
-use crate::tasking::scheduler::with_current_thread;
 use crate::util::unchecked::UncheckedUnwrap;
 use core::alloc::{GlobalAlloc, Layout};
 use core::cmp;

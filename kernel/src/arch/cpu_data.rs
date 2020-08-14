@@ -1,5 +1,4 @@
 use crate::arch::asid::AsidManager;
-use crate::tasking::scheduler;
 use core::cell::{Cell, RefCell};
 
 /// Per-CPU data.
@@ -32,13 +31,6 @@ impl CpuData {
     /// Offset of field `preempt_count`.
     pub const fn preempt_count_offset() -> usize {
         8
-    }
-
-    /// Should schedule now? Do if needed.
-    pub fn check_should_schedule(&self) {
-        if self.should_schedule != 0 {
-            scheduler::thread_yield();
-        }
     }
 
     /// Prepare to set the per-CPU data.

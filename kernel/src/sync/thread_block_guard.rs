@@ -1,6 +1,7 @@
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::with_current_thread;
 use crate::tasking::thread::ThreadStatus;
+use core::intrinsics::likely;
 
 /// Guard that marks the thread as blocked.
 /// The thread will be yielded and woken up later on drop if the resource hasn't become available
@@ -9,6 +10,7 @@ use crate::tasking::thread::ThreadStatus;
 pub struct ThreadBlockGuard {}
 
 impl ThreadBlockGuard {
+    /// Activates the block guard.
     pub fn activate() -> Self {
         // Mark the thread as blocked.
         // Next context switch the thread will block.
@@ -24,7 +26,7 @@ impl Drop for ThreadBlockGuard {
         // The scheduler will have marked the thread as `Runnable` again in that case.
         // We don't have to yield in that case.
         // TL;DR: if it's still blocked: yield.
-        if with_current_thread(|thread| thread.status()) == ThreadStatus::Blocked {
+        if likely(with_current_thread(|thread| thread.status()) == ThreadStatus::Blocked) {
             scheduler::thread_yield();
         }
     }

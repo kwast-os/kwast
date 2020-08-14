@@ -1,9 +1,9 @@
 //! Basic, read-only, in-memory tar support.
 
+use core::iter::repeat;
 use core::marker::PhantomData;
 use core::mem::size_of;
 use core::slice;
-use core::iter::repeat;
 
 /// Tar standard Posix header.
 #[repr(C, align(512))]

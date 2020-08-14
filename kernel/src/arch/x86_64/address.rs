@@ -1,6 +1,6 @@
+use crate::arch::x86_64::paging::PAGE_SIZE;
 use core::fmt::{Debug, Error, Formatter};
 use core::ops::Add;
-use crate::arch::x86_64::paging::PAGE_SIZE;
 use core::ops::{AddAssign, Sub, SubAssign};
 
 /// A 64-bit physical address.

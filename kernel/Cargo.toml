@@ -31,7 +31,6 @@ panic = "abort"
 
 [dependencies]
 static_assertions = "1.1.0"
-rlibc = "1.0.0"
 atomic = { version = "0.4", features = ["nightly"] } # 0.5 seems to have a bug where it doesn't detect the atomic types properly
 wasm-call = { path = "../lib/wasm-call" }
 raw-cpuid = "^7.0"
@@ -47,4 +46,4 @@ cranelift-native = { git = "https://github.com/kwast-os/wasmtime", package="cran
 
 [replace]
 "wasmparser:0.59.0" = { git = "https://github.com/kwast-os/wasm-tools", "branch" = "0.59.0" }
-"spin:0.5.2" = { git = "https://github.com/kwast-os/spin-rs", rev = "8541336" }
+"spin:0.5.2" = { git = "https://github.com/kwast-os/spin-rs", rev = "434b4f9" }

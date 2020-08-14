@@ -1,13 +1,16 @@
 use crate::arch::{preempt_disable, preempt_enable};
-use crate::sync::atomic::AtomicOptionBox;
 use crate::sync::thread_block_guard::ThreadBlockGuard;
 use crate::sync::wait_queue::WaitQueue;
 use crate::tasking::file::{FileDescriptor, FileHandle};
 use crate::tasking::scheduler::{self, with_current_thread};
-use crate::tasking::thread::ThreadId;
-use alloc::boxed::Box;
+use crate::tasking::thread::Thread;
 use alloc::sync::{Arc, Weak};
 use core::sync::atomic::Ordering;
+
+/// Reply data inside TCB.
+/// We only wait at most for one reply. The reply data is very simple, it's just a status + data pair.
+/// In the case we have a non-blocking send, we don't have reply data.
+pub type TcbReplyData = u64; // TODO: move me and make better
 
 /// Type of file handle.
 enum Handle {
@@ -22,10 +25,9 @@ enum CommandData {
     Open,
 }
 
-pub struct Command {
-    sender: ThreadId,
+struct Command {
     data: CommandData,
-    response: Arc<AtomicOptionBox<i32>>,
+    thread: Arc<Thread>,
 }
 
 pub type SchemePtr = Weak<Scheme>;
@@ -59,38 +61,33 @@ impl Scheme {
         FileDescriptor::from(&self, FileHandle::Own)
     }
 
-    pub fn open(&self) {
-        let sender = with_current_thread(|thread| thread.id());
-        let response = Arc::new(AtomicOptionBox::from(None));
+    pub fn open(&self) -> bool {
+        with_current_thread(|t| {
+            // Blocks the thread, sends the command and notifies the receiving thread.
+            {
+                preempt_disable();
+                let _block_guard = ThreadBlockGuard::activate();
+                self.command_queue.push_back(Command {
+                    data: CommandData::Open,
+                    thread: t.clone(),
+                });
+                preempt_enable();
+            }
 
-        // Blocks the thread, sends the command and notifies the receiving thread.
-        {
-            preempt_disable();
-            let _block_guard = ThreadBlockGuard::activate();
-            self.command_queue.push_back(Command {
-                sender,
-                data: CommandData::Open,
-                response: response.clone(),
-            });
-            preempt_enable();
-        }
-
-        // We have waken up
-        let response = response.swap(None, Ordering::AcqRel);
-        println!("response: {:?}", response);
-
-        // TODO
+            t.abc.load(Ordering::Acquire) == 1000000
+        })
     }
 
-    pub fn command_receive(&self) -> Command {
+    fn command_receive(&self) -> Command {
         self.command_queue.pop_front()
     }
 
-    pub fn test(&self, data: i32) {
+    pub fn test(&self, data2: i32) {
         let cmd = self.command_receive();
-        let response = Some(Box::new(data));
-        cmd.response.swap(response, Ordering::AcqRel);
-        scheduler::wakeup_and_yield(cmd.sender);
+        cmd.thread.abc.store(data2, Ordering::Release);
+        let id = cmd.thread.id();
+        drop(cmd.thread);
+        scheduler::wakeup_and_yield(id);
     }
 }
 

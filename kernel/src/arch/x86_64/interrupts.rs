@@ -6,7 +6,6 @@ use lazy_static::lazy_static;
 use crate::arch::x86_64::address::VirtAddr;
 use crate::arch::x86_64::paging::PageFaultError;
 use crate::arch::x86_64::port::write_port8;
-use crate::arch::USER_START;
 use crate::tasking::scheduler;
 
 /// The stack frame pushed by the CPU for an ISR.
@@ -243,7 +242,7 @@ extern "x86-interrupt" fn exc_bound_range_exceeded(frame: &mut ISRStackFrame) {
     panic!("Bound range exceeded exception: {:#?}", frame);
 }
 
-extern "x86-interrupt" fn exc_invalid_opcode(frame: &mut ISRStackFrame) {
+extern "x86-interrupt" fn exc_invalid_opcode(_frame: &mut ISRStackFrame) {
     // Can't check RIP because we do ud2 too in kernel code for userspace.
     println!("wasm trap, thread killed");
     scheduler::thread_exit(u32::MAX); // TODO: exit code

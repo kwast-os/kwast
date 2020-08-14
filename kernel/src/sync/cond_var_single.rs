@@ -1,7 +1,6 @@
 use crate::sync::spinlock::PreemptCounterInfluence;
 use crate::sync::thread_block_guard::ThreadBlockGuard;
-use crate::tasking::scheduler;
-use crate::tasking::scheduler::with_current_thread;
+use crate::tasking::scheduler::{self, with_current_thread};
 use crate::tasking::thread::ThreadId;
 use atomic::{Atomic, Ordering};
 use spin::MutexGuard;

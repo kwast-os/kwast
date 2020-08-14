@@ -1,5 +1,5 @@
 use crate::arch::interrupts::{irq_restore, irq_save_and_stop, IrqState};
-use crate::arch::{get_per_cpu_data, preempt_disable, preempt_enable};
+use crate::arch::{check_should_schedule, preempt_disable, preempt_enable};
 use spin::{self, SchedulerInfluence};
 
 pub struct PreemptCounterInfluence {}
@@ -20,7 +20,7 @@ impl Drop for PreemptCounterInfluence {
     #[inline]
     fn drop(&mut self) {
         preempt_enable();
-        get_per_cpu_data().check_should_schedule();
+        check_should_schedule();
     }
 }
 
@@ -42,7 +42,5 @@ impl Drop for IrqInfluence {
 // TODO: apply Hardware Lock Elision if supported
 
 pub type Spinlock<T> = spin::Mutex<T, PreemptCounterInfluence>;
-
 pub type RwLock<T> = spin::RwLock<T, PreemptCounterInfluence>;
-
 pub type IrqSpinlock<T> = spin::Mutex<T, IrqInfluence>;

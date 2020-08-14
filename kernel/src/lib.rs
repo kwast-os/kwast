@@ -12,8 +12,6 @@
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]
 
-extern crate rlibc;
-
 #[macro_use]
 extern crate static_assertions;
 
@@ -32,7 +30,9 @@ use core::slice;
 use arch::interrupts;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
+use crate::arch::hpet;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
+use crate::arch::qemu::qemu_exit;
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
@@ -134,13 +134,12 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     // TODO: debug code
     unsafe {
         let entry = VirtAddr::new(thread_test as usize);
-        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
+        let domain = ProtectionDomain::new().unwrap();
+        let domain2 = domain.clone();
+        let t = Thread::create(domain, entry, 1234).unwrap();
         scheduler::add_and_schedule_thread(t);
-    };
-    // TODO: debug code
-    unsafe {
         let entry = VirtAddr::new(thread2_test as usize);
-        let t = Thread::create(ProtectionDomain::new().unwrap(), entry, 1234).unwrap();
+        let t = Thread::create(domain2, entry, 1234).unwrap();
         scheduler::add_and_schedule_thread(t);
     };
 
@@ -156,22 +155,31 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     }
 }
 
-extern "C" fn thread2_test(arg: u64) {
+extern "C" fn thread2_test(_arg: u64) {
     let self_scheme = schemes().read().get(Box::new([])).unwrap();
     let mut i = 0;
     loop {
         self_scheme.test(i);
         i += 1;
     }
-    scheduler::thread_exit(0);
 }
 
-extern "C" fn thread_test(arg: u64) {
+extern "C" fn thread_test(_arg: u64) {
     let self_scheme = schemes().read().get(Box::new([])).unwrap();
+    let hpet = hpet().unwrap();
+    let first = hpet.counter();
     loop {
-        self_scheme.open();
+        if self_scheme.open() {
+            unsafe {
+                println!("{}ns", hpet.counter_to_ns(hpet.counter() - first));
+                println!(
+                    "{}ns / msg",
+                    hpet.counter_to_ns(hpet.counter() - first) / 1000000
+                );
+                qemu_exit(0);
+            }
+        }
     }
-    scheduler::thread_exit(0);
 }
 
 /// Kernel test main, called after arch init is done.

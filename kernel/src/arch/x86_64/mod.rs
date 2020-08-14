@@ -96,6 +96,9 @@ impl Iterator for ArchBootModuleProvider<'_> {
 /// Initializes arch-specific stuff.
 #[no_mangle]
 pub extern "C" fn entry(mboot_addr: usize) {
+    // Constants that can't be put as const because it's not const fn.
+    let hpet_addr: VirtAddr = VirtAddr::new(0x1000);
+
     {
         let cpuid = CpuId::new();
         let use_pcid = cpuid.get_feature_info().expect("feature info").has_pcid()
@@ -195,7 +198,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
     unsafe {
         let mut mapping = ActiveMapping::get_unlocked();
         if let Some(hpet_data) = result.hpet {
-            HPET = Some(Hpet::from(&mut mapping, VirtAddr::new(0x1000), hpet_data));
+            HPET = Some(Hpet::from(&mut mapping, hpet_addr, hpet_data));
         }
     }
 

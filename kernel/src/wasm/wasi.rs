@@ -251,6 +251,7 @@ impl WasmPtr<u8> {
         let slice = self.slice(ctx, len)?;
         for (dst, src) in slice.iter().zip(src.iter().chain(iter::once(&0))) {
             dst.set(*src);
+            println!("set {}", *src);
         }
         Ok(())
     }
@@ -413,7 +414,7 @@ impl AbiFunctions for VmContext {
         iovs_len: u32,
         nwritten: WasmPtr<u32>,
     ) -> WasmStatus {
-        // println!("fd_write {} iovs_len={}", fd, iovs_len);
+        println!("fd_write {} iovs_len={}", _fd, iovs_len);
 
         let iovs = iovs.slice(self, iovs_len)?;
 
@@ -449,7 +450,7 @@ impl AbiFunctions for VmContext {
                         dir: PreStatDir { pr_name_len },
                     },
                 });
-                println!("write {}", pr_name_len);
+                println!("fd_prestat_get: write {}", pr_name_len);
                 Ok(())
             } else {
                 Err(Errno::NameTooLong)
@@ -464,6 +465,7 @@ impl AbiFunctions for VmContext {
             if pre_open_path.len() + 1 > path_len as usize {
                 Err(Errno::NameTooLong)
             } else {
+                println!("fd_prestat_dir_name: {:?}", pre_open_path);
                 path.write_from_slice_with_null(self, path_len, pre_open_path)
             }
         })

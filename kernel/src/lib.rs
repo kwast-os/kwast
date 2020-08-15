@@ -36,6 +36,7 @@ use crate::arch::qemu::qemu_exit;
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
+use crate::tasking::scheduler::thread_exit;
 use crate::tasking::scheme_container::schemes;
 use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
@@ -135,12 +136,9 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     unsafe {
         let entry = VirtAddr::new(thread_test as usize);
         let domain = ProtectionDomain::new().unwrap();
-        let domain2 = domain.clone();
+        let entry = VirtAddr::new(thread_test as usize);
         let t = Thread::create(domain, entry, 1234).unwrap();
-        scheduler::add_and_schedule_thread(t);
-        let entry = VirtAddr::new(thread2_test as usize);
-        let t = Thread::create(domain2, entry, 1234).unwrap();
-        scheduler::add_and_schedule_thread(t);
+        //scheduler::add_and_schedule_thread(t);
     };
 
     // Handle boot modules.
@@ -155,31 +153,11 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     }
 }
 
-extern "C" fn thread2_test(_arg: u64) {
-    let self_scheme = schemes().read().get(Box::new([])).unwrap();
-    let mut i = 0;
-    loop {
-        self_scheme.test(i);
-        i += 1;
-    }
-}
-
 extern "C" fn thread_test(_arg: u64) {
-    let self_scheme = schemes().read().get(Box::new([])).unwrap();
-    let hpet = hpet().unwrap();
-    let first = hpet.counter();
-    loop {
-        if self_scheme.open() {
-            unsafe {
-                println!("{}ns", hpet.counter_to_ns(hpet.counter() - first));
-                println!(
-                    "{}ns / msg",
-                    hpet.counter_to_ns(hpet.counter() - first) / 1000000
-                );
-                qemu_exit(0);
-            }
-        }
-    }
+    //let self_scheme = schemes().read().get(Box::new([])).unwrap();
+    //self_scheme.test(0);
+    loop {}
+    thread_exit(123);
 }
 
 /// Kernel test main, called after arch init is done.

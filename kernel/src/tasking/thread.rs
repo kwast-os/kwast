@@ -9,6 +9,7 @@ use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::tasking::file::FileDescriptorTable;
 use crate::tasking::protection_domain::ProtectionDomain;
+use crate::tasking::scheme::ReplyDataTcb;
 use crate::tasking::scheme_container::schemes;
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use alloc::boxed::Box;
@@ -80,7 +81,7 @@ pub struct Thread {
     domain: ProtectionDomain,
     status: Atomic<ThreadStatus>,
     file_descriptor_table: FileDescriptorTable,
-    pub abc: AtomicI32,
+    pub reply: ReplyDataTcb,
 }
 
 impl Thread {
@@ -110,11 +111,16 @@ impl Thread {
         // TODO
         let mut fdt = FileDescriptorTable::new();
         fdt.insert_lowest({
+            //let mut tmp = schemes()
+            //    .read()
+            //    .get(Box::new([]))
+            //    .expect("self scheme")
+            //    .open_self();
+            //
             let mut tmp = schemes()
                 .read()
-                .get(Box::new([]))
-                .expect("self scheme")
-                .open_self();
+                .open_self(Box::new([]))
+                .expect("self scheme");
             tmp.set_pre_open_path(Box::new(*b"."));
             tmp
         });
@@ -128,7 +134,7 @@ impl Thread {
             simd_state: SimdState::new(),
             status: Atomic::new(ThreadStatus::Runnable),
             file_descriptor_table: fdt,
-            abc: AtomicI32::new(0),
+            reply: ReplyDataTcb::new(),
         }
     }
 

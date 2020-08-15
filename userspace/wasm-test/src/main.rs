@@ -13,6 +13,8 @@ fn main() {
 
     println!("-----");*/
 
+//    println!("Hello");
+
     let mut test = File::open(".").expect("open test");
     test.write(b"abc").expect("write test");
 }

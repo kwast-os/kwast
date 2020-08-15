@@ -10,7 +10,10 @@ pub type FileIdx = usize;
 
 /// File handle used in a scheme (per-scheme).
 pub enum FileHandle {
-    Inner(usize),
+    /// A handle to a file in the scheme.
+    /// This should be handled by the service.
+    Inner(u64),
+    /// A handle to the scheme itself.
     Own,
 }
 
@@ -30,9 +33,9 @@ pub struct FileDescriptorTable {
 
 impl FileDescriptor {
     /// Creates a file descriptor from scheme data.
-    pub fn from(scheme: &Scheme, handle: FileHandle) -> Self {
+    pub fn from(scheme: SchemePtr, handle: FileHandle) -> Self {
         Self {
-            scheme: scheme.ptr.clone(),
+            scheme,
             handle,
             pre_open_path: None,
         }

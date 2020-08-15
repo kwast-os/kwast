@@ -1,5 +1,6 @@
 use crate::sync::spinlock::RwLock;
-use crate::tasking::scheme::Scheme;
+use crate::tasking::file::{FileDescriptor, FileHandle};
+use crate::tasking::scheme::{Scheme, SchemePtr};
 use alloc::boxed::Box;
 use alloc::collections::btree_map::Entry;
 use alloc::collections::BTreeMap;
@@ -15,7 +16,9 @@ pub enum SchemeInsertionError {
 
 pub struct SchemeContainer {
     /// Maps a name to an id.
-    name_scheme_map: BTreeMap<Box<[u8]>, Arc<Scheme>>,
+    /// It also stores a `SchemePtr` because creating it using `Arc::downgrade` is more expensive
+    /// than cloning an already existing one.
+    name_scheme_map: BTreeMap<Box<[u8]>, (Arc<Scheme>, SchemePtr)>,
 }
 
 impl SchemeContainer {
@@ -33,16 +36,29 @@ impl SchemeContainer {
             Entry::Vacant(v) => {
                 let scheme = Arc::new(scheme);
                 let weak = Arc::downgrade(&scheme);
-                scheme.set_ptr(weak);
-                v.insert(scheme);
+                v.insert((scheme, weak));
                 Ok(())
             }
         }
     }
 
     /// Gets a scheme by name.
-    pub fn get(&self, name: Box<[u8]>) -> Option<Arc<Scheme>> {
-        self.name_scheme_map.get(&name).cloned()
+    //pub fn get(&self, name: Box<[u8]>) -> Option<Arc<Scheme>> {
+    //    self.name_scheme_map.get(&name).map(|(a, _)| a).cloned()
+    //}
+
+    pub fn open_self(&self, name: Box<[u8]>) -> Result<FileDescriptor, usize> {
+        // TODO: errno nodevice ?
+        let (_, w) = self.name_scheme_map.get(&name).ok_or(1usize)?;
+        Ok(FileDescriptor::from(w.clone(), FileHandle::Own))
+    }
+
+    pub fn open(&self, name: Box<[u8]>) -> Result<FileDescriptor, usize> {
+        // TODO: errno nodevice ?
+        let (a, w) = self.name_scheme_map.get(&name).ok_or(1usize)?;
+        // TODO: filename arg
+        a.open()
+            .map(|handle| FileDescriptor::from(w.clone(), handle))
     }
 }
 

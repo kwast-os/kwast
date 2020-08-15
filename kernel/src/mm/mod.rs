@@ -35,6 +35,9 @@ pub fn page_fault(fault_addr: VirtAddr, ip: VirtAddr) {
         } else {
             // Kill the thread.
             println!("Pagefault in thread at {:?}", fault_addr);
+            println!("{:?}", unsafe {
+                ActiveMapping::get_unlocked().translate(fault_addr)
+            });
             scheduler::thread_exit(u32::MAX); // TODO: exit code
         }
     }

@@ -6,6 +6,19 @@ use alloc::collections::btree_map::Entry;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use spin::Once;
+use crate::wasm::wasi::Errno;
+
+/// Scheme identifier.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(transparent)]
+pub struct SchemeId(usize);
+
+impl SchemeId {
+    /// Sentinel.
+    pub const fn sentinel() -> Self {
+        Self(0)
+    }
+}
 
 /// Error that can occur when inserting a new scheme.
 #[derive(Debug)]
@@ -19,6 +32,8 @@ pub struct SchemeContainer {
     /// It also stores a `SchemePtr` because creating it using `Arc::downgrade` is more expensive
     /// than cloning an already existing one.
     name_scheme_map: BTreeMap<Box<[u8]>, (Arc<Scheme>, SchemePtr)>,
+    /// Next scheme id.
+    next_scheme_id: usize,
 }
 
 impl SchemeContainer {
@@ -26,14 +41,17 @@ impl SchemeContainer {
     fn new() -> Self {
         Self {
             name_scheme_map: BTreeMap::new(),
+            next_scheme_id: 1,
         }
     }
 
     /// Inserts a new scheme.
-    pub fn insert(&mut self, name: Box<[u8]>, scheme: Scheme) -> Result<(), SchemeInsertionError> {
+    pub fn insert(&mut self, name: Box<[u8]>) -> Result<(), SchemeInsertionError> {
         match self.name_scheme_map.entry(name) {
             Entry::Occupied(_) => Err(SchemeInsertionError::NameAlreadyTaken),
             Entry::Vacant(v) => {
+                let scheme = Scheme::new(SchemeId(self.next_scheme_id));
+                self.next_scheme_id += 1;
                 let scheme = Arc::new(scheme);
                 let weak = Arc::downgrade(&scheme);
                 v.insert((scheme, weak));
@@ -47,15 +65,13 @@ impl SchemeContainer {
     //    self.name_scheme_map.get(&name).map(|(a, _)| a).cloned()
     //}
 
-    pub fn open_self(&self, name: Box<[u8]>) -> Result<FileDescriptor, usize> {
-        // TODO: errno nodevice ?
-        let (_, w) = self.name_scheme_map.get(&name).ok_or(1usize)?;
+    pub fn open_self(&self, name: Box<[u8]>) -> Result<FileDescriptor, Errno> {
+        let (_, w) = self.name_scheme_map.get(&name).ok_or(Errno::NoDev)?;
         Ok(FileDescriptor::from(w.clone(), FileHandle::Own))
     }
 
-    pub fn open(&self, name: Box<[u8]>) -> Result<FileDescriptor, usize> {
-        // TODO: errno nodevice ?
-        let (a, w) = self.name_scheme_map.get(&name).ok_or(1usize)?;
+    pub fn open(&self, name: Box<[u8]>) -> Result<FileDescriptor, Errno> {
+        let (a, w) = self.name_scheme_map.get(&name).ok_or(Errno::NoDev)?;
         // TODO: filename arg
         a.open()
             .map(|handle| FileDescriptor::from(w.clone(), handle))
@@ -70,7 +86,7 @@ pub fn schemes() -> &'static RwLock<SchemeContainer> {
         let mut container = SchemeContainer::new();
 
         container
-            .insert(Box::new([]), Scheme::new())
+            .insert(Box::new([]))
             .expect("add self");
 
         RwLock::new(container)

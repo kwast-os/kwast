@@ -9,8 +9,8 @@ use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::{RwLock, Spinlock};
 use crate::tasking::file::FileDescriptorTable;
 use crate::tasking::protection_domain::ProtectionDomain;
-use crate::tasking::scheme::ReplyDataTcb;
-use crate::tasking::scheme_container::schemes;
+use crate::tasking::scheme::ReplyPayloadTcb;
+use crate::tasking::scheme_container::{schemes, SchemeId};
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -33,7 +33,7 @@ pub struct Stack {
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(transparent)]
-pub struct ThreadId(u64);
+pub struct ThreadId(pub u64); // TODO: make private
 
 const_assert!(Atomic::<ThreadId>::is_lock_free());
 
@@ -75,13 +75,16 @@ struct StaticWasmThreadData {
 pub struct Thread {
     pub stack: Stack,
     id: ThreadId,
-    heap: RwLock<LazilyMappedVma>, // or something lighter? since this is only an issue with shared heaps
+    heap: RwLock<LazilyMappedVma>,
     static_wasm_data: Spinlock<Option<StaticWasmThreadData>>,
     simd_state: SimdState,
     domain: ProtectionDomain,
     status: Atomic<ThreadStatus>,
     file_descriptor_table: FileDescriptorTable,
-    pub reply: ReplyDataTcb,
+    pub reply: ReplyPayloadTcb,
+    /// On what scheme are we blocked on? Only applicable for sync IPC.
+    /// If this is equal to the sentinel value, we aren't blocked on a scheme.
+    blocked_on: Atomic<SchemeId>,
 }
 
 impl Thread {
@@ -111,12 +114,6 @@ impl Thread {
         // TODO
         let mut fdt = FileDescriptorTable::new();
         fdt.insert_lowest({
-            //let mut tmp = schemes()
-            //    .read()
-            //    .get(Box::new([]))
-            //    .expect("self scheme")
-            //    .open_self();
-            //
             let mut tmp = schemes()
                 .read()
                 .open_self(Box::new([]))
@@ -134,7 +131,8 @@ impl Thread {
             simd_state: SimdState::new(),
             status: Atomic::new(ThreadStatus::Runnable),
             file_descriptor_table: fdt,
-            reply: ReplyDataTcb::new(),
+            reply: ReplyPayloadTcb::new(),
+            blocked_on: Atomic::new(SchemeId::sentinel()),
         }
     }
 
@@ -219,11 +217,13 @@ impl Thread {
     }
 
     /// Sets the status.
+    #[inline]
     pub fn set_status(&self, new_status: ThreadStatus) {
         self.status.store(new_status, atomic::Ordering::Release);
     }
 
     /// Compare exchange status.
+    #[inline]
     pub fn status_compare_exchange(
         &self,
         current: ThreadStatus,
@@ -235,8 +235,21 @@ impl Thread {
     }
 
     /// Gets the status.
+    #[inline]
     pub fn status(&self) -> ThreadStatus {
         self.status.load(atomic::Ordering::Acquire)
+    }
+
+    /// Sets blocked on.
+    #[inline]
+    pub fn set_blocked_on(&self, blocked_on: SchemeId) {
+        self.blocked_on.store(blocked_on, atomic::Ordering::Release);
+    }
+
+    /// Sets blocked on.
+    #[inline]
+    pub fn blocked_on(&self) -> SchemeId {
+        self.blocked_on.load(atomic::Ordering::Acquire)
     }
 }
 

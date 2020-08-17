@@ -8,4 +8,4 @@ mod reloc_sink;
 mod runtime;
 mod table;
 pub mod vmctx;
-mod wasi;
+pub mod wasi;

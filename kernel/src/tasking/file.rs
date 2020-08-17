@@ -1,6 +1,7 @@
 use crate::tasking::scheme::{Scheme, SchemePtr};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use crate::wasm::wasi::Errno;
 
 /// Maximum amount of files a single table can have opened.
 const MAX_FILES: usize = 32;
@@ -8,11 +9,16 @@ const MAX_FILES: usize = 32;
 /// File index in file descriptor table.
 pub type FileIdx = usize;
 
+/// This should be handled by the service.
+#[derive(Copy, Clone)]
+#[repr(transparent)]
+pub struct InnerFileHandle(pub(crate) u64);
+
 /// File handle used in a scheme (per-scheme).
+#[derive(Copy, Clone)]
 pub enum FileHandle {
     /// A handle to a file in the scheme.
-    /// This should be handled by the service.
-    Inner(u64),
+    Inner(InnerFileHandle),
     /// A handle to the scheme itself.
     Own,
 }
@@ -49,6 +55,14 @@ impl FileDescriptor {
     /// Sets the pre open path.
     pub fn set_pre_open_path(&mut self, path: Box<[u8]>) {
         self.pre_open_path = Some(path);
+    }
+
+    /// Execute with scheme and handle.
+    pub fn with<F, T>(&self, f: F) -> Result<T, Errno>
+        where F: FnOnce(&Scheme, FileHandle) -> Result<T, Errno>
+    {
+        let scheme = self.scheme.upgrade().ok_or(Errno::NoDev)?;
+        f(&scheme, self.handle)
     }
 }
 

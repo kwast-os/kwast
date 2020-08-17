@@ -41,6 +41,13 @@ impl SchedulerCommon {
         }
     }
 
+    pub fn with_thread<F, T>(&self, tid: ThreadId, f: F) -> T
+    where F: FnOnce(&Arc<Thread>) -> T
+    {
+        // TODO?
+        f(&self.threads.get(&tid).unwrap())
+    }
+
     /// Adds a thread.
     pub fn add_thread(&mut self, thread: Thread) -> Arc<Thread> {
         let id = thread.id();

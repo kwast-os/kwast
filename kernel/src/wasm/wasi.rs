@@ -21,7 +21,7 @@ use lazy_static::lazy_static;
 
 #[repr(u16)]
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Errno {
     /// No error occurred.
     Success,
@@ -251,7 +251,6 @@ impl WasmPtr<u8> {
         let slice = self.slice(ctx, len)?;
         for (dst, src) in slice.iter().zip(src.iter().chain(iter::once(&0))) {
             dst.set(*src);
-            println!("set {}", *src);
         }
         Ok(())
     }
@@ -360,6 +359,7 @@ abi_functions! {
     environ_sizes_get: (environc: WasmPtr<Size>, environ_buf_size: WasmPtr<Size>) -> Errno,
     environ_get: (environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> Errno,
     fd_close: (fd: Fd) -> Errno,
+    fd_read: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: Size, nread: WasmPtr<u32>) -> Errno,
     fd_write: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: Size, nwritten: WasmPtr<u32>) -> Errno,
     fd_prestat_get: (fd: Fd, prestat: WasmPtr<PreStat>) -> Errno,
     fd_prestat_dir_name: (fd: Fd, path: WasmPtr<u8>, path_len: Size) -> Errno,
@@ -407,16 +407,44 @@ impl AbiFunctions for VmContext {
         Ok(())
     }
 
+    fn fd_read(
+        &self,
+        fd: Fd,
+        iovs: WasmPtr<CioVec>,
+        iovs_len: u32,
+        nread: WasmPtr<u32>,
+    ) -> WasmStatus {
+        self.with_fd(fd, |fd| {
+            let iovs = iovs.slice(self, iovs_len)?;
+            for iov in iovs {
+                let iov = iov.get();
+                let buf = iov.buf.slice(self, iov.buf_len)?;
+
+                // TODO: safety
+                let buf = unsafe {
+                    slice::from_raw_parts_mut(buf as *const _ as *mut u8, buf.len())
+
+                };
+                println!("read: buf has len {}", buf.len());
+                fd.with(|s, h| s.read(h, buf))?;
+            }
+
+            // TODO: nread
+
+            Ok(())
+        })
+    }
+
     fn fd_write(
         &self,
-        _fd: Fd,
+        fd: Fd,
         iovs: WasmPtr<CioVec>,
         iovs_len: u32,
         nwritten: WasmPtr<u32>,
     ) -> WasmStatus {
-        println!("fd_write {} iovs_len={}", _fd, iovs_len);
+        println!("fd_write {} iovs_len={}", fd, iovs_len);
 
-        let iovs = iovs.slice(self, iovs_len)?;
+        /*let iovs = iovs.slice(self, iovs_len)?;
 
         // TODO: overflow?
         let mut written = 0;
@@ -434,9 +462,27 @@ impl AbiFunctions for VmContext {
             written += iov.buf_len;
         }
 
-        nwritten.cell(&self)?.set(written);
+        nwritten.cell(&self)?.set(written);*/
 
-        Ok(())
+        self.with_fd(fd, |fd| {
+            let iovs = iovs.slice(self, iovs_len)?;
+            for iov in iovs {
+                let iov = iov.get();
+                let buf = iov.buf.slice(self, iov.buf_len)?;
+
+                // TODO: safety
+                let buf = unsafe {
+                    slice::from_raw_parts(buf as *const _ as *const u8, buf.len())
+
+                };
+                println!("write: buf has len {}", buf.len());
+                fd.with(|s, h| s.write(h, buf))?;
+            }
+
+            // TODO: nwritten
+
+            Ok(())
+        })
     }
 
     fn fd_prestat_get(&self, fd: Fd, prestat: WasmPtr<PreStat>) -> WasmStatus {
@@ -450,7 +496,7 @@ impl AbiFunctions for VmContext {
                         dir: PreStatDir { pr_name_len },
                     },
                 });
-                println!("fd_prestat_get: write {}", pr_name_len);
+                //println!("fd_prestat_get: write {}", pr_name_len);
                 Ok(())
             } else {
                 Err(Errno::NameTooLong)
@@ -465,7 +511,7 @@ impl AbiFunctions for VmContext {
             if pre_open_path.len() + 1 > path_len as usize {
                 Err(Errno::NameTooLong)
             } else {
-                println!("fd_prestat_dir_name: {:?}", pre_open_path);
+                //println!("fd_prestat_dir_name: {:?}", pre_open_path);
                 path.write_from_slice_with_null(self, path_len, pre_open_path)
             }
         })
@@ -488,6 +534,7 @@ impl AbiFunctions for VmContext {
 
         self.with_fd(dir_fd, |dir_fd| {
             // TODO
+            fd.cell(&self)?.set(3); // TODO: hack
             Ok(())
         })
     }

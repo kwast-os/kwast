@@ -36,7 +36,7 @@ use crate::arch::qemu::qemu_exit;
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::thread_exit;
+use crate::tasking::scheduler::{thread_exit, with_common_scheduler};
 use crate::tasking::scheme_container::schemes;
 use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
@@ -136,9 +136,8 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     unsafe {
         let entry = VirtAddr::new(thread_test as usize);
         let domain = ProtectionDomain::new().unwrap();
-        let entry = VirtAddr::new(thread_test as usize);
         let t = Thread::create(domain, entry, 1234).unwrap();
-        //scheduler::add_and_schedule_thread(t);
+        scheduler::add_and_schedule_thread(t);
     };
 
     // Handle boot modules.
@@ -154,9 +153,21 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 }
 
 extern "C" fn thread_test(_arg: u64) {
-    //let self_scheme = schemes().read().get(Box::new([])).unwrap();
-    //self_scheme.test(0);
-    loop {}
+    //let hpet = hpet().unwrap();
+    //let a = hpet.counter();
+    //for _ in 0..1_000_000 {
+    //    with_common_scheduler(|s| s.test());
+    //}
+    //let b = hpet.counter();
+    //println!("{}ns", hpet.counter_to_ns(b-a)/1000000);
+    //println!();println!();
+
+    let self_scheme = schemes().read().open_self(Box::new([])).unwrap();
+    println!("abc");
+    for _ in 0..1000 {
+        self_scheme.with(|s, h| s.open());
+    }
+    println!("def");
     thread_exit(123);
 }
 

@@ -425,7 +425,6 @@ impl AbiFunctions for VmContext {
                     slice::from_raw_parts_mut(buf as *const _ as *mut u8, buf.len())
 
                 };
-                println!("read: buf has len {}", buf.len());
                 fd.with(|s, h| s.read(h, buf))?;
             }
 
@@ -442,27 +441,30 @@ impl AbiFunctions for VmContext {
         iovs_len: u32,
         nwritten: WasmPtr<u32>,
     ) -> WasmStatus {
-        println!("fd_write {} iovs_len={}", fd, iovs_len);
+        //println!("fd_write {} iovs_len={}", fd, iovs_len);
 
-        /*let iovs = iovs.slice(self, iovs_len)?;
+        // TODO: debug
+        if fd < 3 {
+            let iovs = iovs.slice(self, iovs_len)?;
 
-        // TODO: overflow?
-        let mut written = 0;
+            // TODO: overflow?
+            let mut written = 0;
 
-        for iov in iovs {
-            let iov = iov.get();
+            for iov in iovs {
+                let iov = iov.get();
 
-            let buf = iov.buf.slice(self, iov.buf_len)?;
+                let buf = iov.buf.slice(self, iov.buf_len)?;
 
-            // TODO: just prints to stdout for now
-            for b in buf {
-                print!("{}", b.get() as char);
+                // TODO: just prints to stdout for now
+                for b in buf {
+                    print!("{}", b.get() as char);
+                }
+
+                written += iov.buf_len;
             }
 
-            written += iov.buf_len;
+            nwritten.cell(&self)?.set(written);
         }
-
-        nwritten.cell(&self)?.set(written);*/
 
         self.with_fd(fd, |fd| {
             let iovs = iovs.slice(self, iovs_len)?;
@@ -475,7 +477,6 @@ impl AbiFunctions for VmContext {
                     slice::from_raw_parts(buf as *const _ as *const u8, buf.len())
 
                 };
-                println!("write: buf has len {}", buf.len());
                 fd.with(|s, h| s.write(h, buf))?;
             }
 

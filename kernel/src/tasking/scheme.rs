@@ -120,8 +120,6 @@ impl Scheme {
             slice::from_raw_parts(buffer as *const _ as *const Reply, buffer.len() / size_of::<Reply>())
         };
 
-        println!("got replies: {}", buffer.len());
-
         for reply in buffer {
             self.send_reply(*reply);
         }
@@ -171,17 +169,6 @@ impl Scheme {
         }
     }
 
-/*
-    pub fn test(&self, data2: i32) {
-        // TODO: how to write response (ability to send to thread? maybe store waiting_on in tcb and only allow reply then? but how do we get the thread instance then?)
-
-        let cmd = self.command_queue.pop_front();
-        // TODO: set reply data
-        let id = cmd.thread.id();
-        drop(cmd.thread);
-        scheduler::wakeup_and_yield(id);
-    }*/
-
     pub fn receive_commands_blocking(&self, buffer: &mut [u8]) -> Result<usize, Errno> {
         // TODO: document
         let buffer = unsafe {
@@ -189,8 +176,6 @@ impl Scheme {
         };
 
         let x = self.command_queue.pop_front_many(buffer);
-        println!("receive_commands_blocking: {}", x);
-
         Ok(x * size_of::<Command>())
         // TODO: map memory if required?
     }

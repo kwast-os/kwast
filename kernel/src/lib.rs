@@ -163,11 +163,11 @@ extern "C" fn thread_test(_arg: u64) {
     //println!();println!();
 
     let self_scheme = schemes().read().open_self(Box::new([])).unwrap();
-    println!("abc");
+    println!("---");
     for _ in 0..1000 {
         self_scheme.with(|s, h| s.open());
     }
-    println!("def");
+    println!("---");
     thread_exit(123);
 }
 

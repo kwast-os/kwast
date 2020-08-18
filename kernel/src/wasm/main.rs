@@ -12,13 +12,12 @@ use cranelift_wasm::{translate_module, Global, Memory, SignatureIndex};
 use cranelift_wasm::{FuncIndex, FuncTranslator, WasmError};
 
 use crate::arch::address::{align_up, VirtAddr};
-use crate::arch::invalid_opcode;
 use crate::arch::paging::EntryFlags;
 use crate::mm::mapper::MemoryError;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::tasking::protection_domain::ProtectionDomain;
-use crate::tasking::scheduler::{add_and_schedule_thread, with_current_thread};
+use crate::tasking::scheduler::{add_and_schedule_thread, with_current_thread, thread_exit};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{
@@ -469,8 +468,7 @@ extern "C" fn start_from_compile_result(compile_result: *mut CompileResult) {
         }
     }
 
-    invalid_opcode();
-    unreachable!()
+    thread_exit(0);
 }
 
 /// Compiles a WebAssembly buffer.

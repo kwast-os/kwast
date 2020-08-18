@@ -4,6 +4,8 @@
 thread_trampoline:
     // The stack is page aligned right now, so also 16 byte like it should for the System V ABI.
     movq %rbp, %rdi
+    xor %esi, %esi
     callq *%rbx
-    // Applications should call exit
+
+    // Should not get here. Applications should call exit.
     ud2

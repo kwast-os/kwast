@@ -297,10 +297,3 @@ pub fn check_should_schedule() {
         _check_should_schedule();
     }
 }
-
-/// Invalid opcode.
-pub fn invalid_opcode() {
-    unsafe {
-        llvm_asm!("ud2" :::: "volatile");
-    }
-}

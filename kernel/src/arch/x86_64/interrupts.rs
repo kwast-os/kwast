@@ -269,13 +269,13 @@ extern "x86-interrupt" fn exc_stack_segment(frame: &mut ISRStackFrame, err: u64)
 }
 
 extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
-    unsafe {
-        let ptr = frame.rip.as_const::<u8>();
-        for i in -16..16 {
-            print!("0x{:x}, ", *ptr.offset(i));
-        }
-        println!();
-    }
+    //unsafe {
+    //    let ptr = frame.rip.as_const::<u8>();
+    //    for i in -16..16 {
+    //        print!("0x{:x}, ", *ptr.offset(i));
+    //    }
+    //    println!();
+    //}
 
     panic!("GPF: {:#?}, errcode {:x}", frame, err);
 }
@@ -286,7 +286,7 @@ extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError)
         llvm_asm!("movq %cr2, $0" : "=r" (addr));
     }
 
-    println!("{:?} {:?}", frame, err);
+    //println!("{:?} {:?}", frame, err);
     crate::mm::page_fault(addr, frame.rip);
 }
 

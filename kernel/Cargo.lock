@@ -45,7 +45,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 [[package]]
 name = "cranelift-bforest"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 dependencies = [
  "cranelift-entity",
 ]
@@ -53,7 +53,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -71,7 +71,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -80,17 +80,17 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 
 [[package]]
 name = "cranelift-entity"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 
 [[package]]
 name = "cranelift-frontend"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 dependencies = [
  "cranelift-codegen",
  "hashbrown",
@@ -102,7 +102,7 @@ dependencies = [
 [[package]]
 name = "cranelift-native"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -112,7 +112,7 @@ dependencies = [
 [[package]]
 name = "cranelift-wasm"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#9d6fd1b78904a4e083bc19aadf036607db0b6fd0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",

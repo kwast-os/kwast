@@ -7,7 +7,7 @@ use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::{PreemptCounterInfluence, RwLock, Spinlock};
-use crate::tasking::file::FileDescriptorTable;
+use crate::tasking::file::{FileDescriptor, FileDescriptorTable};
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheme::ReplyPayloadTcb;
 use crate::tasking::scheme_container::{schemes, SchemeId};

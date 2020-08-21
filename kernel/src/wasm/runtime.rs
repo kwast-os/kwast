@@ -2,7 +2,6 @@ use crate::tasking::scheduler::with_current_thread;
 use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
 use crate::wasm::vmctx::{VmContext, WASM_PAGE_SIZE};
 use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
-use cranelift_wasm::MemoryIndex;
 use lazy_static::lazy_static;
 
 /// Runtime namespace for `ExternalName`.
@@ -44,14 +43,14 @@ lazy_static! {
 }
 
 /// memory.size
-pub fn runtime_memory_size(_vmctx: &VmContext, idx: MemoryIndex) -> u32 {
-    assert_eq!(idx.as_u32(), 0);
+pub extern "C" fn runtime_memory_size(_vmctx: &VmContext, idx: u32) -> u32 {
+    assert_eq!(idx, 0);
     let heap_size = with_current_thread(|thread| thread.heap_size());
     (heap_size / WASM_PAGE_SIZE) as u32
 }
 
 /// memory.grow
-pub fn runtime_memory_grow(_vmctx: &VmContext, idx: MemoryIndex, wasm_pages: u32) -> u32 {
-    assert_eq!(idx.as_u32(), 0);
+pub extern "C" fn runtime_memory_grow(_vmctx: &VmContext, idx: u32, wasm_pages: u32) -> u32 {
+    assert_eq!(idx, 0);
     with_current_thread(|thread| thread.heap_grow(wasm_pages))
 }

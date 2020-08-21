@@ -111,6 +111,7 @@ impl Scheduler {
     }
 
     /// Gets the next thread to run.
+    #[inline]
     fn next_thread(&self, queues: &mut Queues) -> Arc<Thread> {
         if let Some(thread) = queues.run_queue.pop_front() {
             thread

@@ -156,10 +156,10 @@ extern "C" fn thread_test(_arg: u64) {
     let self_scheme = schemes().read().open_self(Box::new([])).unwrap();
     println!("---");
     let (scheme, _handle) = self_scheme.scheme_and_handle().unwrap();
-    scheme.open(-1);
+    scheme.open(-1).unwrap();
     let a = hpet.counter();
     for i in 0..(10000 - 1) {
-        scheme.open(i);
+        scheme.open(i).unwrap();
     }
     let b = hpet.counter();
     println!("{}ns", hpet.counter_to_ns(b - a) / (10000 - 1));

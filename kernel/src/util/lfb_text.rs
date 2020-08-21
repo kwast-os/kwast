@@ -61,7 +61,7 @@ impl LfbText {
     /// Sets a pixel.
     fn set_pixel(&mut self, x: u32, y: u32, color: u32) {
         if x < self.width && y < self.height {
-            // Safety: in bounds.
+            // Safety: in bounds and aligned.
             unsafe {
                 *self.address.as_mut::<u32>().add((y * self.pitch + x) as _) = color;
             }
@@ -71,8 +71,8 @@ impl LfbText {
     /// Gets a pixel.
     fn get_pixel(&mut self, x: u32, y: u32) -> u32 {
         if x < self.width && y < self.height {
-            // Safety: in bounds.
-            unsafe { *self.address.as_mut::<u32>().add((y * self.pitch + x) as _) }
+            // Safety: in bounds and aligned.
+            unsafe { *self.address.as_const::<u32>().add((y * self.pitch + x) as _) }
         } else {
             0
         }

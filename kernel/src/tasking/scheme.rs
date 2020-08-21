@@ -164,7 +164,7 @@ impl Scheme {
 
                 receiver.reply.store(reply.payload);
                 true
-            })
+            }, || false)
         });
 
         // TODO: this is here because it needs to be outside the lock.

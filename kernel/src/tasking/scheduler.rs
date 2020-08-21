@@ -42,12 +42,14 @@ impl SchedulerCommon {
         }
     }
 
-    pub fn with_thread<F, T>(&self, tid: ThreadId, f: F) -> T
+    /// Executes something in context of a thread.
+    /// Executes `f` if the thread exists, `e` on error.
+    pub fn with_thread<F, E, T>(&self, tid: ThreadId, f: F, e: E) -> T
     where
         F: FnOnce(&Arc<Thread>) -> T,
+        E: FnOnce() -> T,
     {
-        // TODO?
-        f(&self.threads.get(&tid).unwrap())
+        self.threads.get(&tid).map(f).unwrap_or_else(e)
     }
 
     /// Adds a thread.

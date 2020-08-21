@@ -82,9 +82,9 @@ pub struct Thread {
     status: Atomic<ThreadStatus>,
     file_descriptor_table: Spinlock<FileDescriptorTable>, // TODO: avoid locks if we're the only owner
     pub reply: ReplyPayloadTcb,
-    /// On what scheme are we blocked on? Only applicable for sync IPC.
+    /// On which IPC scheme are we blocked on? Only applicable for sync IPC.
     /// If this is equal to the sentinel value, we aren't blocked on a scheme.
-    blocked_on: Atomic<SchemeId>,
+    ipc_blocked_on: Atomic<SchemeId>,
 }
 
 impl Thread {
@@ -132,7 +132,7 @@ impl Thread {
             status: Atomic::new(ThreadStatus::Runnable),
             file_descriptor_table: Spinlock::new(fdt),
             reply: ReplyPayloadTcb::new(),
-            blocked_on: Atomic::new(SchemeId::sentinel()),
+            ipc_blocked_on: Atomic::new(SchemeId::sentinel()),
         }
     }
 
@@ -242,16 +242,16 @@ impl Thread {
         self.status.load(atomic::Ordering::Acquire)
     }
 
-    /// Sets blocked on.
+    /// Sets which IPC scheme we're blocked on.
     #[inline]
-    pub fn set_blocked_on(&self, blocked_on: SchemeId) {
-        self.blocked_on.store(blocked_on, atomic::Ordering::Release);
+    pub fn set_ipc_blocked_on(&self, blocked_on: SchemeId) {
+        self.ipc_blocked_on.store(blocked_on, atomic::Ordering::Release);
     }
 
-    /// Sets blocked on.
+    /// Gets which IPC scheme we're blocked on.
     #[inline]
-    pub fn blocked_on(&self) -> SchemeId {
-        self.blocked_on.load(atomic::Ordering::Acquire)
+    pub fn ipc_blocked_on(&self) -> SchemeId {
+        self.ipc_blocked_on.load(atomic::Ordering::Acquire)
     }
 }
 

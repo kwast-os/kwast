@@ -98,7 +98,7 @@ impl Scheme {
             {
                 preempt_disable();
                 let _block_guard = ThreadBlockGuard::activate();
-                t.set_blocked_on(self.id);
+                t.set_ipc_blocked_on(self.id);
                 self.command_queue.push_back(Command {
                     payload,
                     thread_id: t.id(),
@@ -106,7 +106,7 @@ impl Scheme {
                 preempt_enable();
             }
 
-            t.set_blocked_on(SchemeId::sentinel());
+            t.set_ipc_blocked_on(SchemeId::sentinel());
 
             // Response to sender comes here.
             ReplyPayload::from(&t.reply)
@@ -156,18 +156,16 @@ impl Scheme {
     pub fn send_reply(&self, reply: Reply) {
         let success = with_common_scheduler(|s| {
             s.with_thread(reply.to, |receiver| {
-                if receiver.blocked_on() != self.id {
-                    // TODO: rename: ipc_blocked_on ?
-                    // TODO: error?
-                    return false;
+                if receiver.ipc_blocked_on() != self.id {
+                    false
+                } else {
+                    receiver.reply.store(reply.payload);
+                    true
                 }
-
-                receiver.reply.store(reply.payload);
-                true
             }, || false)
         });
 
-        // TODO: this is here because it needs to be outside the lock.
+        // This needs to be outside the lock.
         if success {
             scheduler::wakeup_and_yield(reply.to);
         }

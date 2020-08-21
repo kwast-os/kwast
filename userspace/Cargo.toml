@@ -7,5 +7,5 @@ members = [
 opt-level = "z"
 
 [profile.release]
-lto = true
+#lto = true
 opt-level = 3

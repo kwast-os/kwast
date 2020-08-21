@@ -1,25 +1,12 @@
-//! Wasi implementation
-//! See https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md
-
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::identity_op)]
-
-use crate::arch::address::VirtAddr;
-use crate::tasking::file::{FileDescriptor, FileIdx};
-use crate::tasking::scheduler::{self, with_current_thread};
-use crate::wasm::main::{WASM_CALL_CONV, WASM_VMCTX_TYPE};
+use crate::tasking::scheduler::with_current_thread;
 use crate::wasm::vmctx::VmContext;
-use alloc::collections::BTreeMap;
 use bitflags::bitflags;
 use core::cell::Cell;
-use core::convert::TryFrom;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
 use core::{iter, slice};
-use cranelift_codegen::ir::{types, AbiParam, ArgumentPurpose, Signature};
-use lazy_static::lazy_static;
 
-#[repr(u16)]
+#[repr(u32)] // 32-bit for Cranelift
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub enum Errno {
@@ -182,7 +169,7 @@ pub enum Errno {
 /// WebAssembly pointer type to use in ABI functions.
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-struct WasmPtr<T> {
+pub struct WasmPtr<T> {
     offset: u32,
     _phantom: PhantomData<T>,
 }
@@ -194,6 +181,12 @@ impl<T> WasmPtr<T> {
             offset,
             _phantom: PhantomData,
         }
+    }
+
+    /// Gets the offset from the base memory address.
+    #[inline]
+    pub fn offset(&self) -> u32 {
+        self.offset
     }
 
     /// Internal helper function to get a real pointer or an error from a WasmPtr.
@@ -257,27 +250,27 @@ impl WasmPtr<u8> {
 }
 
 /// Size type.
-type Size = u32;
+pub type Size = u32;
 
 /// File descriptor.
-type Fd = u32;
+pub type Fd = u32;
 
 /// Exit code for process.
-type ExitCode = u32;
+pub type ExitCode = u32;
 
-type WasmResult<T> = Result<T, Errno>;
-type WasmStatus = WasmResult<()>;
+pub type WasmResult<T> = Result<T, Errno>;
+pub type WasmStatus = WasmResult<()>;
 
 bitflags! {
     #[repr(C)]
-    struct LookupFlags: u32 {
+    pub struct LookupFlags: u32 {
         const SYMLINK_FOLLOW = 1 << 0;
     }
 }
 
 bitflags! {
     #[repr(C)]
-    struct OFlags: u16 {
+    pub struct OFlags: u16 {
         const CREAT = 1 << 0;
         const DIRECTORY = 1 << 1;
         const EXCL = 1 << 2;
@@ -287,7 +280,7 @@ bitflags! {
 
 bitflags! {
     #[repr(C)]
-    struct FdFlags: u16 {
+    pub struct FdFlags: u16 {
         const APPEND = 1 << 0;
         const DSYNC = 1 << 1;
         const NONBLOCK = 1 << 2;
@@ -298,7 +291,7 @@ bitflags! {
 
 bitflags! {
     #[repr(C)]
-    struct Rights: u64 {
+    pub struct Rights: u64 {
         const FD_DATASYNC = 1 << 0;
         const FD_READ = 1 << 1;
         const FD_SEEK = 1 << 2;
@@ -333,239 +326,24 @@ bitflags! {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-struct CioVec {
+pub struct CioVec {
     pub buf: WasmPtr<u8>,
     pub buf_len: u32,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct PreStatDir {
-    pr_name_len: Size,
+pub struct PreStatDir {
+    pub pr_name_len: Size,
 }
 
 #[repr(C)]
-union PreStatInner {
-    dir: PreStatDir,
+pub union PreStatInner {
+    pub dir: PreStatDir,
 }
 
 #[repr(C)]
-struct PreStat {
-    tag: u8,
-    inner: PreStatInner,
-}
-
-abi_functions! {
-    environ_sizes_get: (environc: WasmPtr<Size>, environ_buf_size: WasmPtr<Size>) -> Errno,
-    environ_get: (environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> Errno,
-    fd_close: (fd: Fd) -> Errno,
-    fd_read: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: Size, nread: WasmPtr<u32>) -> Errno,
-    fd_write: (fd: Fd, iovs: WasmPtr<CioVec>, iovs_len: Size, nwritten: WasmPtr<u32>) -> Errno,
-    fd_prestat_get: (fd: Fd, prestat: WasmPtr<PreStat>) -> Errno,
-    fd_prestat_dir_name: (fd: Fd, path: WasmPtr<u8>, path_len: Size) -> Errno,
-    path_open: (dir_fd: Fd, dir_flags: LookupFlags, path: WasmPtr<u8>, path_len: Size, o_flags: OFlags, fs_rights_base: Rights, fs_rights_inheriting: Rights, fd_flags: FdFlags, fd: WasmPtr<Fd>) -> Errno,
-    proc_exit: (exit_code: ExitCode) -> (),
-}
-
-// TODO: capabilities
-impl AbiFunctions for VmContext {
-    fn environ_sizes_get(
-        &self,
-        environc: WasmPtr<Size>,
-        environ_buf_size: WasmPtr<Size>,
-    ) -> WasmStatus {
-        environc.cell(self)?.set(1);
-        // This is the sum of the string lengths in bytes (including \0 terminators)
-        let abcdefg = "RUST_BACKTRACE=1";
-        environ_buf_size
-            .cell(self)?
-            .set(1 + abcdefg.bytes().len() as u32 /* TODO: make safe */);
-        Ok(())
-    }
-
-    fn environ_get(&self, environ: WasmPtr<WasmPtr<u8>>, environ_buf: WasmPtr<u8>) -> WasmStatus {
-        // The bytes should be all after each other consecutively in `environ_buf`.
-        let abcdefg = "RUST_BACKTRACE=1";
-        let slice = environ_buf.slice(
-            &self,
-            (1 + abcdefg.bytes().len()) as u32, /* TODO: make safe */
-        )?;
-        for (byte, cell) in abcdefg.bytes().zip(slice.iter()) {
-            cell.set(byte);
-        }
-        slice[slice.len() - 1].set(0);
-
-        // Write pointers to the environment variables in the buffer.
-        let slice = environ.slice(&self, 1)?;
-        slice[0].set(WasmPtr::from(environ_buf.offset));
-
-        Ok(())
-    }
-
-    fn fd_close(&self, fd: Fd) -> WasmStatus {
-        println!("fd_close: {}", fd);
-        Ok(())
-    }
-
-    fn fd_read(
-        &self,
-        fd: Fd,
-        iovs: WasmPtr<CioVec>,
-        iovs_len: u32,
-        nread: WasmPtr<u32>,
-    ) -> WasmStatus {
-        self.with_fd(fd, |fd| {
-            let iovs = iovs.slice(self, iovs_len)?;
-            for iov in iovs {
-                let iov = iov.get();
-                let buf = iov.buf.slice(self, iov.buf_len)?;
-
-                // TODO: safety
-                let buf = unsafe {
-                    slice::from_raw_parts_mut(buf as *const _ as *mut u8, buf.len())
-
-                };
-                fd.with(|s, h| s.read(h, buf))?;
-            }
-
-            // TODO: nread
-
-            Ok(())
-        })
-    }
-
-    fn fd_write(
-        &self,
-        fd: Fd,
-        iovs: WasmPtr<CioVec>,
-        iovs_len: u32,
-        nwritten: WasmPtr<u32>,
-    ) -> WasmStatus {
-        //println!("fd_write {} iovs_len={}", fd, iovs_len);
-
-        // TODO: debug
-        if fd < 3 {
-            let iovs = iovs.slice(self, iovs_len)?;
-
-            // TODO: overflow?
-            let mut written = 0;
-
-            for iov in iovs {
-                let iov = iov.get();
-
-                let buf = iov.buf.slice(self, iov.buf_len)?;
-
-                // TODO: just prints to stdout for now
-                for b in buf {
-                    print!("{}", b.get() as char);
-                }
-
-                written += iov.buf_len;
-            }
-
-            nwritten.cell(&self)?.set(written);
-        }
-
-        self.with_fd(fd, |fd| {
-            let iovs = iovs.slice(self, iovs_len)?;
-            for iov in iovs {
-                let iov = iov.get();
-                let buf = iov.buf.slice(self, iov.buf_len)?;
-
-                // TODO: safety
-                let buf = unsafe {
-                    slice::from_raw_parts(buf as *const _ as *const u8, buf.len())
-
-                };
-                fd.with(|s, h| s.write(h, buf))?;
-            }
-
-            // TODO: nwritten
-
-            Ok(())
-        })
-    }
-
-    fn fd_prestat_get(&self, fd: Fd, prestat: WasmPtr<PreStat>) -> WasmStatus {
-        self.with_fd(fd, |fd| {
-            // TODO: check if it's a directory, if it's not: return ENOTDIR
-            let pre_open_path = fd.pre_open_path().ok_or(Errno::NotSup)?;
-            if let Ok(pr_name_len) = u32::try_from(pre_open_path.len() + 1) {
-                prestat.cell(self)?.set(PreStat {
-                    tag: 0,
-                    inner: PreStatInner {
-                        dir: PreStatDir { pr_name_len },
-                    },
-                });
-                //println!("fd_prestat_get: write {}", pr_name_len);
-                Ok(())
-            } else {
-                Err(Errno::NameTooLong)
-            }
-        })
-    }
-
-    fn fd_prestat_dir_name(&self, fd: Fd, path: WasmPtr<u8>, path_len: Size) -> WasmStatus {
-        self.with_fd(fd, |fd| {
-            // TODO: check if it's a directory, if it's not: return ENOTDIR
-            let pre_open_path = fd.pre_open_path().ok_or(Errno::NotSup)?;
-            if pre_open_path.len() + 1 > path_len as usize {
-                Err(Errno::NameTooLong)
-            } else {
-                //println!("fd_prestat_dir_name: {:?}", pre_open_path);
-                path.write_from_slice_with_null(self, path_len, pre_open_path)
-            }
-        })
-    }
-
-    fn path_open(
-        &self,
-        dir_fd: Fd,
-        dir_flags: LookupFlags,
-        path: WasmPtr<u8>,
-        path_len: Size,
-        o_flags: OFlags,
-        fs_rights_base: Rights,
-        fs_rights_inheriting: Rights,
-        fd_flags: FdFlags,
-        fd: WasmPtr<Fd>,
-    ) -> WasmStatus {
-        // TODO: handle the flags and rights
-        println!("path_open: {} {}", dir_fd, path.str(self, path_len)?);
-
-        self.with_fd(dir_fd, |dir_fd| {
-            // TODO
-            fd.cell(&self)?.set(3); // TODO: hack
-            Ok(())
-        })
-    }
-
-    fn proc_exit(&self, exit_code: ExitCode) {
-        //println!("proc exit");
-        scheduler::thread_exit(exit_code);
-    }
-}
-
-impl VmContext {
-    /// Execute with fd context.
-    fn with_fd<F, T>(&self, fd: Fd, f: F) -> WasmResult<T>
-    where
-        F: FnOnce(&FileDescriptor) -> WasmResult<T>,
-    {
-        with_current_thread(|thread| {
-            let tbl = thread.file_descriptor_table();
-            f(tbl.get(fd as FileIdx).ok_or(Errno::BadF)?)
-        })
-    }
-}
-
-/// Gets the address for a wasi syscall and validate signature.
-pub fn get_address_for_wasi_and_validate_sig(name: &str, sig: &Signature) -> Option<VirtAddr> {
-    let (addr, reference_sig) = ABI_MAP.get(name)?;
-
-    if reference_sig != sig {
-        None
-    } else {
-        Some(*addr)
-    }
+pub struct PreStat {
+    pub tag: u8,
+    pub inner: PreStatInner,
 }

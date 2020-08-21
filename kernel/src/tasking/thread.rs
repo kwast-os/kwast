@@ -6,7 +6,7 @@ use crate::arch::simd::SimdState;
 use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
-use crate::sync::spinlock::{RwLock, Spinlock};
+use crate::sync::spinlock::{PreemptCounterInfluence, RwLock, Spinlock};
 use crate::tasking::file::FileDescriptorTable;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheme::ReplyPayloadTcb;
@@ -17,7 +17,7 @@ use alloc::sync::Arc;
 use atomic::Atomic;
 use core::borrow::Borrow;
 use core::cmp::Ordering;
-use core::sync::atomic::AtomicI32;
+use spin::MutexGuard;
 
 /// Stack size in bytes.
 const STACK_SIZE: usize = 1024 * 256;
@@ -33,7 +33,7 @@ pub struct Stack {
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(transparent)]
-pub struct ThreadId(pub u64); // TODO: make private
+pub struct ThreadId(u64);
 
 const_assert!(Atomic::<ThreadId>::is_lock_free());
 
@@ -80,7 +80,7 @@ pub struct Thread {
     simd_state: SimdState,
     domain: ProtectionDomain,
     status: Atomic<ThreadStatus>,
-    file_descriptor_table: FileDescriptorTable,
+    file_descriptor_table: Spinlock<FileDescriptorTable>, // TODO: avoid locks if we're the only owner
     pub reply: ReplyPayloadTcb,
     /// On what scheme are we blocked on? Only applicable for sync IPC.
     /// If this is equal to the sentinel value, we aren't blocked on a scheme.
@@ -130,7 +130,7 @@ impl Thread {
             domain,
             simd_state: SimdState::new(),
             status: Atomic::new(ThreadStatus::Runnable),
-            file_descriptor_table: fdt,
+            file_descriptor_table: Spinlock::new(fdt),
             reply: ReplyPayloadTcb::new(),
             blocked_on: Atomic::new(SchemeId::sentinel()),
         }
@@ -153,8 +153,10 @@ impl Thread {
 
     /// Gets the file descriptor table.
     #[inline]
-    pub fn file_descriptor_table(&self) -> &FileDescriptorTable {
-        &self.file_descriptor_table
+    pub fn file_descriptor_table(
+        &self,
+    ) -> MutexGuard<FileDescriptorTable, PreemptCounterInfluence> {
+        self.file_descriptor_table.lock()
     }
 
     /// Gets the thread id.

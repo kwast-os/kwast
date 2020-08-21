@@ -1,6 +1,6 @@
 use crate::sync::spinlock::PreemptCounterInfluence;
 use crate::sync::thread_block_guard::ThreadBlockGuard;
-use crate::tasking::scheduler::{self, with_current_thread};
+use crate::tasking::scheduler::{with_current_thread, with_common_scheduler};
 use crate::tasking::thread::ThreadId;
 use atomic::{Atomic, Ordering};
 use spin::MutexGuard;
@@ -23,7 +23,9 @@ impl CondVarSingle {
     pub fn notify(&self) {
         let tid = self.waiter.swap(ThreadId::zero(), Ordering::Acquire);
         if tid != ThreadId::zero() {
-            scheduler::wakeup_and_yield(tid);
+            // We shouldn't do wakeup + yield here.
+            // It implies the caller wants to yield, but it might for example be still preparing it's blocked state.
+            with_common_scheduler(|s| s.wakeup(tid));
         }
     }
 

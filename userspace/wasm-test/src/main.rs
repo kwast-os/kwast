@@ -50,14 +50,16 @@ fn main() {
 
     let mut file = File::open(".").expect("open test");
     let mut buffer = [0u8; 64];
-    for _ in 0..1000 {
-        file.read(&mut buffer[..]).expect("read test");
+    for i in 0..10000 {
+        let res = file.read(&mut buffer[..]).expect("read test");
+        //println!("{}", res);
         let test = unsafe {
             std::slice::from_raw_parts(&buffer[..] as *const _ as *const Command, 1) // TODO
         };
 
         let command = test[0];
-        println!("read one: {:?}", command);
+        //println!("read one: {:?}", command);
+        //assert_eq!(command.sender, 1);
 
         let mut test = unsafe {
             std::slice::from_raw_parts_mut(&mut buffer[..] as *mut _ as *mut Reply, 1) // TODO
@@ -70,6 +72,8 @@ fn main() {
             },
         };
 
-        file.write(&mut buffer[..24]).expect("write test");
+        let res = file.write(&mut buffer[..24]).expect("write test");
+        //println!("{} {} w", res, i-1);
     }
+    println!("end");
 }

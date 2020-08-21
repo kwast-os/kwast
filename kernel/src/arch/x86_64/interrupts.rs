@@ -269,6 +269,14 @@ extern "x86-interrupt" fn exc_stack_segment(frame: &mut ISRStackFrame, err: u64)
 }
 
 extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
+    unsafe {
+        let ptr = frame.rip.as_const::<u8>();
+        for i in -16..16 {
+            print!("0x{:x}, ", *ptr.offset(i));
+        }
+        println!();
+    }
+
     panic!("GPF: {:#?}, errcode {:x}", frame, err);
 }
 

@@ -32,11 +32,10 @@ use arch::interrupts;
 use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::hpet;
 use crate::arch::paging::{ActiveMapping, EntryFlags};
-use crate::arch::qemu::qemu_exit;
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
-use crate::tasking::scheduler::{thread_exit, with_common_scheduler};
+use crate::tasking::scheduler::{thread_exit, with_common_scheduler, with_current_thread};
 use crate::tasking::scheme_container::schemes;
 use crate::tasking::thread::Thread;
 use crate::util::boot_module::{BootModule, BootModuleProvider};
@@ -101,8 +100,8 @@ fn handle_module(module: BootModule) -> Option<()> {
     for file in tar {
         // TODO: we should probably have a manifest file which describes what services should be
         //       in the same domain.
-        let domain = ProtectionDomain::new().expect("domain");
-        //let domain = with_core_scheduler(|s| s.get_current_thread().domain().clone());
+        //let domain = ProtectionDomain::new().expect("domain");
+        let domain = with_current_thread(|t| t.domain().clone());
         wasm::main::run(file.as_slice(), domain).unwrap_or_else(|e| {
             println!("Could not start: {:?}", e);
         });
@@ -153,21 +152,29 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 }
 
 extern "C" fn thread_test(_arg: u64) {
-    //let hpet = hpet().unwrap();
-    //let a = hpet.counter();
-    //for _ in 0..1_000_000 {
-    //    with_common_scheduler(|s| s.test());
-    //}
-    //let b = hpet.counter();
-    //println!("{}ns", hpet.counter_to_ns(b-a)/1000000);
-    //println!();println!();
-
+    let hpet = hpet().unwrap();
     let self_scheme = schemes().read().open_self(Box::new([])).unwrap();
     println!("---");
-    for _ in 0..1000 {
-        self_scheme.with(|s, h| s.open());
+    let (scheme, _handle) = self_scheme.scheme_and_handle().unwrap();
+    scheme.open(-1);
+    let a = hpet.counter();
+    for i in 0..(10000 - 1) {
+        scheme.open(i);
     }
-    println!("---");
+    let b = hpet.counter();
+    println!("{}ns", hpet.counter_to_ns(b - a) / (10000 - 1));
+    println!();
+    println!();
+    let x = with_current_thread(|t| t.id());
+    let a = hpet.counter();
+    for _ in 0..10000 {
+        with_common_scheduler(|s| s.with_thread(x, |t| assert_eq!(t.id(), x)));
+    }
+    let b = hpet.counter();
+    println!("{}ns", hpet.counter_to_ns(b - a) / (10000 - 1));
+    println!();
+    println!();
+    //println!("---");
     thread_exit(123);
 }
 

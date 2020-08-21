@@ -33,6 +33,11 @@ impl CpuData {
         8
     }
 
+    /// Gets the `preempt_count`.
+    pub fn preempt_count(&self) -> u32 {
+        self.preempt_count
+    }
+
     /// Prepare to set the per-CPU data.
     pub fn prepare_to_set(&mut self, asid_enable: bool) {
         // Assembly code also trusts on this.

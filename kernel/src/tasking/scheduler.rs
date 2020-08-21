@@ -1,4 +1,5 @@
 use crate::arch::address::VirtAddr;
+use crate::arch::get_per_cpu_data;
 use crate::arch::paging::{get_cpu_page_mapping, CpuPageMapping};
 use crate::mm::vma_allocator::MappedVma;
 use crate::sync::atomic::{AtomicArc, AtomicManagedPtr};
@@ -42,7 +43,8 @@ impl SchedulerCommon {
     }
 
     pub fn with_thread<F, T>(&self, tid: ThreadId, f: F) -> T
-    where F: FnOnce(&Arc<Thread>) -> T
+    where
+        F: FnOnce(&Arc<Thread>) -> T,
     {
         // TODO?
         f(&self.threads.get(&tid).unwrap())
@@ -226,6 +228,7 @@ impl Scheduler {
         println!();*/
 
         let next_thread = self.next_thread(&mut queues);
+        debug_assert_eq!(next_thread.status(), ThreadStatus::Runnable);
 
         // Safety:
         // This could lead to a memory leak if the old value is never read.
@@ -265,6 +268,13 @@ fn switch_to_next() {
 /// Yield the current thread.
 #[inline]
 pub fn thread_yield() {
+    // If we manually switch and the `preempt_count` isn't zero, that indicates an issue in the code.
+    debug_assert_eq!(
+        get_per_cpu_data().preempt_count(),
+        0,
+        "trying to preempt while holding a spinlock"
+    );
+
     switch_to_next();
 }
 
@@ -276,7 +286,6 @@ pub fn wakeup_and_yield(id: ThreadId) {
 }
 
 /// Exit the thread.
-#[inline]
 pub fn thread_exit(exit_code: u32) -> ! {
     extern "C" {
         fn _thread_exit() -> !;

@@ -3,7 +3,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr::{copy_nonoverlapping, write_unaligned};
-use cranelift_codegen::binemit::{NullStackmapSink, NullTrapSink, Reloc};
+use cranelift_codegen::binemit::{NullStackMapSink, NullTrapSink, Reloc};
 use cranelift_codegen::ir::{types, LibCall, Signature, Type};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_codegen::settings::{self, Configurable};
@@ -17,7 +17,7 @@ use crate::mm::mapper::MemoryError;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::tasking::protection_domain::ProtectionDomain;
-use crate::tasking::scheduler::{add_and_schedule_thread, with_current_thread, thread_exit};
+use crate::tasking::scheduler::{add_and_schedule_thread, thread_exit, with_current_thread};
 use crate::tasking::thread::Thread;
 use crate::wasm::func_env::FuncEnv;
 use crate::wasm::module_env::{
@@ -37,8 +37,6 @@ use core::mem;
 
 pub const WASM_VMCTX_TYPE: Type = types::I64;
 pub const WASM_CALL_CONV: CallConv = CallConv::SystemV;
-
-// TODO: in some areas, a bump allocator could be used to quickly allocate some vectors.
 
 extern "C" {
     pub fn __rust_probestack();
@@ -144,11 +142,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
                     });
                     let minimum = mem.minimum as usize * WASM_PAGE_SIZE;
 
-                    // TODO: func_env assumes 4GiB is available, also makes it so that we can't construct
+                    // Note: func_env assumes 4GiB is available, also makes it so that we can't construct
                     //       a pointer outside (See issue #10 also)
-                    //let maximum = mem
-                    //    .maximum
-                    //    .map_or(HEAP_SIZE, |m| (m as u64) * WASM_PAGE_SIZE as u64);
                     let maximum = HEAP_SIZE;
 
                     if minimum as u64 > HEAP_SIZE || maximum > HEAP_SIZE {
@@ -174,7 +169,7 @@ impl<'r, 'data> Instantiation<'r, 'data> {
         for context in self.compile_result.contexts.iter() {
             let mut reloc_sink = RelocSink::new();
             let mut trap_sink = NullTrapSink {};
-            let mut null_stackmap_sink = NullStackmapSink {};
+            let mut null_stackmap_sink = NullStackMapSink {};
 
             let info = unsafe {
                 let ptr = (code_vma.address() + offset).as_mut();
@@ -193,6 +188,8 @@ impl<'r, 'data> Instantiation<'r, 'data> {
 
             offset += info.total_size as usize;
         }
+
+        //println!("{:x}", offset);
 
         Ok((code_vma, heap_vma, reloc_sinks))
     }
@@ -259,9 +256,6 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             }
         }
 
-        // Debug code: print the bytes of the code section.
-        // self.print_code_as_hex(&code_vma);
-
         // Now the code is written, change it to read-only & executable.
         with_current_thread(|thread| {
             thread.domain().with(|_vma, mapping| {
@@ -283,19 +277,6 @@ impl<'r, 'data> Instantiation<'r, 'data> {
             vmctx_container,
             start_address,
         })
-    }
-
-    /// Print code section as hex.
-    #[allow(dead_code)]
-    fn print_code_as_hex(&self, code_vma: &MappedVma) {
-        for i in 0..self.compile_result.total_size {
-            let address = code_vma.address().as_usize() + i;
-            unsafe {
-                let ptr = address as *const u8;
-                print!("{:#x}, ", *ptr);
-            }
-        }
-        println!();
     }
 
     /// Creates the VmContext container.
@@ -473,7 +454,8 @@ extern "C" fn start_from_compile_result(compile_result: *mut CompileResult) {
 
 /// Compiles a WebAssembly buffer.
 fn compile(buffer: &[u8]) -> Result<CompileResult, Error> {
-    let isa_builder = cranelift_native::builder().unwrap();
+    let isa_builder =
+        cranelift_native::builder().expect("native flag builder should be constructable");
     let mut flag_builder = settings::builder();
 
     // Flags

@@ -1,17 +1,16 @@
 use crate::arch::{preempt_disable, preempt_enable};
 use crate::sync::thread_block_guard::ThreadBlockGuard;
 use crate::sync::wait_queue::WaitQueue;
-use crate::tasking::file::{FileDescriptor, FileHandle, InnerFileHandle};
-use crate::tasking::scheduler::{self, with_current_thread, with_common_scheduler};
-use crate::tasking::thread::{Thread, ThreadId};
-use alloc::sync::{Arc, Weak};
-use core::sync::atomic::AtomicU64;
-use core::sync::atomic::{AtomicUsize, Ordering};
-use core::slice;
-use core::mem::size_of;
-use crate::wasm::wasi::Errno;
-use atomic::Atomic;
+use crate::tasking::file::{FileHandle, InnerFileHandle};
+use crate::tasking::scheduler::{self, with_common_scheduler, with_current_thread};
 use crate::tasking::scheme_container::SchemeId;
+use crate::tasking::thread::ThreadId;
+use crate::wasm::wasi::Errno;
+use alloc::sync::Weak;
+use atomic::Atomic;
+use core::mem::size_of;
+use core::slice;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 /// Reply payload.
 /// We only wait at most for one reply. The reply data is very simple, it's just a status + data pair.
@@ -117,20 +116,22 @@ impl Scheme {
     pub fn send_replies(&self, buffer: &[u8]) -> Result<usize, Errno> {
         // TODO: document
         let buffer = unsafe {
-            slice::from_raw_parts(buffer as *const _ as *const Reply, buffer.len() / size_of::<Reply>())
+            slice::from_raw_parts(
+                buffer as *const _ as *const Reply,
+                buffer.len() / size_of::<Reply>(),
+            )
         };
 
         for reply in buffer {
             self.send_reply(*reply);
         }
 
-        // TODO
-        Ok(0)
+        Ok(buffer.len() * size_of::<Reply>())
     }
 
     /// Opens a file inside the scheme.
-    pub(crate) fn open(&self) -> Result<FileHandle, Errno> {
-        let response = self.send_command_blocking(CommandData::Open(313123));
+    pub(crate) fn open(&self, lol: i32) -> Result<FileHandle, Errno> {
+        let response = self.send_command_blocking(CommandData::Open(lol));
         match response.status {
             Errno::Success => Ok(FileHandle::Inner(InnerFileHandle(response.value))),
             e => Err(e),
@@ -153,16 +154,19 @@ impl Scheme {
     }
 
     pub fn send_reply(&self, reply: Reply) {
-        let success = with_common_scheduler(|s| s.with_thread(reply.to, |receiver| {
-            if receiver.blocked_on() != self.id {
-                // TODO: error?
-                return false;
-            }
+        let success = with_common_scheduler(|s| {
+            s.with_thread(reply.to, |receiver| {
+                if receiver.blocked_on() != self.id {
+                    // TODO: rename: ipc_blocked_on ?
+                    // TODO: error?
+                    return false;
+                }
 
-            receiver.reply.store(reply.payload);
-            true
-        }));
-        
+                receiver.reply.store(reply.payload);
+                true
+            })
+        });
+
         // TODO: this is here because it needs to be outside the lock.
         if success {
             scheduler::wakeup_and_yield(reply.to);
@@ -172,7 +176,10 @@ impl Scheme {
     pub fn receive_commands_blocking(&self, buffer: &mut [u8]) -> Result<usize, Errno> {
         // TODO: document
         let buffer = unsafe {
-            slice::from_raw_parts_mut(buffer as *mut _ as *mut Command, buffer.len() / size_of::<Command>())
+            slice::from_raw_parts_mut(
+                buffer as *mut _ as *mut Command,
+                buffer.len() / size_of::<Command>(),
+            )
         };
 
         let x = self.command_queue.pop_front_many(buffer);

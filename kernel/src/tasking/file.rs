@@ -1,7 +1,8 @@
 use crate::tasking::scheme::{Scheme, SchemePtr};
-use alloc::boxed::Box;
-use alloc::vec::Vec;
 use crate::wasm::wasi::Errno;
+use alloc::boxed::Box;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 /// Maximum amount of files a single table can have opened.
 const MAX_FILES: usize = 32;
@@ -58,11 +59,9 @@ impl FileDescriptor {
     }
 
     /// Execute with scheme and handle.
-    pub fn with<F, T>(&self, f: F) -> Result<T, Errno>
-        where F: FnOnce(&Scheme, FileHandle) -> Result<T, Errno>
-    {
+    pub fn scheme_and_handle(&self) -> Result<(Arc<Scheme>, FileHandle), Errno> {
         let scheme = self.scheme.upgrade().ok_or(Errno::NoDev)?;
-        f(&scheme, self.handle)
+        Ok((scheme, self.handle))
     }
 }
 

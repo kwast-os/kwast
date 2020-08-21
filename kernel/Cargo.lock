@@ -32,9 +32,9 @@ checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "cc"
-version = "1.0.58"
+version = "1.0.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9a06fb2e53271d7c279ec1efea6ab691c35a2ae67ec0d91d7acec0caf13b518"
+checksum = "66120af515773fb005778dc07c261bd201ec8ce50bd6e7144c927753fe013381"
 
 [[package]]
 name = "cfg-if"
@@ -45,7 +45,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 [[package]]
 name = "cranelift-bforest"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 dependencies = [
  "cranelift-entity",
 ]
@@ -53,7 +53,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -71,7 +71,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -80,17 +80,17 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 
 [[package]]
 name = "cranelift-entity"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 
 [[package]]
 name = "cranelift-frontend"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 dependencies = [
  "cranelift-codegen",
  "hashbrown",
@@ -102,7 +102,7 @@ dependencies = [
 [[package]]
 name = "cranelift-native"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -112,7 +112,7 @@ dependencies = [
 [[package]]
 name = "cranelift-wasm"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=0.66.0#6abf6bf16235774dfaa6962fafa015402bf85f2a"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#478566a46cc9a28b2f50cbb05bb9c59807946348"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -243,8 +243,8 @@ dependencies = [
 
 [[package]]
 name = "regalloc"
-version = "0.0.28"
-source = "git+https://github.com/kwast-os/regalloc.rs?branch=0.0.27#bd0f064bc70b9aa0c261cfaafd7cf65343219e81"
+version = "0.0.30"
+source = "git+https://github.com/kwast-os/regalloc.rs?branch=0.0.30#0f8b068b92df3037c240a859b998288a162e4c67"
 dependencies = [
  "hashbrown",
  "log",
@@ -326,7 +326,7 @@ checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
 [[package]]
 name = "thiserror"
 version = "1.0.20"
-source = "git+https://github.com/kwast-os/thiserror#f1c7c865b93bfd20556d5ec8641cddb264e58dfc"
+source = "git+https://github.com/kwast-os/thiserror#9998345beca1ae33091a6138d2f49892443a7ce6"
 dependencies = [
  "thiserror-impl",
 ]
@@ -334,7 +334,7 @@ dependencies = [
 [[package]]
 name = "thiserror-impl"
 version = "1.0.20"
-source = "git+https://github.com/kwast-os/thiserror#f1c7c865b93bfd20556d5ec8641cddb264e58dfc"
+source = "git+https://github.com/kwast-os/thiserror#9998345beca1ae33091a6138d2f49892443a7ce6"
 dependencies = [
  "proc-macro2",
  "quote",

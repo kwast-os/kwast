@@ -1,12 +1,12 @@
 use crate::sync::spinlock::RwLock;
 use crate::tasking::file::{FileDescriptor, FileHandle};
 use crate::tasking::scheme::{Scheme, SchemePtr};
+use crate::wasm::wasi::Errno;
 use alloc::boxed::Box;
 use alloc::collections::btree_map::Entry;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use spin::Once;
-use crate::wasm::wasi::Errno;
 
 /// Scheme identifier.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -70,10 +70,10 @@ impl SchemeContainer {
         Ok(FileDescriptor::from(w.clone(), FileHandle::Own))
     }
 
-    pub fn open(&self, name: Box<[u8]>) -> Result<FileDescriptor, Errno> {
+    pub fn open(&self, name: Box<[u8]>, i: i32) -> Result<FileDescriptor, Errno> {
         let (a, w) = self.name_scheme_map.get(&name).ok_or(Errno::NoDev)?;
         // TODO: filename arg
-        a.open()
+        a.open(i)
             .map(|handle| FileDescriptor::from(w.clone(), handle))
     }
 }
@@ -85,9 +85,7 @@ pub fn schemes() -> &'static RwLock<SchemeContainer> {
     SCHEMES.call_once(|| {
         let mut container = SchemeContainer::new();
 
-        container
-            .insert(Box::new([]))
-            .expect("add self");
+        container.insert(Box::new([])).expect("add self");
 
         RwLock::new(container)
     })

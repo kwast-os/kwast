@@ -130,7 +130,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     interrupts::enable();
     interrupts::setup_timer();
     scheduler::thread_yield();
-
+/*
     // TODO: debug code
     unsafe {
         let entry = VirtAddr::new(thread_test as usize);
@@ -144,7 +144,19 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
         handle_module(module).unwrap_or_else(|| {
             println!("Failed to handle module {:?}", module);
         });
+    }*/
+
+    let hpet = hpet().unwrap();
+    let start = hpet.counter();
+    for i in 0..1000000 {
+        scheduler::thread_yield();
     }
+    let t = hpet.counter() - start;
+    println!("{}ns", hpet.counter_to_ns(t) / 1000000);
+
+    let test: u64;
+    unsafe{llvm_asm!("movq %cr3, $0" : "=r"(test) : : : "volatile");}
+    println!("{:x}", test);
 
     loop {
         arch::halt();

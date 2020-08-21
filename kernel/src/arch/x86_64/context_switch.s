@@ -21,8 +21,7 @@ _switch_to_next:
     movq %rsp, %rdi
     call next_thread_state
     movq %rax, %rsp
-    movq %cr3, %rax
-    cmpq %rax, %rdx
+    testq %rdx, %rdx
     jz 1f
     movq %rdx, %cr3
 1:

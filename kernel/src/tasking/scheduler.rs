@@ -189,6 +189,8 @@ impl Scheduler {
         // matching store happens (which we do later).
         let old_thread = unsafe { self.current_thread.load(Ordering::Acquire) };
 
+        let old_mapping = old_thread.domain().cpu_page_mapping();
+
         let old_thread_status = old_thread.status();
 
         if likely(!matches!(old_thread_status, ThreadStatus::Exit(_))) {
@@ -248,7 +250,14 @@ impl Scheduler {
             domain.assign_asid_if_necessary();
             NextThreadState(
                 current_thread.stack.get_current_location(),
-                domain.cpu_page_mapping(),
+                {
+                    let new_mapping = domain.cpu_page_mapping();
+                    if old_mapping == new_mapping {
+                        CpuPageMapping::sentinel()
+                    } else {
+                        new_mapping
+                    }
+                },
             )
         })
     }

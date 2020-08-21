@@ -396,6 +396,12 @@ impl ActiveMapping {
 }
 
 impl CpuPageMapping {
+    /// Sentinel value.
+    #[inline]
+    pub const fn sentinel() -> CpuPageMapping {
+        CpuPageMapping(0)
+    }
+
     /// Applies an Asid to a cpu page mapping.
     #[inline]
     pub fn with_asid(self, asid: Asid) -> CpuPageMapping {

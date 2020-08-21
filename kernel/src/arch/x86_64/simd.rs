@@ -2,7 +2,7 @@ use crate::arch::x86_64::address::VirtAddr;
 use crate::arch::x86_64::{cr4_read, cr4_write, xsetbv};
 use alloc::alloc::{alloc, dealloc, handle_alloc_error};
 use core::alloc::Layout;
-use core::ptr::{copy_nonoverlapping, null};
+use core::ptr::{copy_nonoverlapping, null, write_bytes};
 use raw_cpuid::CpuId;
 
 /// SIMD save routine.
@@ -120,6 +120,7 @@ pub fn setup_simd() {
     // Setup initial state
     unsafe {
         let region = alloc_simd_save_region();
+        write_bytes(region, 0, SIMD_SAVE_SIZE as usize);
         SIMD_SAVE_ROUTINE(region);
         SIMD_INIT = region;
     }

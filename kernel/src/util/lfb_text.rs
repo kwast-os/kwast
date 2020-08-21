@@ -2,9 +2,9 @@ use crate::arch::address::{PhysAddr, VirtAddr};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::sync::spinlock::IrqSpinlock;
+use crate::util::font::{FONT_8X16, FONT_HEIGHT, FONT_WIDTH};
 use core::fmt::{self, Write};
 use spin::Once;
-use crate::util::font::{FONT_WIDTH, FONT_HEIGHT, FONT_8X16};
 
 pub struct LfbParameters {
     pub address: PhysAddr,

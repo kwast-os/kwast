@@ -250,17 +250,14 @@ impl Scheduler {
             current_thread.restore_simd();
             let domain = current_thread.domain();
             domain.assign_asid_if_necessary();
-            NextThreadState(
-                current_thread.stack.get_current_location(),
-                {
-                    let new_mapping = domain.cpu_page_mapping();
-                    if old_mapping == new_mapping {
-                        CpuPageMapping::sentinel()
-                    } else {
-                        new_mapping
-                    }
-                },
-            )
+            NextThreadState(current_thread.stack.get_current_location(), {
+                let new_mapping = domain.cpu_page_mapping();
+                if old_mapping == new_mapping {
+                    CpuPageMapping::sentinel()
+                } else {
+                    new_mapping
+                }
+            })
         })
     }
 }

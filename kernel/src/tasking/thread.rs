@@ -245,7 +245,8 @@ impl Thread {
     /// Sets which IPC scheme we're blocked on.
     #[inline]
     pub fn set_ipc_blocked_on(&self, blocked_on: SchemeId) {
-        self.ipc_blocked_on.store(blocked_on, atomic::Ordering::Release);
+        self.ipc_blocked_on
+            .store(blocked_on, atomic::Ordering::Release);
     }
 
     /// Gets which IPC scheme we're blocked on.

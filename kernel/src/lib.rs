@@ -145,7 +145,7 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
             println!("Failed to handle module {:?}", module);
         });
     }
-/*
+    /*
     let hpet = hpet().unwrap();
     let start = hpet.counter();
     for i in 0..1000000 {

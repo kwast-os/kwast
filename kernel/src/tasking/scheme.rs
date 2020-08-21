@@ -155,14 +155,18 @@ impl Scheme {
 
     pub fn send_reply(&self, reply: Reply) {
         let success = with_common_scheduler(|s| {
-            s.with_thread(reply.to, |receiver| {
-                if receiver.ipc_blocked_on() != self.id {
-                    false
-                } else {
-                    receiver.reply.store(reply.payload);
-                    true
-                }
-            }, || false)
+            s.with_thread(
+                reply.to,
+                |receiver| {
+                    if receiver.ipc_blocked_on() != self.id {
+                        false
+                    } else {
+                        receiver.reply.store(reply.payload);
+                        true
+                    }
+                },
+                || false,
+            )
         });
 
         // This needs to be outside the lock.

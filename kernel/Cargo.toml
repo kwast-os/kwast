@@ -41,7 +41,7 @@ lazy_static = { version = "^1.4.0", features = ["spin_no_std"] }
 hashbrown = "^0.7.0"
 memoffset = "0.5"
 cranelift-wasm = { git = "https://github.com/kwast-os/wasmtime", package="cranelift-wasm", branch = "main", default-features = false, features = ["core"] }
-cranelift-codegen = { git = "https://github.com/kwast-os/wasmtime", package="cranelift-codegen", branch = "main", default-features = false, features = ["core", "x64"] }
+cranelift-codegen = { git = "https://github.com/kwast-os/wasmtime", package="cranelift-codegen", branch = "main", default-features = false, features = ["core"] }
 cranelift-native = { git = "https://github.com/kwast-os/wasmtime", package="cranelift-native", branch = "main", default-features = false, features = ["core"] }
 
 [replace]

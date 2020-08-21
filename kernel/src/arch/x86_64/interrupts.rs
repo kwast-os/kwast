@@ -311,6 +311,6 @@ extern "x86-interrupt" fn exc_virtualization(frame: &mut ISRStackFrame) {
 }
 
 extern "x86-interrupt" fn irq(_frame: &mut ISRStackFrame) {
-    println!("IRQ: {:#?}", _frame);
+    //println!("IRQ: {:#?}", _frame);
     // Real EOI to (maybe both) PIC
 }

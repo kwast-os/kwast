@@ -86,7 +86,7 @@ make iso BUILD=release # (or run)
 
 * To integrate Cranelift, [wasmtime](https://github.com/bytecodealliance/wasmtime/) has been used as a reference implementation, which is licensed under the [Apache License 2.0](https://github.com/bytecodealliance/wasmtime/blob/main/LICENSE).
 
-* [Spleen font](https://github.com/fcambus/spleen) - Spleen is a monospaced bitmap font licensed under the [BSD 2-clause "Simplified" License](https://github.com/fcambus/spleen/blob/master/LICENSE).
+* [Spleen font](https://github.com/fcambus/spleen) - Spleen is a monospaced bitmap font licensed under the [BSD 2-Clause "Simplified" License](https://github.com/fcambus/spleen/blob/master/LICENSE).
 
 ## <a name="similar_projects"> Similar projects </a>
 * [Nebulet](https://github.com/nebulet/nebulet) - A microkernel that implements a WebAssembly "usermode" that runs in Ring 0

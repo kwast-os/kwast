@@ -10,7 +10,9 @@ use crate::arch::x86_64::simd::setup_simd;
 use crate::mm::mapper::MemoryMapper;
 use crate::mm::pmm::with_pmm;
 use crate::util::boot_module::{BootModule, BootModuleProvider, Range};
-use multiboot2::{BootInformation, ElfSectionFlags, ModuleIter};
+use crate::util::lfb_text;
+use crate::util::lfb_text::LfbParameters;
+use multiboot2::{BootInformation, ElfSectionFlags, FramebufferType, ModuleIter};
 use raw_cpuid::CpuId;
 
 #[macro_use]
@@ -99,6 +101,9 @@ pub extern "C" fn entry(mboot_addr: usize) {
     // Constants that can't be put as const because it's not const fn.
     let hpet_addr: VirtAddr = VirtAddr::new(0x1000);
 
+    // Safety: we are the only running thread right now, so no locking is required.
+    let mut mapping = unsafe { ActiveMapping::get_unlocked() };
+
     {
         let cpuid = CpuId::new();
         let use_pcid = cpuid.get_feature_info().expect("feature info").has_pcid()
@@ -125,6 +130,7 @@ pub extern "C" fn entry(mboot_addr: usize) {
 
     let boot_modules = ArchBootModuleProvider::new(&mboot_struct);
 
+    // Put the reserved end after the kernel and modules.
     let reserved_end = {
         let mut reserved_end = max(kernel_end, mboot_end);
 
@@ -137,8 +143,6 @@ pub extern "C" fn entry(mboot_addr: usize) {
 
     // Map sections correctly
     {
-        // Safety: we are the only running thread right now, so no locking is required.
-        let mut mapping = unsafe { ActiveMapping::get_unlocked() };
         let sections = mboot_struct
             .elf_sections_tag()
             .expect("no elf sections tag");
@@ -152,13 +156,6 @@ pub extern "C" fn entry(mboot_addr: usize) {
             if !x.flags().contains(ElfSectionFlags::EXECUTABLE) {
                 paging_flags |= EntryFlags::NX;
             }
-
-            //println!(
-            //    "{:#x}-{:#x} {:?}",
-            //    x.start_address(),
-            //    x.end_address(),
-            //    x.flags()
-            //);
 
             let start = VirtAddr::new(x.start_address() as usize).align_down();
             mapping
@@ -178,12 +175,32 @@ pub extern "C" fn entry(mboot_addr: usize) {
     unsafe {
         let stack_bottom = VirtAddr::new(&STACK_BOTTOM as *const _ as usize);
         let interrupt_stack_bottom = VirtAddr::new(&INTERRUPT_STACK_BOTTOM as *const _ as usize);
-        let mut mapping = ActiveMapping::get_unlocked();
         mapping.free_and_unmap_single(stack_bottom);
         mapping.free_and_unmap_single(interrupt_stack_bottom);
     }
 
-    let reserved_end = VirtAddr::new(reserved_end).align_up();
+    let mut reserved_end = VirtAddr::new(reserved_end).align_up();
+
+    // Setup kernel text output.
+    {
+        if let Some(lfb_mboot_params) = mboot_struct.framebuffer_tag() {
+            if matches!(lfb_mboot_params.buffer_type, FramebufferType::RGB { .. }) {
+                if let Some(new_reserved_end) = lfb_text::init(
+                    LfbParameters {
+                        address: PhysAddr::new(lfb_mboot_params.address as _),
+                        width: lfb_mboot_params.width,
+                        height: lfb_mboot_params.height,
+                        pitch: lfb_mboot_params.pitch,
+                        bpp: lfb_mboot_params.bpp,
+                    },
+                    &mut mapping,
+                    reserved_end,
+                ) {
+                    reserved_end = new_reserved_end;
+                }
+            }
+        }
+    };
 
     // The bootloader verifies the checksum and revision for us.
     let root_sdt = if let Some(rsdp) = mboot_struct.rsdp_v2_tag() {
@@ -196,7 +213,6 @@ pub extern "C" fn entry(mboot_addr: usize) {
 
     let result = acpi::parse_tables(root_sdt, reserved_end);
     unsafe {
-        let mut mapping = ActiveMapping::get_unlocked();
         if let Some(hpet_data) = result.hpet {
             HPET = Some(Hpet::from(&mut mapping, hpet_addr, hpet_data));
         }

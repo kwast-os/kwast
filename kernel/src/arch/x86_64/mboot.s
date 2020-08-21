@@ -24,15 +24,15 @@ info_req_start:
 info_req_end:
 
 // Framebuffer tag
-//.align 8
-//lfb_start:
-//.word 5                           // Type
-//.word TAG_REQUIRED                // Flags
-//.long lfb_end - lfb_start         // Size of this tag
-//.long 1024                        // Width (can be overriden in grub.cfg)
-//.long 768                         // Height (can be overriden in grub.cfg)
-//.long 32                          // Depth (can be overriden in grub.cfg)
-//lfb_end:
+.align 8
+lfb_start:
+.word 5                           // Type
+.word TAG_REQUIRED                // Flags
+.long lfb_end - lfb_start         // Size of this tag
+.long 1024                        // Width (can be overridden in grub.cfg)
+.long 768                         // Height (can be overridden in grub.cfg)
+.long 32                          // Depth (can be overridden in grub.cfg)
+lfb_end:
 
 // End tag
 .align 8

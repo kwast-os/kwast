@@ -280,13 +280,13 @@ extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
     panic!("GPF: {:#?}, errcode {:x}", frame, err);
 }
 
-extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError) {
+extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, _err: PageFaultError) {
     let addr: VirtAddr;
     unsafe {
         llvm_asm!("movq %cr2, $0" : "=r" (addr));
     }
 
-    //println!("{:?} {:?}", frame, err);
+    //println!("{:?} {:?}", frame, _err);
     crate::mm::page_fault(addr, frame.rip);
 }
 

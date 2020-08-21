@@ -87,6 +87,8 @@ pub fn kernel_run(reserved_end: VirtAddr, _boot_modules: impl BootModuleProvider
 
 /// Handle module.
 fn handle_module(module: BootModule) -> Option<()> {
+    println!("Handle module {:?}", module);
+
     // Safety: module data is correct.
     let tar = unsafe {
         Tar::from_slice(slice::from_raw_parts(
@@ -130,11 +132,11 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     interrupts::enable();
     interrupts::setup_timer();
     scheduler::thread_yield();
-
     // TODO: debug code
     unsafe {
         let entry = VirtAddr::new(thread_test as usize);
-        let domain = ProtectionDomain::new().unwrap();
+        //let domain = ProtectionDomain::new().unwrap();
+        let domain = with_current_thread(|t| t.domain().clone());
         let t = Thread::create(domain, entry, 1234).unwrap();
         scheduler::add_and_schedule_thread(t);
     };

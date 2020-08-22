@@ -51,12 +51,6 @@ impl ThreadId {
     }
 }
 
-impl Default for ThreadId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(C, align(8))]
 pub enum ThreadStatus {

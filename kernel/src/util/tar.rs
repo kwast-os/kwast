@@ -47,11 +47,7 @@ pub struct TarIterator<'a> {
 impl<'a> Tar<'a> {
     /// Creates a new in-memory tar.
     pub unsafe fn from_slice(contents: &'a [u8]) -> Option<Self> {
-        if contents.len() % 512 != 0 {
-            None
-        } else {
-            Some(Self { contents })
-        }
+        (contents.len() % 512 == 0).then_some(Self { contents })
     }
 }
 

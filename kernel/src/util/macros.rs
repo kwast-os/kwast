@@ -1,5 +1,3 @@
-#![allow(unused_macros)]
-
 macro_rules! unwrap_or_return {
     ($e:expr) => {
         match $e {

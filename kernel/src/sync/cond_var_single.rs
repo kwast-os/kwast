@@ -1,6 +1,6 @@
 use crate::sync::spinlock::PreemptCounterInfluence;
 use crate::sync::thread_block_guard::ThreadBlockGuard;
-use crate::tasking::scheduler::{with_common_scheduler, with_current_thread};
+use crate::tasking::scheduler::{with_common_scheduler, with_current_thread, thread_yield};
 use crate::tasking::thread::ThreadId;
 use atomic::{Atomic, Ordering};
 use spin::MutexGuard;
@@ -44,8 +44,8 @@ impl CondVarSingle {
                     Err(_) => continue,
                 };
             }
-            drop(guard);
         });
+        drop(guard);
     }
 }
 

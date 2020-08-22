@@ -53,10 +53,6 @@ impl CpuData {
 
     /// Gets a mutable reference to the asid manager.
     pub fn asid_manager(&self) -> Option<&RefCell<AsidManager>> {
-        if self.asid_enable.get() {
-            Some(&self.asid_manager)
-        } else {
-            None
-        }
+        self.asid_enable.get().then_some(&self.asid_manager)
     }
 }

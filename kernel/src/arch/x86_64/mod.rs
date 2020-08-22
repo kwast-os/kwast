@@ -182,25 +182,23 @@ pub extern "C" fn entry(mboot_addr: usize) {
     let mut reserved_end = VirtAddr::new(reserved_end).align_up();
 
     // Setup kernel text output.
-    {
-        if let Some(lfb_mboot_params) = mboot_struct.framebuffer_tag() {
-            if matches!(lfb_mboot_params.buffer_type, FramebufferType::RGB { .. }) {
-                if let Some(new_reserved_end) = lfb_text::init(
-                    LfbParameters {
-                        address: PhysAddr::new(lfb_mboot_params.address as _),
-                        width: lfb_mboot_params.width,
-                        height: lfb_mboot_params.height,
-                        pitch: lfb_mboot_params.pitch,
-                        bpp: lfb_mboot_params.bpp,
-                    },
-                    &mut mapping,
-                    reserved_end,
-                ) {
-                    reserved_end = new_reserved_end;
-                }
+    if let Some(lfb_mboot_params) = mboot_struct.framebuffer_tag() {
+        if matches!(lfb_mboot_params.buffer_type, FramebufferType::RGB { .. }) {
+            if let Some(new_reserved_end) = lfb_text::init(
+                LfbParameters {
+                    address: PhysAddr::new(lfb_mboot_params.address as _),
+                    width: lfb_mboot_params.width,
+                    height: lfb_mboot_params.height,
+                    pitch: lfb_mboot_params.pitch,
+                    bpp: lfb_mboot_params.bpp,
+                },
+                &mut mapping,
+                reserved_end,
+            ) {
+                reserved_end = new_reserved_end;
             }
         }
-    };
+    }
 
     // The bootloader verifies the checksum and revision for us.
     let root_sdt = if let Some(rsdp) = mboot_struct.rsdp_v2_tag() {

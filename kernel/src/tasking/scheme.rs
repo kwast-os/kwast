@@ -1,16 +1,19 @@
-use crate::arch::{preempt_disable, preempt_enable};
+use crate::arch::{preempt_disable, preempt_enable, hpet};
 use crate::sync::thread_block_guard::ThreadBlockGuard;
 use crate::sync::wait_queue::WaitQueue;
 use crate::tasking::file::{FileHandle, InnerFileHandle};
 use crate::tasking::scheduler::{self, with_common_scheduler, with_current_thread};
 use crate::tasking::scheme_container::SchemeId;
-use crate::tasking::thread::ThreadId;
+use crate::tasking::thread::{ThreadId, Thread};
 use crate::wasm::wasi::Errno;
-use alloc::sync::Weak;
+use alloc::sync::{Weak, Arc};
 use atomic::Atomic;
 use core::mem::size_of;
 use core::slice;
 use core::sync::atomic::{AtomicU64, Ordering};
+use crate::sync::spinlock::Spinlock;
+use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 
 /// Reply payload.
 /// We only wait at most for one reply. The reply data is very simple, it's just a status + data pair.
@@ -50,11 +53,14 @@ pub struct Command {
 
 pub type SchemePtr = Weak<Scheme>;
 
+// TODO: capability instead of thread sender
 pub struct Scheme {
     /// Identifier: needed for `blocked_on` in tcb.
     id: SchemeId,
     /// Command queue.
     command_queue: WaitQueue<Command>,
+
+    a: Spinlock<BTreeMap<ThreadId, Arc<Thread>>>,
 }
 
 impl ReplyPayload {
@@ -88,16 +94,18 @@ impl Scheme {
         Self {
             id,
             command_queue: WaitQueue::new(),
+            a: Spinlock::new(BTreeMap::new()),
         }
     }
 
-    /// Sends a blocking ipc message to the scheme.
+    /// Sends a blocking IPC message to the scheme.
     pub fn send_command_blocking(&self, payload: CommandData) -> ReplyPayload {
         with_current_thread(|t| {
             // Blocks the thread, sends the command and notifies the receiving thread.
             {
                 preempt_disable();
                 let _block_guard = ThreadBlockGuard::activate();
+                //self.a.lock().insert(t.id(), t.clone());
                 t.set_ipc_blocked_on(self.id);
                 self.command_queue.push_back(Command {
                     payload,
@@ -168,6 +176,12 @@ impl Scheme {
                 || false,
             )
         });
+        /*let success = if let Some(receiver) = self.a.lock().remove(&reply.to) {
+            receiver.reply.store(reply.payload);
+            true
+        } else {
+            false
+        };*/
 
         // This needs to be outside the lock.
         if success {

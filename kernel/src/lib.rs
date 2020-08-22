@@ -7,10 +7,12 @@
     alloc_error_handler,
     lang_items,
     atomic_mut_ptr,
-    const_in_array_repeat_expressions
+    const_in_array_repeat_expressions,
+    bool_to_option,
 )]
 #![cfg_attr(feature = "integration-test", allow(unused_imports), allow(dead_code))]
 #![allow(clippy::verbose_bit_mask)]
+#![allow(clippy::new_without_default)]
 
 #[macro_use]
 extern crate static_assertions;
@@ -30,17 +32,21 @@ use core::slice;
 use arch::interrupts;
 
 use crate::arch::address::{PhysAddr, VirtAddr};
-use crate::arch::hpet;
+use crate::arch::{hpet, preempt_disable, preempt_enable};
 use crate::arch::paging::{ActiveMapping, EntryFlags};
 use crate::mm::mapper::MemoryMapper;
 use crate::tasking::protection_domain::ProtectionDomain;
 use crate::tasking::scheduler;
 use crate::tasking::scheduler::{thread_exit, with_common_scheduler, with_current_thread};
 use crate::tasking::scheme_container::schemes;
-use crate::tasking::thread::Thread;
+use crate::tasking::thread::{Thread, ThreadId};
 use crate::util::boot_module::{BootModule, BootModuleProvider};
 use crate::util::tar::Tar;
 use alloc::boxed::Box;
+use alloc::collections::{VecDeque, BTreeSet};
+use crate::sync::spinlock::{Spinlock, RwLock};
+use crate::sync::wait_queue::WaitQueue;
+use alloc::sync::Arc;
 
 #[macro_use]
 mod util;
@@ -66,12 +72,12 @@ fn panic(info: &PanicInfo) -> ! {
 
 /// Run.
 pub fn kernel_run(reserved_end: VirtAddr, _boot_modules: impl BootModuleProvider) {
-    // May only be called once.
     unsafe {
+        // May only be called once.
         mm::init(reserved_end);
-        arch::late_init();
-        tasking::scheduler::init();
     }
+    arch::late_init();
+    tasking::scheduler::init();
 
     #[cfg(not(feature = "integration-test"))]
     kernel_main(_boot_modules);
@@ -133,13 +139,38 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
     interrupts::setup_timer();
     scheduler::thread_yield();
 
-    let hpet = hpet().unwrap();
-    let start = hpet.counter();
-    for i in 0..10000000 {
-        scheduler::thread_yield();
+    {
+        let hpet = hpet().unwrap();
+        let start = hpet.counter();
+        for i in 0..10000000 {
+            scheduler::thread_yield();
+        }
+        let t = hpet.counter() - start;
+        println!("{}ns", hpet.counter_to_ns(t) / 10000000);
     }
-    let t = hpet.counter() - start;
-    println!("{}ns", hpet.counter_to_ns(t) / 10000000);
+
+    {
+        let hpet = hpet().unwrap();
+        let start = hpet.counter();
+        struct Lol {
+            b: BTreeSet<i32>,
+        }
+        let mut test = RwLock::new(Lol {
+            b: {
+                let mut a = BTreeSet::new();
+                a.insert(0);
+                a
+            },
+        });
+        for i in 0..10000 {
+            let mut a = test.write();
+            if let Some(x)=a.b.take(&0) {
+                a.b.insert(0);
+            }
+        }
+        let t = hpet.counter() - start;
+        println!("counter: {}ns", hpet.counter_to_ns(t) / 10000);
+    }
 
     // TODO: debug code
     unsafe {
@@ -165,7 +196,6 @@ fn kernel_main(boot_modules: impl BootModuleProvider) {
 extern "C" fn thread_test(_arg: u64) {
     let hpet = hpet().unwrap();
     let self_scheme = schemes().read().open_self(Box::new([])).unwrap();
-    println!("---");
     let (scheme, _handle) = self_scheme.scheme_and_handle().unwrap();
     scheme.open(-1).unwrap();
     let a = hpet.counter();
@@ -173,7 +203,7 @@ extern "C" fn thread_test(_arg: u64) {
         scheme.open(i).unwrap();
     }
     let b = hpet.counter();
-    println!("{}ns", hpet.counter_to_ns(b - a) / (10000 - 1));
+    println!("open: {}ns", hpet.counter_to_ns(b - a) / (10000 - 1));
     println!();
     println!();
     let x = with_current_thread(|t| t.id());
@@ -182,10 +212,10 @@ extern "C" fn thread_test(_arg: u64) {
         with_common_scheduler(|s| s.with_thread(x, |t| assert_eq!(t.id(), x), || {}));
     }
     let b = hpet.counter();
-    println!("{}ns", hpet.counter_to_ns(b - a) / (10000 - 1));
+    println!("with_thread: {}ns", hpet.counter_to_ns(b - a) / 10000);
     println!();
     println!();
-    //println!("---");
+
     thread_exit(123);
 }
 

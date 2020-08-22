@@ -45,16 +45,21 @@ impl<T> WaitQueue<T> {
             return 0;
         }
 
-        let mut count = 0;
-        buffer[count] = self.pop_front();
-        count += 1;
+        loop {
+            let mut guard = self.queue.lock();
+            if let Some(t) = guard.pop_front() {
+                buffer[0] = t;
 
-        let mut guard = self.queue.lock();
-        while !guard.is_empty() && count < buffer.len() {
-            buffer[count] = guard.pop_front().expect("is not empty");
-            count += 1;
+                let mut count = 1usize;
+                while let Some(t) = guard.pop_front() {
+                    buffer[count] = t;
+                    count += 1
+                }
+
+                return count;
+            } else {
+                self.cond_var.wait(guard);
+            }
         }
-
-        count
     }
 }

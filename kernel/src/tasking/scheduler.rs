@@ -9,9 +9,8 @@ use crate::tasking::thread::{Stack, Thread, ThreadId, ThreadStatus};
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use alloc::sync::Arc;
 use atomic::Atomic;
-use bitflags::_core::intrinsics::unlikely;
-use bitflags::_core::mem::ManuallyDrop;
-use core::intrinsics::likely;
+use core::intrinsics::{likely, unlikely};
+use core::mem::ManuallyDrop;
 use core::sync::atomic::Ordering;
 use spin::Once;
 

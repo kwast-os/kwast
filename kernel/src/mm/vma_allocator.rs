@@ -193,13 +193,11 @@ impl LazilyMappedVma {
                     write_bytes(ptr, 0, PAGE_SIZE);
                 }
 
-                true
-            } else {
-                false
+                return true;
             }
-        } else {
-            false
         }
+
+        false
     }
 
     /// Gets the flags to use when mapping the memory.
@@ -266,11 +264,5 @@ impl VmaAllocator {
     pub fn destroy_vma<M: MappableVma>(&mut self, mapping: &mut ActiveMapping, vma: &M) {
         self.insert_region(vma.address(), vma.size());
         vma.unmap(mapping);
-    }
-}
-
-impl Default for VmaAllocator {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -6,7 +6,6 @@ use super::port::{read_port8, write_port8};
 use crate::sync::spinlock::IrqSpinlock;
 
 struct SerialPort {
-    /// IO Port.
     port: u16,
 }
 
@@ -42,7 +41,7 @@ impl SerialPort {
 }
 
 impl fmt::Write for SerialPort {
-    fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
         for byte in s.bytes() {
             self.send(byte);
         }

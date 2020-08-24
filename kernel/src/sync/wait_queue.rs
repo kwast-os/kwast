@@ -51,9 +51,13 @@ impl<T> WaitQueue<T> {
                 buffer[0] = t;
 
                 let mut count = 1usize;
-                while let Some(t) = guard.pop_front() {
-                    buffer[count] = t;
-                    count += 1
+                while count < buffer.len() {
+                    if let Some(t) = guard.pop_front() {
+                        buffer[count] = t;
+                        count += 1;
+                    } else {
+                        break;
+                    }
                 }
 
                 return count;

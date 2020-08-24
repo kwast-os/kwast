@@ -66,6 +66,15 @@ impl Hpet {
         {
             let capability = hpet.read(0x0);
             let clock_period = capability >> 32; // in femptoseconds
+            let num_timers = ((capability >> 8) & 31) as usize + 1;
+            println!("{} hpet timers", num_timers);
+            for i in 0..num_timers {
+                // Disable interrupts on this timer.
+                let t0_cfg_cap = hpet.read(0x100 + i * 0x20);
+                //println!("{:b}", t0_cfg_cap);
+                let t0_cfg_cap = t0_cfg_cap & !(1 << 2);
+                hpet.write(0x100 + i * 0x20, t0_cfg_cap);
+            }
             let enable = hpet.read(0x10) | (1 << 0);
             hpet.write(0x10, enable);
             hpet.clock_period = clock_period;

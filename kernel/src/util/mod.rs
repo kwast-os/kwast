@@ -5,4 +5,4 @@ pub mod unchecked;
 pub mod macros;
 mod font;
 pub mod lfb_text;
-mod mem_funcs;
+pub mod mem_funcs;

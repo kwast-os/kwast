@@ -5,8 +5,8 @@ use crate::arch::address::VirtAddr;
 use crate::arch::paging::{ActiveMapping, EntryFlags, PAGE_SIZE};
 use crate::mm::avl_interval_tree::AVLIntervalTree;
 use crate::mm::mapper::{MemoryError, MemoryMapper};
+use crate::util::mem_funcs::page_clear;
 use core::intrinsics::{likely, unlikely};
-use core::ptr::write_bytes;
 
 /// Virtual memory allocator.
 pub struct VmaAllocator {
@@ -190,7 +190,7 @@ impl LazilyMappedVma {
                 let ptr: *mut u8 = map_addr.as_mut();
                 // Safe because valid pointer and valid size.
                 unsafe {
-                    write_bytes(ptr, 0, PAGE_SIZE);
+                    page_clear(ptr);
                 }
 
                 return true;

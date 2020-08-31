@@ -1,3 +1,5 @@
+.section .text
+
 .extern next_thread_state
 .type next_thread_state, @function
 

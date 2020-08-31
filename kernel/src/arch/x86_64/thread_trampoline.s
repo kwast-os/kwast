@@ -1,3 +1,5 @@
+.section .text
+
 .global thread_trampoline
 .type thread_trampoline, @function
 

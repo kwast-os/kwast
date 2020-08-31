@@ -72,7 +72,12 @@ impl LfbText {
     fn get_pixel(&mut self, x: u32, y: u32) -> u32 {
         if x < self.width && y < self.height {
             // Safety: in bounds and aligned.
-            unsafe { *self.address.as_const::<u32>().add((y * self.pitch + x) as _) }
+            unsafe {
+                *self
+                    .address
+                    .as_const::<u32>()
+                    .add((y * self.pitch + x) as _)
+            }
         } else {
             0
         }

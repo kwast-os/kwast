@@ -1,3 +1,5 @@
+#![allow(clippy::identity_op)]
+
 use core::cmp::max;
 
 use crate::arch::acpi;
@@ -33,6 +35,8 @@ const ONE_PML4_ENTRY: usize = 512 * 1024 * 1024 * 1024;
 // TODO: do we also want to give the 0xffff8000_00000000-(0x8000_00000000 - ONE_PML4_ENTRY) range?
 pub const USER_START: usize = ONE_PML4_ENTRY;
 pub const USER_LEN: usize = 0x8000_00000000 - ONE_PML4_ENTRY - 0x1000;
+pub const TCB_START: usize = 1 * 1024 * 1024 * 1024; // 1 GiB, which is the next entry on the PML3
+pub const TCB_LEN: usize = 1 * 1024 * 1024 * 1024; // 1 GiB, which means a whole PML3 will be used
 
 extern "C" {
     static KERNEL_END_PTR: usize;

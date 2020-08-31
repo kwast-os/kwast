@@ -691,9 +691,10 @@ static ALLOCATOR: LockedHeap = LockedHeap {
 
 /// Inits allocation. May only be called once.
 pub unsafe fn init(reserved_end: VirtAddr) {
-    debug_assert!(ALLOCATOR.inner.lock().is_none());
+    assert!(ALLOCATOR.inner.lock().is_none());
     let heap = Heap::new(reserved_end);
     let max_end = heap.max_end();
-    debug_assert!(max_end.as_usize() < arch::USER_START);
+    assert!(max_end.as_usize() < arch::TCB_START);
+    assert!(max_end.as_usize() < arch::USER_START);
     *ALLOCATOR.inner.lock() = Some(heap);
 }

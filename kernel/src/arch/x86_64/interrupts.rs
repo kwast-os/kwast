@@ -269,25 +269,21 @@ extern "x86-interrupt" fn exc_stack_segment(frame: &mut ISRStackFrame, err: u64)
 }
 
 extern "x86-interrupt" fn exc_gpf(frame: &mut ISRStackFrame, err: u64) {
-    //unsafe {
-    //    let ptr = frame.rip.as_const::<u8>();
-    //    for i in -16..16 {
-    //        print!("0x{:x}, ", *ptr.offset(i));
-    //    }
-    //    println!();
-    //}
-
     panic!("GPF: {:#?}, errcode {:x}", frame, err);
 }
 
-extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, _err: PageFaultError) {
+extern "x86-interrupt" fn exc_pf(frame: &mut ISRStackFrame, err: PageFaultError) {
     let addr: VirtAddr;
     unsafe {
         llvm_asm!("movq %cr2, $0" : "=r" (addr));
     }
 
-    //println!("{:?} {:?}", frame, _err);
-    crate::mm::page_fault(addr, frame.rip);
+    //println!("{:?} {:?}", frame, err);
+    crate::mm::page_fault(
+        addr,
+        frame.rip,
+        err.contains(PageFaultError::CAUSED_BY_WRITE),
+    );
 }
 
 extern "x86-interrupt" fn exc_fp(frame: &mut ISRStackFrame) {

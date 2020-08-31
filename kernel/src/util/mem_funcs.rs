@@ -1,5 +1,9 @@
 use core::mem::size_of;
 
+extern "C" {
+    pub fn page_clear(dst: *mut u8);
+}
+
 const SIZE: usize = size_of::<usize>();
 
 fn is_unaligned(ptr: *const u8) -> bool {

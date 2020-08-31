@@ -1,4 +1,3 @@
-pub mod atomic;
 pub mod cond_var_single;
 pub mod spinlock;
 pub mod thread_block_guard;

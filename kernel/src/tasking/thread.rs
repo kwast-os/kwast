@@ -7,8 +7,9 @@ use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::mapper::MemoryError;
 use crate::mm::vma_allocator::{LazilyMappedVma, MappableVma, MappedVma};
 use crate::sync::spinlock::{PreemptCounterInfluence, RwLock, Spinlock};
-use crate::tasking::file::{FileDescriptor, FileDescriptorTable};
+use crate::tasking::file::FileDescriptorTable;
 use crate::tasking::protection_domain::ProtectionDomain;
+use crate::tasking::scheduler::with_core_scheduler;
 use crate::tasking::scheme::ReplyPayloadTcb;
 use crate::tasking::scheme_container::{schemes, SchemeId};
 use crate::wasm::vmctx::{VmContextContainer, WASM_PAGE_SIZE};
@@ -31,23 +32,45 @@ pub struct Stack {
     current_location: Atomic<VirtAddr>,
 }
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-#[repr(transparent)]
-pub struct ThreadId(u64);
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[repr(C, align(8))]
+pub struct ThreadId {
+    /// We want to reuse thread ids, but we don't want a full 64-bit number,
+    /// because that would not work well with our thread id addressing system.
+    /// When threads are reused, we want to be careful that we don't accidentally identify
+    /// the wrong thread: a thread may be gone, but its id could be reused.
+    /// This is where the generation comes in: an id can be used 2^32 - 1 times.
+    generation: u32,
+    id: u32,
+}
 
 const_assert!(Atomic::<ThreadId>::is_lock_free());
 
 impl ThreadId {
     /// Create new thread id.
     pub fn new() -> Self {
-        use core::sync::atomic::{AtomicU64, Ordering};
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        Self(NEXT.fetch_add(1, Ordering::SeqCst))
+        // TODO: implement id recycling with generations
+        use core::sync::atomic::{AtomicU32, Ordering};
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+
+        Self {
+            generation: 0,
+            id: NEXT.fetch_add(1, Ordering::SeqCst),
+        }
     }
 
     /// Thread id 0, useful for markers / sentinels if you know that thread id 0 won't be used.
     pub const fn zero() -> Self {
-        Self(0)
+        Self {
+            generation: 0,
+            id: 0,
+        }
+    }
+
+    /// Gets the raw number.
+    #[inline]
+    pub fn as_u32(&self) -> u32 {
+        self.id
     }
 }
 
@@ -68,7 +91,7 @@ struct StaticWasmThreadData {
 
 pub struct Thread {
     pub stack: Stack,
-    id: ThreadId,
+    pub id: ThreadId,
     heap: RwLock<LazilyMappedVma>,
     static_wasm_data: Spinlock<Option<StaticWasmThreadData>>,
     simd_state: SimdState,
@@ -153,12 +176,6 @@ impl Thread {
         self.file_descriptor_table.lock()
     }
 
-    /// Gets the thread id.
-    #[inline]
-    pub fn id(&self) -> ThreadId {
-        self.id
-    }
-
     /// Gets the current allocated heap size in WebAssembly pages.
     pub fn heap_size(&self) -> usize {
         self.heap.read().size()
@@ -218,16 +235,21 @@ impl Thread {
         self.status.store(new_status, atomic::Ordering::Release);
     }
 
-    /// Compare exchange status.
-    #[inline]
-    pub fn status_compare_exchange(
-        &self,
-        current: ThreadStatus,
-        new: ThreadStatus,
-        success: atomic::Ordering,
-        failure: atomic::Ordering,
-    ) -> Result<ThreadStatus, ThreadStatus> {
-        self.status.compare_exchange(current, new, success, failure)
+    /// Wakes up this thread.
+    pub fn wakeup(&self) {
+        if self
+            .status
+            .compare_exchange(
+                ThreadStatus::Blocked,
+                ThreadStatus::Runnable,
+                atomic::Ordering::Acquire,
+                atomic::Ordering::Relaxed,
+            )
+            .is_ok()
+        {
+            // TODO: multicore
+            with_core_scheduler(|s| s.move_wakeup(self.id));
+        }
     }
 
     /// Gets the status.
@@ -273,6 +295,13 @@ impl Ord for Thread {
 impl Borrow<ThreadId> for Arc<Thread> {
     fn borrow(&self) -> &ThreadId {
         &self.id
+    }
+}
+
+impl Drop for Thread {
+    fn drop(&mut self) {
+        // Invalidate the thread id.
+        self.id = ThreadId::zero();
     }
 }
 

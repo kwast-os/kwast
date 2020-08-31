@@ -1,19 +1,19 @@
-use crate::arch::{preempt_disable, preempt_enable, hpet};
+use crate::arch::{preempt_disable, preempt_enable};
+use crate::mm::tcb_alloc::with_thread;
+use crate::sync::spinlock::Spinlock;
 use crate::sync::thread_block_guard::ThreadBlockGuard;
 use crate::sync::wait_queue::WaitQueue;
 use crate::tasking::file::{FileHandle, InnerFileHandle};
-use crate::tasking::scheduler::{self, with_common_scheduler, with_current_thread};
+use crate::tasking::scheduler::{self, with_current_thread};
 use crate::tasking::scheme_container::SchemeId;
-use crate::tasking::thread::{ThreadId, Thread};
+use crate::tasking::thread::{Thread, ThreadId};
 use crate::wasm::wasi::Errno;
-use alloc::sync::{Weak, Arc};
+use alloc::collections::BTreeMap;
+use alloc::sync::{Arc, Weak};
 use atomic::Atomic;
 use core::mem::size_of;
 use core::slice;
 use core::sync::atomic::{AtomicU64, Ordering};
-use crate::sync::spinlock::Spinlock;
-use hashbrown::HashMap;
-use alloc::collections::BTreeMap;
 
 /// Reply payload.
 /// We only wait at most for one reply. The reply data is very simple, it's just a status + data pair.
@@ -59,8 +59,6 @@ pub struct Scheme {
     id: SchemeId,
     /// Command queue.
     command_queue: WaitQueue<Command>,
-
-    a: Spinlock<BTreeMap<ThreadId, Arc<Thread>>>,
 }
 
 impl ReplyPayload {
@@ -94,7 +92,6 @@ impl Scheme {
         Self {
             id,
             command_queue: WaitQueue::new(),
-            a: Spinlock::new(BTreeMap::new()),
         }
     }
 
@@ -105,11 +102,11 @@ impl Scheme {
             {
                 preempt_disable();
                 let _block_guard = ThreadBlockGuard::activate();
-                //self.a.lock().insert(t.id(), t.clone());
+                //self.a.lock().insert(t.id, t.clone());
                 t.set_ipc_blocked_on(self.id);
                 self.command_queue.push_back(Command {
                     payload,
-                    thread_id: t.id(),
+                    thread_id: t.id,
                 });
                 preempt_enable();
             }
@@ -162,19 +159,13 @@ impl Scheme {
     }
 
     pub fn send_reply(&self, reply: Reply) {
-        let success = with_common_scheduler(|s| {
-            s.with_thread(
-                reply.to,
-                |receiver| {
-                    if receiver.ipc_blocked_on() != self.id {
-                        false
-                    } else {
-                        receiver.reply.store(reply.payload);
-                        true
-                    }
-                },
-                || false,
-            )
+        let success = with_thread(reply.to, |receiver| {
+            if receiver.ipc_blocked_on() != self.id {
+                false
+            } else {
+                receiver.reply.store(reply.payload);
+                true
+            }
         });
         /*let success = if let Some(receiver) = self.a.lock().remove(&reply.to) {
             receiver.reply.store(reply.payload);

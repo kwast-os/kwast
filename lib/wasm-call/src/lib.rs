@@ -112,7 +112,7 @@ pub fn abi_functions(input: TokenStream) -> TokenStream {
             _ => {
                 emit_error!(
                     return_type,
-                    "unexpected return type  aaaa {:?}",
+                    "unexpected return type {:?}",
                     return_type.to_token_stream()
                 );
                 false

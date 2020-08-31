@@ -466,23 +466,23 @@ impl<'m, 'data> FuncEnvironment for FuncEnv<'m, 'data> {
 
     fn translate_atomic_wait(
         &mut self,
-        pos: FuncCursor,
-        index: MemoryIndex,
-        heap: Heap,
-        addr: Value,
-        expected: Value,
-        timeout: Value,
+        _pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: Heap,
+        _addr: Value,
+        _expected: Value,
+        _timeout: Value,
     ) -> WasmResult<Value> {
         unimplemented!()
     }
 
     fn translate_atomic_notify(
         &mut self,
-        pos: FuncCursor,
-        index: MemoryIndex,
-        heap: Heap,
-        addr: Value,
-        count: Value,
+        _pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: Heap,
+        _addr: Value,
+        _count: Value,
     ) -> WasmResult<Value> {
         unimplemented!()
     }

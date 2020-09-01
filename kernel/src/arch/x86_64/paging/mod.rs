@@ -12,6 +12,7 @@ use crate::mm::vma_allocator::MappableVma;
 use crate::tasking::scheduler::with_current_thread;
 use core::fmt::{Debug, Error, Formatter};
 use core::intrinsics::unlikely;
+use crate::util::mem_funcs::page_clear;
 
 mod entry;
 mod frame;
@@ -159,6 +160,7 @@ impl MemoryMapper for ActiveMapping {
 
                 // Copy kernel mappings and clear the others.
                 unsafe {
+                    page_clear(p4.address().as_mut());
                     let p4_ptr = &mut *p4.address().as_mut::<Table<Level4>>();
                     p4_ptr.entries[0].set_raw(mapping.p4.entries[0].get_raw());
                     p4_ptr.entries[0].set_used_count(2);
@@ -166,9 +168,6 @@ impl MemoryMapper for ActiveMapping {
                         cr3,
                         EntryFlags::PRESENT | EntryFlags::NX | EntryFlags::WRITABLE,
                     );
-                    for entry in &mut p4_ptr.entries[1..511] {
-                        entry.set_raw(0);
-                    }
                 }
 
                 // Undo temporary mapping

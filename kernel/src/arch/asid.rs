@@ -29,6 +29,7 @@ impl Asid {
     }
 }
 
+#[derive(Copy, Clone)]
 struct Entry {
     /// The bitsets for free/used (1 = free, 0 = used).
     used_free: u64,

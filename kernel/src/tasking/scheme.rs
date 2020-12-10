@@ -1,15 +1,13 @@
 use crate::arch::{preempt_disable, preempt_enable};
 use crate::mm::tcb_alloc::with_thread;
-use crate::sync::spinlock::Spinlock;
 use crate::sync::thread_block_guard::ThreadBlockGuard;
 use crate::sync::wait_queue::WaitQueue;
 use crate::tasking::file::{FileHandle, InnerFileHandle};
 use crate::tasking::scheduler::{self, with_current_thread};
 use crate::tasking::scheme_container::SchemeId;
-use crate::tasking::thread::{Thread, ThreadId};
+use crate::tasking::thread::ThreadId;
 use crate::wasm::wasi::Errno;
-use alloc::collections::BTreeMap;
-use alloc::sync::{Arc, Weak};
+use alloc::sync::Weak;
 use atomic::Atomic;
 use core::mem::size_of;
 use core::slice;

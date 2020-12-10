@@ -128,7 +128,7 @@ pub fn tcb_dealloc(tid: ThreadId) {
         // Safety: it was initialised and will be dropped only once.
         unsafe {
             // This will also invalidate the thread id.
-            drop(page.threads[offset].0.read());
+            drop(page.threads[offset].0.assume_init_read());
         }
         if old_free | (1 << offset) == u16::MAX {
             // Safety:
@@ -166,6 +166,6 @@ where
         assert_eq!(*tid_ptr, tid, "thread generation mismatch");
 
         // We now know that the thread was initialized, otherwise the assert would've failed.
-        f(block.0.get_ref())
+        f(block.0.assume_init_ref())
     }
 }

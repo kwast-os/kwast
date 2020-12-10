@@ -32,9 +32,9 @@ checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "cc"
-version = "1.0.59"
+version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66120af515773fb005778dc07c261bd201ec8ce50bd6e7144c927753fe013381"
+checksum = "4c0496836a84f8d0495758516b8621a622beb77c0fed418570e50764093ced48"
 
 [[package]]
 name = "cfg-if"
@@ -45,7 +45,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 [[package]]
 name = "cranelift-bforest"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 dependencies = [
  "cranelift-entity",
 ]
@@ -53,7 +53,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -71,7 +71,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -80,17 +80,17 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 
 [[package]]
 name = "cranelift-entity"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 
 [[package]]
 name = "cranelift-frontend"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 dependencies = [
  "cranelift-codegen",
  "hashbrown",
@@ -102,7 +102,7 @@ dependencies = [
 [[package]]
 name = "cranelift-native"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -112,7 +112,7 @@ dependencies = [
 [[package]]
 name = "cranelift-wasm"
 version = "0.66.0"
-source = "git+https://github.com/kwast-os/wasmtime?branch=main#d5e383b6d4ce1e5e89ecf00afbfc32e6bd6b2aeb"
+source = "git+https://github.com/kwast-os/wasmtime?branch=main#aa36c3f5f2c6a5ebf384018c4abc1e3c5c001d62"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -172,9 +172,9 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c198b026e1bbf08a937e94c6c60f9ec4a2267f5b0d2eec9c1b21b061ce2be55f"
+checksum = "043175f069eda7b85febe4a74abbaeff828d9f8b448515d3151a14a3542811aa"
 dependencies = [
  "autocfg",
 ]
@@ -214,9 +214,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.19"
+version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04f5f085b5d71e2188cb8271e5da0161ad52c3f227a661a3c135fdf28e258b12"
+checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
 dependencies = [
  "unicode-xid",
 ]
@@ -284,9 +284,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "smallvec"
-version = "1.4.2"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbee7696b84bbf3d89a1c2eccff0850e3047ed46bfcd2e92c29a2d074d57e252"
+checksum = "ae524f056d7d770e174287294f562e95044c68e88dec909a00d2094805db9d75"
 
 [[package]]
 name = "spin"
@@ -308,9 +308,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "syn"
-version = "1.0.39"
+version = "1.0.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891d8d6567fe7c7f8835a3a98af4208f3846fba258c1bc3c31d6e506239f11f9"
+checksum = "9a2af957a63d6bd42255c359c93d9bfdb97076bd3b820897ce55ffbfbf107f44"
 dependencies = [
  "proc-macro2",
  "quote",

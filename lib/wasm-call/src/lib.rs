@@ -3,11 +3,11 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use proc_macro_error::*;
 use quote::{format_ident, quote};
-use syn::export::{ToTokens, TokenStream2};
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{parenthesized, token, Ident, Token};
 use syn::{parse_macro_input, Type};
+use quote::ToTokens;
 
 struct AbiFunctions {
     functions: Punctuated<AbiFunction, Token![,]>,
@@ -67,7 +67,7 @@ impl Parse for AbiFunctionParam {
 }
 
 impl ToTokens for AbiFunctionParam {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let name = &self.name;
         let ty = &self.ty;
         (quote! {
